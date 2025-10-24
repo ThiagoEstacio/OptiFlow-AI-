@@ -456,22 +456,165 @@ async def import_ethernet_ip_tags(
 
 # ========== S7 Protocol Endpoints ==========
 
+class S7ScanRequest(BaseModel):
+    """Request to scan network for S7 devices"""
+    start_ip: str = Field(..., example="192.168.1.1", description="Starting IP address")
+    end_ip: str = Field(..., example="192.168.1.254", description="Ending IP address")
+    rack: Optional[int] = Field(0, description="Rack number (usually 0)")
+    slot: Optional[int] = Field(1, description="Slot number (usually 1 for CPU)")
+    timeout: Optional[float] = Field(2.0, ge=0.5, le=10.0, description="Probe timeout")
+
+
+class S7ListDBsRequest(BaseModel):
+    """Request to list Data Blocks"""
+    device_ip: str = Field(..., description="Device IP address")
+    rack: Optional[int] = Field(0, description="Rack number")
+    slot: Optional[int] = Field(1, description="Slot number")
+    start_db: Optional[int] = Field(1, description="Starting DB number")
+    end_db: Optional[int] = Field(1000, description="Ending DB number")
+    max_dbs: Optional[int] = Field(100, description="Maximum DBs to find")
+
+
+class DBInfo(BaseModel):
+    """Data Block information"""
+    db_number: int
+    size: int
+    accessible: bool = True
+    error: Optional[str] = None
+
+
+class S7ListDBsResponse(BaseModel):
+    """Response from DB listing"""
+    device_ip: str
+    db_count: int
+    total_size: int
+    dbs: List[DBInfo]
+
+
 @router.post("/s7/scan")
 async def scan_s7_network(
-    request: EtherNetIPScanRequest,  # Reuse same request model
+    request: S7ScanRequest,
     current_user: User = Depends(get_current_user)
 ):
     """
-    Scan network for S7 devices.
+    Scan IP range for S7 devices.
 
     Note: S7 devices don't respond to broadcast, so this performs
-    unicast probes on the subnet.
+    unicast probes on each IP in the range.
     """
-    # TODO: Implement S7 scanning in Week 2
-    raise HTTPException(
-        status_code=501,
-        detail="S7 scanning will be implemented in Phase 0 Week 2"
-    )
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../../gateway'))
+
+        from gateway.app.protocols.s7 import S7Client
+        import ipaddress
+
+        devices = []
+        start = ipaddress.ip_address(request.start_ip)
+        end = ipaddress.ip_address(request.end_ip)
+
+        current = start
+        scan_count = 0
+
+        logger.info(f"Scanning S7 devices from {request.start_ip} to {request.end_ip}...")
+
+        while current <= end and scan_count < 254:  # Limit to prevent excessive scanning
+            ip_str = str(current)
+            scan_count += 1
+
+            try:
+                # Probe this IP
+                client = S7Client(ip_str, rack=request.rack, slot=request.slot, timeout=request.timeout)
+
+                if client.connect():
+                    # Get device info
+                    info = client.get_device_info()
+
+                    if info:
+                        devices.append(DeviceInfo(
+                            ip_address=ip_str,
+                            product_name=info.cpu_type,
+                            serial_number=info.serial_number,
+                            vendor_name="Siemens",
+                            protocol="S7"
+                        ))
+                        logger.info(f"Found S7 device at {ip_str}")
+
+                    client.disconnect()
+
+            except Exception as e:
+                logger.debug(f"No S7 device at {ip_str}: {e}")
+
+            current += 1
+
+        return {
+            "devices": devices,
+            "scanned_ips": scan_count,
+            "devices_found": len(devices)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"S7 scan failed: {str(e)}")
+
+
+@router.post("/s7/list-dbs", response_model=S7ListDBsResponse)
+async def list_s7_data_blocks(
+    request: S7ListDBsRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List all accessible Data Blocks in an S7 PLC.
+
+    This endpoint probes DB numbers from start_db to end_db to find
+    which DBs are accessible.
+    """
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../../gateway'))
+
+        from gateway.app.services.discovery.s7_db_browser import S7DBBrowser
+
+        # Create DB browser
+        browser = S7DBBrowser(
+            request.device_ip,
+            rack=request.rack,
+            slot=request.slot
+        )
+
+        # List DBs
+        dbs = await browser.list_dbs_async(
+            start_db=request.start_db,
+            end_db=request.end_db,
+            max_dbs=request.max_dbs
+        )
+
+        # Cleanup
+        browser.disconnect()
+
+        # Convert to response
+        db_infos = [
+            DBInfo(
+                db_number=db.db_number,
+                size=db.size,
+                accessible=db.accessible,
+                error=db.error
+            )
+            for db in dbs
+        ]
+
+        total_size = sum(db.size for db in dbs)
+
+        return S7ListDBsResponse(
+            device_ip=request.device_ip,
+            db_count=len(db_infos),
+            total_size=total_size,
+            dbs=db_infos
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB listing failed: {str(e)}")
 
 
 @router.post("/s7/import-symbols")
@@ -483,15 +626,120 @@ async def import_s7_symbols(
     """
     Import S7 symbols from CSV file exported from TIA Portal.
 
-    CSV format:
-    DB,Offset,Name,Type,Size,Description
-    10,0.0,Temperature,REAL,4,Motor temperature
+    CSV format (flexible, must have Name and Address columns):
+    Name,Address,Type,Comment
+    MotorSpeed,DB10.DBREAL0,Real,Motor speed in RPM
+    MotorTemp,DB10.DBREAL4,Real,Motor temperature
+
+    or:
+
+    Symbol,Tag Address,Data Type,Description
+    Temperature_1,DB1.DBW0,INT,Temperature sensor 1
     """
-    # TODO: Implement S7 symbol import in Week 2
-    raise HTTPException(
-        status_code=501,
-        detail="S7 symbol import will be implemented in Phase 0 Week 2"
-    )
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../../gateway'))
+
+        from gateway.app.services.discovery.s7_symbol_importer import S7SymbolImporter
+
+        # Create importer
+        importer = S7SymbolImporter()
+
+        # Import symbols from CSV
+        symbols = importer.import_from_csv(request.symbols_csv)
+
+        if not symbols:
+            raise HTTPException(
+                status_code=400,
+                detail="No symbols found in CSV. Check format."
+            )
+
+        # Validate symbols
+        validation = importer.validate_symbols(symbols)
+
+        if validation['invalid'] > 0:
+            logger.warning(f"Symbol validation found {validation['invalid']} invalid symbols")
+
+        # Check if device exists
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Device).where(
+                Device.connection_string == request.device_ip,
+                Device.organization_id == request.organization_id
+            )
+        )
+        device = result.scalar_one_or_none()
+
+        # Create device if needed
+        if not device and request.create_device:
+            device_info = DeviceInfo(
+                ip_address=request.device_ip,
+                protocol="S7",
+                product_name="S7 PLC",
+                vendor_name="Siemens"
+            )
+
+            device = await create_device_from_discovery(
+                db=db,
+                device_info=device_info,
+                site_id=request.site_id,
+                organization_id=request.organization_id,
+                slot=0
+            )
+
+        if not device:
+            raise HTTPException(
+                status_code=404,
+                detail="Device not found and create_device is False"
+            )
+
+        # Import symbols as tags
+        tags_imported = 0
+        tags_failed = 0
+        errors = []
+
+        for symbol in symbols:
+            try:
+                # Create tag from symbol
+                tag_request = ImportTagRequest(
+                    tag_name=symbol.name,
+                    source_address=symbol.address,
+                    data_type=symbol.data_type,
+                    description=symbol.comment,
+                    unit=symbol.unit
+                )
+
+                tag = await create_tag_from_import(
+                    db=db,
+                    device=device,
+                    tag_request=tag_request,
+                    organization_id=request.organization_id
+                )
+
+                tags_imported += 1
+
+            except Exception as e:
+                tags_failed += 1
+                errors.append(f"{symbol.name}: {str(e)}")
+
+        # Commit
+        await db.commit()
+
+        return {
+            "device_id": device.id,
+            "symbols_processed": len(symbols),
+            "tags_imported": tags_imported,
+            "tags_failed": tags_failed,
+            "validation": validation,
+            "errors": errors[:10]  # Limit error list
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Symbol import failed: {str(e)}")
 
 
 # ========== OPC UA Endpoints ==========

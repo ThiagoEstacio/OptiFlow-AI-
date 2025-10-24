@@ -129,6 +129,7 @@ class DataCollector:
 
         # Protocol clients
         self._ethernetip_clients: Dict[str, EtherNetIPClient] = {}
+        self._s7_clients: Dict[str, Any] = {}  # S7Client instances
 
         # Device status
         self._device_status: Dict[int, DeviceStatus] = {}
@@ -294,8 +295,7 @@ class DataCollector:
                 if protocol == "EtherNet/IP":
                     await self._collect_ethernetip(device_id, device_ip, points)
                 elif protocol == "S7":
-                    # TODO: Implement S7 collection
-                    await asyncio.sleep(1)
+                    await self._collect_s7(device_id, device_ip, points)
                 elif protocol == "OPC UA":
                     # TODO: Implement OPC UA collection
                     await asyncio.sleep(1)
@@ -427,6 +427,130 @@ class DataCollector:
         min_scan_rate = min(scan_groups.keys()) if scan_groups else 1000
         await asyncio.sleep(min_scan_rate / 1000.0)
 
+    async def _collect_s7(
+        self,
+        device_id: int,
+        device_ip: str,
+        points: List[PointConfig]
+    ) -> None:
+        """
+        Collect data from S7 device.
+
+        Args:
+            device_id: Device ID
+            device_ip: Device IP address
+            points: Points to collect
+        """
+        from ..protocols.s7 import S7Client
+
+        # Get or create client
+        rack = points[0].slot if hasattr(points[0], 'rack') else 0
+        slot = points[0].slot if points else 1
+        client_key = f"{device_ip}:{rack}:{slot}"
+
+        if client_key not in self._s7_clients:
+            client = S7Client(device_ip, rack=rack, slot=slot)
+            if not await client.connect_async():
+                logger.error(f"Failed to connect to S7 PLC at {device_ip}")
+                self._device_status[device_id].status = ConnectionStatus.ERROR
+                await asyncio.sleep(5)
+                return
+
+            self._s7_clients[client_key] = client
+            self._device_status[device_id].status = ConnectionStatus.CONNECTED
+            self._device_status[device_id].last_connected = time.time()
+
+            if self.status_callback:
+                await self.status_callback(self._device_status[device_id])
+
+        client = self._s7_clients[client_key]
+
+        # Check connection
+        if not client.is_connected():
+            logger.warning(f"S7 client disconnected, reconnecting to {device_ip}")
+            if not await client.connect_async():
+                logger.error(f"Reconnection failed for {device_ip}")
+                self._device_status[device_id].status = ConnectionStatus.ERROR
+                await asyncio.sleep(5)
+                return
+
+        # Group points by scan rate
+        scan_groups = {}
+        for point in points:
+            rate = point.scan_rate
+            if rate not in scan_groups:
+                scan_groups[rate] = []
+            scan_groups[rate].append(point)
+
+        # Collect data for each scan rate group
+        current_time = time.time()
+
+        for scan_rate, group_points in scan_groups.items():
+            # Check if it's time to collect
+            needs_collection = []
+
+            for point in group_points:
+                if point.last_collection is None:
+                    needs_collection.append(point)
+                else:
+                    elapsed = (current_time - point.last_collection) * 1000
+                    if elapsed >= scan_rate:
+                        needs_collection.append(point)
+
+            if not needs_collection:
+                continue
+
+            # Read each address individually (S7 doesn't have batch read like EtherNet/IP)
+            data_points = []
+
+            for point in needs_collection:
+                try:
+                    # Read using S7 address
+                    result = await client.read_address_async(point.source_address)
+
+                    if result.quality == "Good":
+                        # Apply scaling
+                        scaled_value = self._apply_scaling(result.value, point)
+
+                        # Check deadband
+                        should_report = self._check_deadband(scaled_value, point)
+
+                        if should_report:
+                            data_points.append(DataPoint(
+                                point_id=point.point_id,
+                                point_name=point.point_name,
+                                value=scaled_value,
+                                quality=result.quality,
+                                timestamp=time.time(),
+                                device_id=device_id
+                            ))
+
+                        # Update last values
+                        point.last_value = scaled_value
+                        point.last_collection = current_time
+
+                        # Update statistics
+                        self._device_status[device_id].total_reads += 1
+
+                    else:
+                        logger.warning(
+                            f"Bad quality reading {point.source_address}: {result.error}"
+                        )
+                        self._device_status[device_id].failed_reads += 1
+
+                except Exception as e:
+                    logger.error(f"Error reading {point.source_address} from {device_ip}: {e}")
+                    self._device_status[device_id].failed_reads += 1
+                    self._device_status[device_id].error_count += 1
+
+            # Send data via callback
+            if data_points and self.data_callback:
+                await self.data_callback(data_points)
+
+        # Sleep until next collection cycle
+        min_scan_rate = min(scan_groups.keys()) if scan_groups else 1000
+        await asyncio.sleep(min_scan_rate / 1000.0)
+
     def _apply_scaling(self, value: Any, point: PointConfig) -> Any:
         """
         Apply scaling to raw value.
@@ -500,6 +624,12 @@ class DataCollector:
             await client.disconnect_async()
 
         self._ethernetip_clients.clear()
+
+        # Disconnect S7 clients
+        for client_key, client in self._s7_clients.items():
+            await client.disconnect_async()
+
+        self._s7_clients.clear()
 
     def get_statistics(self) -> Dict[str, Any]:
         """
