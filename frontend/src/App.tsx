@@ -5,6 +5,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
+import { SmartPortPage } from './pages/SmartPortPage';
 import { LoginPage } from './pages/LoginPage';
 import { useAuth } from './hooks/useAuth';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
@@ -29,6 +30,16 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        {/* SmartPort - Standalone route (no MainLayout) */}
+        <Route
+          path="/smartport"
+          element={
+            <ProtectedRoute>
+              <SmartPortPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/"

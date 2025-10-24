@@ -15,6 +15,10 @@ from app.api.v1.endpoints import (
     export,
     annotations,
     analytics,
+    smartport_berths,
+    smartport_vessels,
+    smartport_operations,
+    smartport_dashboard,
 )
 
 api_router = APIRouter()
@@ -31,3 +35,9 @@ api_router.include_router(alarms.router, prefix="/alarms", tags=["Alarms"])
 api_router.include_router(export.router, prefix="/export", tags=["Data Export"])
 api_router.include_router(annotations.router, prefix="/annotations", tags=["Annotations & Collaboration"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Advanced Analytics"])
+
+# SmartPort endpoints
+api_router.include_router(smartport_berths.router, prefix="/smartport/berths", tags=["SmartPort - Berths"])
+api_router.include_router(smartport_vessels.router, prefix="/smartport/vessels", tags=["SmartPort - Vessels"])
+api_router.include_router(smartport_operations.router, prefix="/smartport/operations", tags=["SmartPort - Operations"])
+api_router.include_router(smartport_dashboard.router, prefix="/smartport/dashboard", tags=["SmartPort - Dashboard"])

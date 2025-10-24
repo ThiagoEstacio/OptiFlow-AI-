@@ -4,7 +4,7 @@ WebSocket routes
 from fastapi import APIRouter, WebSocket, Query
 from typing import Optional
 
-from app.websocket.handlers import handle_realtime_data, handle_dashboard
+from app.websocket.handlers import handle_realtime_data, handle_dashboard, handle_smartport
 
 router = APIRouter()
 
@@ -26,3 +26,12 @@ async def websocket_dashboard(
 ):
     """Dashboard-specific WebSocket endpoint"""
     await handle_dashboard(websocket, dashboard_id, token)
+
+
+@router.websocket("/smartport")
+async def websocket_smartport(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None)
+):
+    """SmartPort real-time updates WebSocket endpoint"""
+    await handle_smartport(websocket, token)

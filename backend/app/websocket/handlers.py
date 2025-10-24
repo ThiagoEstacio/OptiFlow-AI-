@@ -214,3 +214,178 @@ async def handle_dashboard(
         logger.error(f"Dashboard WebSocket error: {e}")
     finally:
         await manager.disconnect(websocket)
+
+
+async def handle_smartport(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),
+):
+    """
+    WebSocket endpoint for SmartPort real-time updates
+
+    Usage:
+    ws://localhost:8000/api/v1/ws/smartport?token=<jwt_token>
+
+    Message types:
+    - subscribe_berth: Subscribe to berth status updates
+    - subscribe_vessel: Subscribe to vessel position/status updates
+    - subscribe_operation: Subscribe to operation progress updates
+    - subscribe_port: Subscribe to all port events
+    """
+    current_user = None
+
+    try:
+        # Authenticate user if token provided
+        if token:
+            try:
+                current_user = await get_current_user_ws(token)
+            except Exception as e:
+                await websocket.close(code=4001, reason="Authentication failed")
+                return
+
+        # Accept connection
+        user_id = str(current_user.id) if current_user else None
+        await manager.connect(websocket, user_id=user_id, metadata={"type": "smartport"})
+
+        # Send welcome message
+        await manager.send_personal_message({
+            "type": "connection",
+            "status": "connected",
+            "message": "Connected to SmartPort WebSocket",
+            "user_id": user_id
+        }, websocket)
+
+        # Handle incoming messages
+        while True:
+            try:
+                # Receive message
+                data = await websocket.receive_json()
+
+                # Handle different message types
+                message_type = data.get("type")
+
+                if message_type == "subscribe_berth":
+                    berth_id = data.get("berth_id")
+                    if berth_id:
+                        room_id = f"smartport:berth:{berth_id}"
+                        await manager.join_room(websocket, room_id)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "subscribed",
+                            "resource": "berth",
+                            "resource_id": berth_id,
+                            "room_id": room_id
+                        }, websocket)
+
+                elif message_type == "unsubscribe_berth":
+                    berth_id = data.get("berth_id")
+                    if berth_id:
+                        room_id = f"smartport:berth:{berth_id}"
+                        await manager.leave_room(websocket, room_id)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "unsubscribed",
+                            "resource": "berth",
+                            "resource_id": berth_id
+                        }, websocket)
+
+                elif message_type == "subscribe_vessel":
+                    vessel_id = data.get("vessel_id")
+                    if vessel_id:
+                        room_id = f"smartport:vessel:{vessel_id}"
+                        await manager.join_room(websocket, room_id)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "subscribed",
+                            "resource": "vessel",
+                            "resource_id": vessel_id,
+                            "room_id": room_id
+                        }, websocket)
+
+                elif message_type == "unsubscribe_vessel":
+                    vessel_id = data.get("vessel_id")
+                    if vessel_id:
+                        room_id = f"smartport:vessel:{vessel_id}"
+                        await manager.leave_room(websocket, room_id)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "unsubscribed",
+                            "resource": "vessel",
+                            "resource_id": vessel_id
+                        }, websocket)
+
+                elif message_type == "subscribe_operation":
+                    operation_id = data.get("operation_id")
+                    if operation_id:
+                        room_id = f"smartport:operation:{operation_id}"
+                        await manager.join_room(websocket, room_id)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "subscribed",
+                            "resource": "operation",
+                            "resource_id": operation_id,
+                            "room_id": room_id
+                        }, websocket)
+
+                elif message_type == "unsubscribe_operation":
+                    operation_id = data.get("operation_id")
+                    if operation_id:
+                        room_id = f"smartport:operation:{operation_id}"
+                        await manager.leave_room(websocket, room_id)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "unsubscribed",
+                            "resource": "operation",
+                            "resource_id": operation_id
+                        }, websocket)
+
+                elif message_type == "subscribe_port":
+                    # Subscribe to all port events
+                    room_id = "smartport:port:all"
+                    await manager.join_room(websocket, room_id)
+                    await manager.send_personal_message({
+                        "type": "subscription",
+                        "status": "subscribed",
+                        "resource": "port",
+                        "room_id": room_id
+                    }, websocket)
+
+                elif message_type == "unsubscribe_port":
+                    room_id = "smartport:port:all"
+                    await manager.leave_room(websocket, room_id)
+                    await manager.send_personal_message({
+                        "type": "subscription",
+                        "status": "unsubscribed",
+                        "resource": "port"
+                    }, websocket)
+
+                elif message_type == "ping":
+                    await manager.send_personal_message({
+                        "type": "pong",
+                        "timestamp": data.get("timestamp")
+                    }, websocket)
+
+                else:
+                    await manager.send_personal_message({
+                        "type": "error",
+                        "message": f"Unknown message type: {message_type}"
+                    }, websocket)
+
+            except json.JSONDecodeError:
+                await manager.send_personal_message({
+                    "type": "error",
+                    "message": "Invalid JSON format"
+                }, websocket)
+            except Exception as e:
+                logger.error(f"Error handling SmartPort WebSocket message: {e}")
+                await manager.send_personal_message({
+                    "type": "error",
+                    "message": "Internal server error"
+                }, websocket)
+
+    except WebSocketDisconnect:
+        logger.info(f"SmartPort WebSocket disconnected: user_id={user_id}")
+    except Exception as e:
+        logger.error(f"SmartPort WebSocket error: {e}")
+    finally:
+        await manager.disconnect(websocket)
