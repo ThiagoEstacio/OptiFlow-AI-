@@ -131,3 +131,40 @@ def validate_password_strength(password: str) -> bool:
     # - At least one special character
 
     return True
+
+
+async def get_current_user_ws(token: str):
+    """
+    Authenticate WebSocket connection using JWT token
+
+    Args:
+        token: JWT token from WebSocket query parameter
+
+    Returns:
+        User object from token
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    from app.models.user import User
+
+    try:
+        payload = decode_token(token)
+        user_id: str = payload.get("sub")
+
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials"
+            )
+
+        # Create a simple user object with the ID
+        # In production, you might want to fetch full user from database
+        user = type('User', (), {'id': user_id})()
+        return user
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
