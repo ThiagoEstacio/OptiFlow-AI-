@@ -111,7 +111,7 @@ class AlarmEvent(Base):
     duration_seconds = Column(Float, nullable=True)
 
     # Additional data
-    metadata = Column(JSONB, default=dict, nullable=False)
+    event_metadata = Column(JSONB, default=dict, nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

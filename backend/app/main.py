@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.session import init_db
+from app.websocket.routes import router as websocket_router
 
 # Configure logging
 logging.basicConfig(
@@ -69,6 +70,9 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Include WebSocket router
+app.include_router(websocket_router)
 
 
 @app.get("/")
