@@ -79,5 +79,11 @@ class Site(Base):
     organization = relationship("Organization", back_populates="sites")
     devices = relationship("Device", back_populates="site", cascade="all, delete-orphan")
 
+    # Port-specific relationships
+    vessels = relationship("Vessel", back_populates="site", cascade="all, delete-orphan")
+    berths = relationship("Berth", back_populates="site", cascade="all, delete-orphan")
+    loading_operations = relationship("LoadingOperation", back_populates="site", cascade="all, delete-orphan")
+    port_equipment = relationship("PortEquipment", back_populates="site", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<Site {self.name}>"
