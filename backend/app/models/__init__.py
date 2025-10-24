@@ -5,6 +5,12 @@ from app.models.device import Device
 from app.models.tag import Tag
 from app.models.alarm import AlarmDefinition, AlarmEvent
 from app.models.ml_model import MLModel, Prediction
+from app.models.point_config import (
+    PointTemplate,
+    PointConfiguration,
+    CompressionType,
+    HistorianType,
+)
 
 __all__ = [
     "Organization",
@@ -16,4 +22,8 @@ __all__ = [
     "AlarmEvent",
     "MLModel",
     "Prediction",
+    "PointTemplate",
+    "PointConfiguration",
+    "CompressionType",
+    "HistorianType",
 ]
