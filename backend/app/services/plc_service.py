@@ -308,6 +308,203 @@ class PLCService:
                 pass
             logger.info("Stopped tag monitoring")
 
+    async def browse_opcua(
+        self,
+        node_id: str = "i=85",  # Objects folder
+        max_depth: int = 10,
+        include_properties: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Browse OPC UA server tree and discover all variables/tags
+
+        Args:
+            node_id: Starting node ID (default: Objects folder)
+            max_depth: Maximum depth to browse (prevents infinite recursion)
+            include_properties: Include property nodes (usually not needed)
+
+        Returns:
+            List of discovered tags with metadata
+        """
+        if not self.opcua_client or not self.connected:
+            logger.error("OPC UA client not connected")
+            return []
+
+        discovered_tags = []
+
+        async def browse_node(node, current_path: str = "", depth: int = 0):
+            """Recursively browse nodes"""
+            if depth > max_depth:
+                return
+
+            try:
+                # Get node class (Object, Variable, Method, etc)
+                node_class = await node.read_node_class()
+
+                # Get browse name
+                browse_name = await node.read_browse_name()
+                node_name = browse_name.Name
+
+                # Build path
+                path = f"{current_path}/{node_name}" if current_path else node_name
+
+                # If it's a Variable node, extract tag information
+                if node_class == ua.NodeClass.Variable:
+                    try:
+                        # Get data type
+                        data_type_node = await node.read_data_type()
+                        data_type = await self._get_data_type_name(data_type_node)
+
+                        # Get description
+                        try:
+                            description_attr = await node.read_description()
+                            description = description_attr.Text if description_attr else ""
+                        except:
+                            description = ""
+
+                        # Get current value to infer more info
+                        try:
+                            value = await node.read_value()
+                            value_type = type(value).__name__
+                        except:
+                            value = None
+                            value_type = "Unknown"
+
+                        # Get access level
+                        try:
+                            access_level = await node.read_attribute(ua.AttributeIds.AccessLevel)
+                            writable = bool(access_level.Value.Value & 0x02)  # Check write bit
+                        except:
+                            writable = False
+
+                        # Get node ID string
+                        node_id_str = node.nodeid.to_string()
+
+                        tag_info = {
+                            "name": node_name,
+                            "path": path,
+                            "node_id": node_id_str,
+                            "data_type": data_type,
+                            "value_type": value_type,
+                            "description": description,
+                            "current_value": value,
+                            "writable": writable,
+                        }
+
+                        discovered_tags.append(tag_info)
+                        logger.debug(f"Discovered tag: {path} ({data_type})")
+
+                    except Exception as e:
+                        logger.warning(f"Error reading variable {path}: {e}")
+
+                # Browse children
+                try:
+                    children = await node.get_children()
+                    for child in children:
+                        # Skip properties unless explicitly requested
+                        if not include_properties:
+                            child_browse_name = await child.read_browse_name()
+                            # Properties typically have namespace 0 and are in Properties folder
+                            if child_browse_name.NamespaceIndex == 0:
+                                continue
+
+                        await browse_node(child, path, depth + 1)
+                except Exception as e:
+                    logger.debug(f"No children for node {path}: {e}")
+
+            except Exception as e:
+                logger.warning(f"Error browsing node {current_path}: {e}")
+
+        # Start browsing from root node
+        try:
+            root_node = self.opcua_client.get_node(node_id)
+            logger.info(f"Starting OPC UA browse from node: {node_id}")
+            await browse_node(root_node)
+            logger.info(f"Browse complete. Found {len(discovered_tags)} tags")
+        except Exception as e:
+            logger.error(f"Error starting browse: {e}")
+
+        return discovered_tags
+
+    async def _get_data_type_name(self, data_type_node) -> str:
+        """Convert OPC UA data type node to readable name"""
+        try:
+            # Map common OPC UA data types
+            type_map = {
+                "i=1": "Boolean",
+                "i=2": "SByte",
+                "i=3": "Byte",
+                "i=4": "Int16",
+                "i=5": "UInt16",
+                "i=6": "Int32",
+                "i=7": "UInt32",
+                "i=8": "Int64",
+                "i=9": "UInt64",
+                "i=10": "Float",
+                "i=11": "Double",
+                "i=12": "String",
+                "i=13": "DateTime",
+                "i=15": "Guid",
+                "i=17": "ByteString",
+            }
+
+            node_id_str = data_type_node.to_string()
+            return type_map.get(node_id_str, node_id_str)
+        except:
+            return "Unknown"
+
+    async def test_connection(self, url: str) -> Dict[str, Any]:
+        """
+        Test connection to OPC UA server and get basic info
+
+        Args:
+            url: OPC UA server URL
+
+        Returns:
+            Connection test results
+        """
+        result = {
+            "success": False,
+            "url": url,
+            "server_info": None,
+            "error": None
+        }
+
+        temp_client = None
+        try:
+            temp_client = OPCClient(url=url, timeout=5)
+            await temp_client.connect()
+
+            # Get server info
+            server_info = {
+                "application_uri": str(temp_client.application_uri),
+                "product_uri": str(temp_client.product_uri),
+                "server_name": str(temp_client.name),
+            }
+
+            # Try to get namespace array
+            try:
+                ns_node = temp_client.get_node("i=2255")  # NamespaceArray node
+                namespaces = await ns_node.read_value()
+                server_info["namespaces"] = namespaces
+            except:
+                pass
+
+            result["success"] = True
+            result["server_info"] = server_info
+            logger.info(f"Successfully tested connection to {url}")
+
+        except Exception as e:
+            result["error"] = str(e)
+            logger.error(f"Connection test failed for {url}: {e}")
+        finally:
+            if temp_client:
+                try:
+                    await temp_client.disconnect()
+                except:
+                    pass
+
+        return result
+
 
 # Demo PLC simulator for testing
 class DemoPLCService(PLCService):
