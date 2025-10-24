@@ -44,9 +44,20 @@ export const API_ENDPOINTS = {
   // Annotations
   ANNOTATIONS: `${API_VERSION}/annotations`,
 
+  // PLC
+  PLC_TAGS: `${API_VERSION}/plc/tags`,
+  PLC_TAG: (tagName: string) => `${API_VERSION}/plc/tags/${tagName}`,
+  PLC_TAG_HISTORY: (tagName: string) => `${API_VERSION}/plc/tags/${tagName}/history`,
+  PLC_TAG_STATS: (tagName: string) => `${API_VERSION}/plc/tags/${tagName}/stats`,
+
+  // ChatBot
+  CHATBOT_CHAT: `${API_VERSION}/chatbot/chat`,
+  CHATBOT_HISTORY: `${API_VERSION}/chatbot/history`,
+
   // WebSocket
   WS_REALTIME: `${API_VERSION}/ws/realtime`,
   WS_DASHBOARD: `${API_VERSION}/ws/dashboard`,
+  WS_PLC: `/ws/plc`,
 } as const;
 
 export const WEBSOCKET_EVENTS = {

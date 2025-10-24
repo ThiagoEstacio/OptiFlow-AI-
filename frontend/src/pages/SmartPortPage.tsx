@@ -10,8 +10,11 @@ import { PortMap } from '../components/smartport/PortMap';
 import { BerthStatusGrid } from '../components/smartport/BerthStatusGrid';
 import { VesselList } from '../components/smartport/VesselList';
 import { OperationProgress } from '../components/smartport/OperationProgress';
+import { RealTimePLCViewer } from '../components/smartport/RealTimePLCViewer';
+import { HistoricalTrendChart } from '../components/smartport/HistoricalTrendChart';
+import { ChatBotWidget } from '../components/smartport/ChatBotWidget';
 import { Berth, Vessel, PortOperation } from '../api/smartport';
-import { RefreshCw, Activity, Wifi, WifiOff } from 'lucide-react';
+import { RefreshCw, Activity, Wifi, WifiOff, Gauge } from 'lucide-react';
 
 export const SmartPortPage: React.FC = () => {
   const {
@@ -25,9 +28,8 @@ export const SmartPortPage: React.FC = () => {
   } = useSmartPort();
 
   const [selectedBerthId, setSelectedBerthId] = useState<string | undefined>();
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'berths' | 'vessels' | 'operations'>(
-    'overview'
-  );
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'berths' | 'vessels' | 'operations' | 'plc'>('overview');
+  const [selectedPLCTag, setSelectedPLCTag] = useState<string>('crane_1_position');
 
   const handleBerthClick = (berth: Berth) => {
     setSelectedBerthId(berth.id);
@@ -128,6 +130,19 @@ export const SmartPortPage: React.FC = () => {
               >
                 Operations ({operations.length})
               </button>
+              <button
+                onClick={() => setSelectedTab('plc')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  selectedTab === 'plc'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Gauge className="h-4 w-4" />
+                  PLC Monitor
+                </div>
+              </button>
             </nav>
           </div>
         </div>
@@ -183,6 +198,49 @@ export const SmartPortPage: React.FC = () => {
 
         {selectedTab === 'operations' && (
           <OperationProgress operations={operations} onOperationClick={handleOperationClick} />
+        )}
+
+        {selectedTab === 'plc' && (
+          <div className="space-y-6">
+            {/* Real-time PLC Viewer */}
+            <RealTimePLCViewer showAllTags={true} />
+
+            {/* Historical Trend and ChatBot - Side by Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Historical Chart - Takes 2 columns */}
+              <div className="lg:col-span-2">
+                <HistoricalTrendChart
+                  tagName={selectedPLCTag}
+                  hours={24}
+                  chartType="area"
+                  showStatistics={true}
+                />
+
+                {/* Tag Selector */}
+                <div className="mt-4 bg-white rounded-lg shadow-sm p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Tag for Historical View:
+                  </label>
+                  <select
+                    value={selectedPLCTag}
+                    onChange={(e) => setSelectedPLCTag(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="crane_1_position">Crane 1 Position</option>
+                    <option value="crane_1_load">Crane 1 Load</option>
+                    <option value="crane_1_speed">Crane 1 Speed</option>
+                    <option value="berth_t1a_containers">Berth T1-A Containers</option>
+                    <option value="port_throughput">Port Throughput</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* ChatBot Widget - Takes 1 column */}
+              <div className="lg:col-span-1">
+                <ChatBotWidget includeContext={true} className="h-full" />
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
