@@ -19,6 +19,8 @@ from app.api.v1.endpoints import (
     smartport_vessels,
     smartport_operations,
     smartport_dashboard,
+    plc,
+    chatbot,
 )
 
 api_router = APIRouter()
@@ -41,3 +43,7 @@ api_router.include_router(smartport_berths.router, prefix="/smartport/berths", t
 api_router.include_router(smartport_vessels.router, prefix="/smartport/vessels", tags=["SmartPort - Vessels"])
 api_router.include_router(smartport_operations.router, prefix="/smartport/operations", tags=["SmartPort - Operations"])
 api_router.include_router(smartport_dashboard.router, prefix="/smartport/dashboard", tags=["SmartPort - Dashboard"])
+
+# PLC and ChatBot endpoints
+api_router.include_router(plc.router, prefix="/plc", tags=["PLC Tags"])
+api_router.include_router(chatbot.router, prefix="/chatbot", tags=["AI ChatBot"])

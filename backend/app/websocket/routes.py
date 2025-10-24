@@ -4,7 +4,7 @@ WebSocket routes
 from fastapi import APIRouter, WebSocket, Query
 from typing import Optional
 
-from app.websocket.handlers import handle_realtime_data, handle_dashboard, handle_smartport
+from app.websocket.handlers import handle_realtime_data, handle_dashboard, handle_smartport, handle_plc_streaming
 
 router = APIRouter()
 
@@ -35,3 +35,12 @@ async def websocket_smartport(
 ):
     """SmartPort real-time updates WebSocket endpoint"""
     await handle_smartport(websocket, token)
+
+
+@router.websocket("/plc")
+async def websocket_plc(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None)
+):
+    """PLC real-time streaming WebSocket endpoint"""
+    await handle_plc_streaming(websocket, token)

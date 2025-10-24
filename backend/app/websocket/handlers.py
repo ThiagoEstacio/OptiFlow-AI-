@@ -389,3 +389,188 @@ async def handle_smartport(
         logger.error(f"SmartPort WebSocket error: {e}")
     finally:
         await manager.disconnect(websocket)
+
+
+async def handle_plc_streaming(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),
+):
+    """
+    WebSocket endpoint for PLC real-time streaming
+
+    Usage:
+    ws://localhost:8000/api/v1/ws/plc?token=<jwt_token>
+
+    Message types:
+    - subscribe_tag: Subscribe to a specific PLC tag
+    - unsubscribe_tag: Unsubscribe from a tag
+    - subscribe_all: Subscribe to all tags
+    - read_tag: Read current value of a tag
+    """
+    from app.services.plc_service import plc_service
+    from app.services.timeseries_service import timeseries_service
+    import asyncio
+
+    current_user = None
+    subscribed_tags = set()
+    streaming_task = None
+
+    try:
+        # Authenticate user if token provided
+        if token:
+            try:
+                current_user = await get_current_user_ws(token)
+            except Exception as e:
+                await websocket.close(code=4001, reason="Authentication failed")
+                return
+
+        # Accept connection
+        user_id = str(current_user.id) if current_user else None
+        await manager.connect(websocket, user_id=user_id, metadata={"type": "plc"})
+
+        # Send welcome message with available tags
+        await manager.send_personal_message({
+            "type": "connection",
+            "status": "connected",
+            "message": "Connected to PLC Streaming",
+            "available_tags": list(plc_service.tags.keys())
+        }, websocket)
+
+        # Streaming loop task
+        async def stream_tags():
+            while True:
+                if subscribed_tags:
+                    # Read subscribed tags
+                    data = {}
+                    for tag_name in subscribed_tags:
+                        value = await plc_service.read_tag_opcua(tag_name)
+                        tag = plc_service.tags.get(tag_name)
+                        if tag:
+                            data[tag_name] = {
+                                "value": value,
+                                "timestamp": tag.timestamp.isoformat() if tag.timestamp else None,
+                                "quality": tag.quality,
+                                "unit": tag.unit,
+                                "description": tag.description
+                            }
+
+                            # Write to time series
+                            if value is not None:
+                                timeseries_service.write_tag_value(
+                                    tag_name=tag_name,
+                                    value=value,
+                                    timestamp=tag.timestamp
+                                )
+
+                    # Send update
+                    if data:
+                        await manager.send_personal_message({
+                            "type": "plc_update",
+                            "data": data
+                        }, websocket)
+
+                await asyncio.sleep(1.0)  # Update every 1 second
+
+        # Handle incoming messages
+        while True:
+            try:
+                # Receive message
+                data = await websocket.receive_json()
+
+                # Handle different message types
+                message_type = data.get("type")
+
+                if message_type == "subscribe_tag":
+                    tag_name = data.get("tag_name")
+                    if tag_name and tag_name in plc_service.tags:
+                        subscribed_tags.add(tag_name)
+
+                        # Start streaming if not already started
+                        if streaming_task is None or streaming_task.done():
+                            streaming_task = asyncio.create_task(stream_tags())
+
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "subscribed",
+                            "tag_name": tag_name
+                        }, websocket)
+
+                elif message_type == "unsubscribe_tag":
+                    tag_name = data.get("tag_name")
+                    if tag_name in subscribed_tags:
+                        subscribed_tags.remove(tag_name)
+                        await manager.send_personal_message({
+                            "type": "subscription",
+                            "status": "unsubscribed",
+                            "tag_name": tag_name
+                        }, websocket)
+
+                elif message_type == "subscribe_all":
+                    subscribed_tags = set(plc_service.tags.keys())
+
+                    # Start streaming
+                    if streaming_task is None or streaming_task.done():
+                        streaming_task = asyncio.create_task(stream_tags())
+
+                    await manager.send_personal_message({
+                        "type": "subscription",
+                        "status": "subscribed_all",
+                        "tags": list(subscribed_tags)
+                    }, websocket)
+
+                elif message_type == "unsubscribe_all":
+                    subscribed_tags.clear()
+                    await manager.send_personal_message({
+                        "type": "subscription",
+                        "status": "unsubscribed_all"
+                    }, websocket)
+
+                elif message_type == "read_tag":
+                    tag_name = data.get("tag_name")
+                    if tag_name and tag_name in plc_service.tags:
+                        value = await plc_service.read_tag_opcua(tag_name)
+                        tag = plc_service.tags.get(tag_name)
+
+                        await manager.send_personal_message({
+                            "type": "tag_value",
+                            "tag_name": tag_name,
+                            "value": value,
+                            "timestamp": tag.timestamp.isoformat() if tag.timestamp else None,
+                            "quality": tag.quality,
+                            "unit": tag.unit
+                        }, websocket)
+
+                elif message_type == "ping":
+                    await manager.send_personal_message({
+                        "type": "pong",
+                        "timestamp": data.get("timestamp")
+                    }, websocket)
+
+                else:
+                    await manager.send_personal_message({
+                        "type": "error",
+                        "message": f"Unknown message type: {message_type}"
+                    }, websocket)
+
+            except json.JSONDecodeError:
+                await manager.send_personal_message({
+                    "type": "error",
+                    "message": "Invalid JSON format"
+                }, websocket)
+            except Exception as e:
+                logger.error(f"Error handling PLC WebSocket message: {e}")
+                await manager.send_personal_message({
+                    "type": "error",
+                    "message": "Internal server error"
+                }, websocket)
+
+    except WebSocketDisconnect:
+        logger.info(f"PLC WebSocket disconnected: user_id={user_id}")
+    except Exception as e:
+        logger.error(f"PLC WebSocket error: {e}")
+    finally:
+        # Stop streaming
+        if streaming_task and not streaming_task.done():
+            streaming_task.cancel()
+
+        await manager.disconnect(websocket)
