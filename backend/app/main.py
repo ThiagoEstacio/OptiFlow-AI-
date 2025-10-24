@@ -9,8 +9,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.api.v1.api import api_router
-from app.db.session import init_db
+from app.core.database import init_db, close_db
+from app.core.cache import close_redis_connections
+from app.api.v1.api import api_router  # Legacy routers (auth, organizations, sites)
+from app.optiflow.api import optiflow_router  # OptiFlow Core routers
 
 # Configure logging
 logging.basicConfig(
@@ -42,6 +44,9 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("👋 Shutting down OptiFlow AI Platform...")
+    await close_db()
+    await close_redis_connections()
+    logger.info("✅ Cleanup completed")
 
 
 # Create FastAPI application
@@ -67,8 +72,11 @@ app.add_middleware(
 # GZip compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Include API router
+# Include legacy API router (auth, organizations, sites)
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Include OptiFlow Core router
+app.include_router(optiflow_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
@@ -79,6 +87,13 @@ async def root():
         "version": settings.APP_VERSION,
         "status": "running",
         "environment": settings.ENVIRONMENT,
+        "architecture": "Modular Monolith",
+        "modules": {
+            "optiflow_core": "Gateway, SCADA, Historian, ML",
+            "smartport": "Port terminal operations (coming soon)",
+            "ml_engine": "Machine learning predictions (coming soon)",
+            "ai_insights": "AI-powered insights (coming soon)"
+        },
         "docs": "/docs"
     }
 
