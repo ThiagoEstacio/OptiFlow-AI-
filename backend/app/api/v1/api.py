@@ -14,6 +14,9 @@ from app.api.v1.endpoints import (
     alarms,
     discovery,
     points,
+    annotations,
+    visualization,
+    explorer,
 )
 
 api_router = APIRouter()
@@ -29,3 +32,6 @@ api_router.include_router(timeseries.router, prefix="/timeseries", tags=["Time S
 api_router.include_router(alarms.router, prefix="/alarms", tags=["Alarms"])
 api_router.include_router(discovery.router, prefix="/discovery", tags=["Discovery"])
 api_router.include_router(points.router, prefix="/points", tags=["Point Builder"])
+api_router.include_router(annotations.router, prefix="/annotations", tags=["Annotations"])
+api_router.include_router(visualization.router, prefix="/visualization", tags=["Visualization"])
+api_router.include_router(explorer.router, prefix="/explorer", tags=["Tag Explorer"])

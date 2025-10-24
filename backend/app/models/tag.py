@@ -92,6 +92,7 @@ class Tag(Base):
     # Relationships
     device = relationship("Device", back_populates="tags")
     alarm_definitions = relationship("AlarmDefinition", back_populates="tag", cascade="all, delete-orphan")
+    annotations = relationship("Annotation", back_populates="tag", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Tag {self.name} ({self.unit})>"

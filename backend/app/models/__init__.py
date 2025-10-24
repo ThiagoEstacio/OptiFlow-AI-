@@ -11,6 +11,11 @@ from app.models.point_config import (
     CompressionType,
     HistorianType,
 )
+from app.models.annotation import (
+    Annotation,
+    AnnotationType,
+    AnnotationSeverity,
+)
 
 __all__ = [
     "Organization",
@@ -26,4 +31,7 @@ __all__ = [
     "PointConfiguration",
     "CompressionType",
     "HistorianType",
+    "Annotation",
+    "AnnotationType",
+    "AnnotationSeverity",
 ]
