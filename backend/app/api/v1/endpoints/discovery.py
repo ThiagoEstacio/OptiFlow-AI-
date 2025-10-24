@@ -744,21 +744,271 @@ async def import_s7_symbols(
 
 # ========== OPC UA Endpoints ==========
 
-@router.post("/opcua/browse")
+class OPCUABrowseRequest(BaseModel):
+    """Request to browse OPC UA address space"""
+    server_url: str = Field(..., example="opc.tcp://192.168.1.100:4840", description="OPC UA server URL")
+    root_node_id: Optional[str] = Field("i=85", description="Root node ID (default: Objects folder)")
+    max_depth: Optional[int] = Field(10, ge=1, le=20, description="Maximum browse depth")
+    filter_variables_only: Optional[bool] = Field(True, description="Only return Variable nodes")
+    include_values: Optional[bool] = Field(False, description="Include current values (slower)")
+
+
+class OPCUANodeInfo(BaseModel):
+    """OPC UA node information"""
+    node_id: str
+    browse_name: str
+    display_name: str
+    node_class: str
+    data_type: Optional[str] = None
+    parent_node_id: Optional[str] = None
+    namespace: Optional[int] = None
+
+
+class OPCUABrowseResponse(BaseModel):
+    """Response from OPC UA browse"""
+    server_url: str
+    node_count: int
+    nodes: List[OPCUANodeInfo]
+
+
+class OPCUAImportRequest(BaseModel):
+    """Request to import OPC UA nodes as tags"""
+    server_url: str
+    site_id: int
+    organization_id: int
+    nodes: List[Dict[str, Any]]  # List of node_id and optional config
+    create_device: Optional[bool] = True
+
+
+@router.post("/opcua/browse", response_model=OPCUABrowseResponse)
 async def browse_opcua_address_space(
-    request: BrowseTagsRequest,
+    request: OPCUABrowseRequest,
     current_user: User = Depends(get_current_user)
 ):
     """
     Browse OPC UA address space.
 
     Connects to OPC UA server and recursively browses the address space.
+    Returns variables (tags) that can be imported.
     """
-    # TODO: Implement OPC UA browsing in Week 3
-    raise HTTPException(
-        status_code=501,
-        detail="OPC UA browsing will be implemented in Phase 0 Week 3"
-    )
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../../gateway'))
+
+        from gateway.app.protocols.opcua import OPCUAClient
+
+        # Create OPC UA client
+        client = OPCUAClient(request.server_url)
+
+        # Connect
+        if not await client.connect():
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not connect to OPC UA server at {request.server_url}"
+            )
+
+        try:
+            # Browse address space
+            filter_classes = ["Variable"] if request.filter_variables_only else None
+
+            nodes = await client.browse_address_space(
+                root_node_id=request.root_node_id,
+                max_depth=request.max_depth,
+                filter_node_classes=filter_classes
+            )
+
+            # Filter to industrial tags only
+            if request.filter_variables_only:
+                nodes = await client.filter_industrial_tags(nodes)
+
+            # Read values if requested
+            if request.include_values:
+                for node in nodes[:100]:  # Limit to first 100 to avoid timeout
+                    try:
+                        value_result = await client.read_node(node.node_id)
+                        node.value = value_result.value
+                    except:
+                        pass
+
+            # Convert to response
+            node_infos = [
+                OPCUANodeInfo(
+                    node_id=node.node_id,
+                    browse_name=node.browse_name,
+                    display_name=node.display_name,
+                    node_class=node.node_class,
+                    data_type=node.data_type,
+                    parent_node_id=node.parent_node_id,
+                    namespace=node.namespace
+                )
+                for node in nodes
+            ]
+
+            return OPCUABrowseResponse(
+                server_url=request.server_url,
+                node_count=len(node_infos),
+                nodes=node_infos
+            )
+
+        finally:
+            await client.disconnect()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OPC UA browse failed: {str(e)}")
+
+
+@router.post("/opcua/import-nodes")
+async def import_opcua_nodes(
+    request: OPCUAImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Import OPC UA nodes as tags.
+
+    Creates device (if needed) and imports selected nodes as tags.
+    """
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../../gateway'))
+
+        from gateway.app.protocols.opcua import OPCUAClient
+
+        # Check if device exists
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Device).where(
+                Device.connection_string == request.server_url,
+                Device.organization_id == request.organization_id
+            )
+        )
+        device = result.scalar_one_or_none()
+
+        # Create device if needed
+        if not device and request.create_device:
+            device_info = DeviceInfo(
+                ip_address=request.server_url,
+                protocol="OPC UA",
+                product_name="OPC UA Server",
+                vendor_name="OPC Foundation"
+            )
+
+            device = await create_device_from_discovery(
+                db=db,
+                device_info=device_info,
+                site_id=request.site_id,
+                organization_id=request.organization_id,
+                slot=0
+            )
+
+        if not device:
+            raise HTTPException(
+                status_code=404,
+                detail="Device not found and create_device is False"
+            )
+
+        # Import nodes as tags
+        tags_imported = 0
+        tags_failed = 0
+        errors = []
+
+        # Connect to server to get node info
+        client = OPCUAClient(request.server_url)
+        await client.connect()
+
+        try:
+            for node_data in request.nodes:
+                try:
+                    node_id = node_data.get('node_id')
+                    if not node_id:
+                        continue
+
+                    # Get node info
+                    client_node = client._client.get_node(node_id)
+                    display_name = await client_node.read_display_name()
+                    browse_name = await client_node.read_browse_name()
+
+                    # Get data type
+                    try:
+                        data_type_node = await client_node.read_data_type()
+                        data_type_bn = await data_type_node.read_browse_name()
+                        data_type_str = str(data_type_bn)
+                    except:
+                        data_type_str = "Unknown"
+
+                    # Create tag
+                    tag_request = ImportTagRequest(
+                        tag_name=node_data.get('name', str(display_name)),
+                        source_address=node_id,
+                        data_type=data_type_str,
+                        description=node_data.get('description', str(browse_name))
+                    )
+
+                    tag = await create_tag_from_import(
+                        db=db,
+                        device=device,
+                        tag_request=tag_request,
+                        organization_id=request.organization_id
+                    )
+
+                    tags_imported += 1
+
+                except Exception as e:
+                    tags_failed += 1
+                    errors.append(f"{node_data.get('node_id', 'Unknown')}: {str(e)}")
+
+        finally:
+            await client.disconnect()
+
+        # Commit
+        await db.commit()
+
+        return {
+            "device_id": device.id,
+            "nodes_processed": len(request.nodes),
+            "tags_imported": tags_imported,
+            "tags_failed": tags_failed,
+            "errors": errors[:10]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"OPC UA import failed: {str(e)}")
+
+
+@router.post("/opcua/discover-servers")
+async def discover_opcua_servers(
+    discovery_url: str = "opc.tcp://localhost:4840",
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Discover OPC UA servers on the network.
+
+    Uses the OPC UA discovery protocol to find available servers.
+    """
+    try:
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../../gateway'))
+
+        from gateway.app.protocols.opcua import discover_opcua_servers
+
+        servers = await discover_opcua_servers(discovery_url)
+
+        return {
+            "discovery_url": discovery_url,
+            "servers_found": len(servers),
+            "servers": servers
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Server discovery failed: {str(e)}")
 
 
 # ========== Utility Endpoints ==========

@@ -130,6 +130,7 @@ class DataCollector:
         # Protocol clients
         self._ethernetip_clients: Dict[str, EtherNetIPClient] = {}
         self._s7_clients: Dict[str, Any] = {}  # S7Client instances
+        self._opcua_clients: Dict[str, Any] = {}  # OPCUAClient instances
 
         # Device status
         self._device_status: Dict[int, DeviceStatus] = {}
@@ -297,8 +298,7 @@ class DataCollector:
                 elif protocol == "S7":
                     await self._collect_s7(device_id, device_ip, points)
                 elif protocol == "OPC UA":
-                    # TODO: Implement OPC UA collection
-                    await asyncio.sleep(1)
+                    await self._collect_opcua(device_id, device_ip, points)
                 else:
                     logger.warning(f"Unsupported protocol: {protocol}")
                     await asyncio.sleep(5)
@@ -551,6 +551,128 @@ class DataCollector:
         min_scan_rate = min(scan_groups.keys()) if scan_groups else 1000
         await asyncio.sleep(min_scan_rate / 1000.0)
 
+    async def _collect_opcua(
+        self,
+        device_id: int,
+        device_ip: str,
+        points: List[PointConfig]
+    ) -> None:
+        """
+        Collect data from OPC UA device.
+
+        Args:
+            device_id: Device ID
+            device_ip: Device IP/URL (e.g., opc.tcp://192.168.1.100:4840)
+            points: Points to collect
+        """
+        from ..protocols.opcua import OPCUAClient
+
+        # Get or create client
+        client_key = device_ip
+
+        if client_key not in self._opcua_clients:
+            client = OPCUAClient(device_ip)
+            if not await client.connect():
+                logger.error(f"Failed to connect to OPC UA server at {device_ip}")
+                self._device_status[device_id].status = ConnectionStatus.ERROR
+                await asyncio.sleep(5)
+                return
+
+            self._opcua_clients[client_key] = client
+            self._device_status[device_id].status = ConnectionStatus.CONNECTED
+            self._device_status[device_id].last_connected = time.time()
+
+            if self.status_callback:
+                await self.status_callback(self._device_status[device_id])
+
+        client = self._opcua_clients[client_key]
+
+        # Check connection
+        if not client.is_connected():
+            logger.warning(f"OPC UA client disconnected, reconnecting to {device_ip}")
+            if not await client.connect():
+                logger.error(f"Reconnection failed for {device_ip}")
+                self._device_status[device_id].status = ConnectionStatus.ERROR
+                await asyncio.sleep(5)
+                return
+
+        # Group points by scan rate
+        scan_groups = {}
+        for point in points:
+            rate = point.scan_rate
+            if rate not in scan_groups:
+                scan_groups[rate] = []
+            scan_groups[rate].append(point)
+
+        # Collect data for each scan rate group
+        current_time = time.time()
+
+        for scan_rate, group_points in scan_groups.items():
+            # Check if it's time to collect
+            needs_collection = []
+
+            for point in group_points:
+                if point.last_collection is None:
+                    needs_collection.append(point)
+                else:
+                    elapsed = (current_time - point.last_collection) * 1000
+                    if elapsed >= scan_rate:
+                        needs_collection.append(point)
+
+            if not needs_collection:
+                continue
+
+            # Read each node
+            data_points = []
+
+            for point in needs_collection:
+                try:
+                    # Read using OPC UA node ID
+                    result = await client.read_node(point.source_address)
+
+                    if result.quality == "Good":
+                        # Apply scaling
+                        scaled_value = self._apply_scaling(result.value, point)
+
+                        # Check deadband
+                        should_report = self._check_deadband(scaled_value, point)
+
+                        if should_report:
+                            data_points.append(DataPoint(
+                                point_id=point.point_id,
+                                point_name=point.point_name,
+                                value=scaled_value,
+                                quality=result.quality,
+                                timestamp=time.time(),
+                                device_id=device_id
+                            ))
+
+                        # Update last values
+                        point.last_value = scaled_value
+                        point.last_collection = current_time
+
+                        # Update statistics
+                        self._device_status[device_id].total_reads += 1
+
+                    else:
+                        logger.warning(
+                            f"Bad quality reading {point.source_address}: {result.error}"
+                        )
+                        self._device_status[device_id].failed_reads += 1
+
+                except Exception as e:
+                    logger.error(f"Error reading {point.source_address} from {device_ip}: {e}")
+                    self._device_status[device_id].failed_reads += 1
+                    self._device_status[device_id].error_count += 1
+
+            # Send data via callback
+            if data_points and self.data_callback:
+                await self.data_callback(data_points)
+
+        # Sleep until next collection cycle
+        min_scan_rate = min(scan_groups.keys()) if scan_groups else 1000
+        await asyncio.sleep(min_scan_rate / 1000.0)
+
     def _apply_scaling(self, value: Any, point: PointConfig) -> Any:
         """
         Apply scaling to raw value.
@@ -630,6 +752,12 @@ class DataCollector:
             await client.disconnect_async()
 
         self._s7_clients.clear()
+
+        # Disconnect OPC UA clients
+        for client_key, client in self._opcua_clients.items():
+            await client.disconnect()
+
+        self._opcua_clients.clear()
 
     def get_statistics(self) -> Dict[str, Any]:
         """
