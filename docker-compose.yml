@@ -1,0 +1,309 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: optiflow-postgres
+    environment:
+      POSTGRES_DB: optiflow
+      POSTGRES_USER: optiflow
+      POSTGRES_PASSWORD: optiflow_password
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U optiflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # InfluxDB Time Series Database
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: optiflow-influxdb
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
+      DOCKER_INFLUXDB_INIT_ORG: optiflow
+      DOCKER_INFLUXDB_INIT_BUCKET: timeseries
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-influxdb-token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    ports:
+      - "8086:8086"
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Pub/Sub
+  redis:
+    image: redis:7-alpine
+    container_name: optiflow-redis
+    command: redis-server --appendonly yes --requirepass optiflow_redis_password
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: optiflow-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: optiflow
+      RABBITMQ_DEFAULT_PASS: optiflow_password
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: optiflow-backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+      - backend_mlflow:/app/mlruns
+    ports:
+      - "8000:8000"
+    environment:
+      # Application
+      APP_NAME: "OptiFlow AI Platform"
+      ENVIRONMENT: development
+      DEBUG: "true"
+      SECRET_KEY: dev-secret-key-change-in-production
+
+      # Database - PostgreSQL
+      DATABASE_URL: postgresql+asyncpg://optiflow:optiflow_password@postgres:5432/optiflow
+
+      # Database - InfluxDB
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: my-super-secret-influxdb-token
+      INFLUXDB_ORG: optiflow
+      INFLUXDB_BUCKET: timeseries
+
+      # Database - Redis
+      REDIS_URL: redis://:optiflow_redis_password@redis:6379/0
+
+      # Message Queue
+      RABBITMQ_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
+      CELERY_BROKER_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://:optiflow_redis_password@redis:6379/4
+
+      # Security
+      JWT_SECRET_KEY: jwt-secret-key-change-in-production
+      ACCESS_TOKEN_EXPIRE_MINUTES: 15
+
+      # CORS
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000"]'
+
+      # Gateway
+      GATEWAY_API_KEY: secure-gateway-api-key-change-in-production
+    networks:
+      - optiflow-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: optiflow-celery-worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - ./backend:/app
+      - backend_mlflow:/app/mlruns
+    environment:
+      # Database - PostgreSQL
+      DATABASE_URL: postgresql+asyncpg://optiflow:optiflow_password@postgres:5432/optiflow
+
+      # Database - InfluxDB
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: my-super-secret-influxdb-token
+      INFLUXDB_ORG: optiflow
+      INFLUXDB_BUCKET: timeseries
+
+      # Database - Redis
+      REDIS_URL: redis://:optiflow_redis_password@redis:6379/0
+
+      # Message Queue
+      RABBITMQ_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
+      CELERY_BROKER_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://:optiflow_redis_password@redis:6379/4
+    networks:
+      - optiflow-network
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - backend
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: optiflow-celery-beat
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      RABBITMQ_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
+      CELERY_BROKER_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://:optiflow_redis_password@redis:6379/4
+    networks:
+      - optiflow-network
+    depends_on:
+      - rabbitmq
+      - redis
+      - backend
+
+  # Gateway (Data Collection)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: optiflow-gateway
+    command: python app/main.py
+    volumes:
+      - ./gateway:/app
+      - ./gateway/config:/app/config
+      - gateway_data:/app/data
+    environment:
+      API_URL: http://backend:8000
+      API_KEY: secure-gateway-api-key-change-in-production
+      LOG_LEVEL: INFO
+    networks:
+      - optiflow-network
+    depends_on:
+      - backend
+
+  # Frontend Web Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: optiflow-frontend
+    command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+    networks:
+      - optiflow-network
+    depends_on:
+      - backend
+
+  # MLflow (Model Tracking & Registry)
+  mlflow:
+    image: python:3.11-slim
+    container_name: optiflow-mlflow
+    command: >
+      sh -c "pip install mlflow psycopg2-binary &&
+             mlflow server
+             --backend-store-uri postgresql://optiflow:optiflow_password@postgres:5432/optiflow
+             --default-artifact-root /mlflow/artifacts
+             --host 0.0.0.0
+             --port 5000"
+    volumes:
+      - backend_mlflow:/mlflow
+    ports:
+      - "5000:5000"
+    networks:
+      - optiflow-network
+    depends_on:
+      - postgres
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: optiflow-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - optiflow-network
+
+  # Grafana (Dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: optiflow-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - optiflow-network
+    depends_on:
+      - prometheus
+      - influxdb
+
+networks:
+  optiflow-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  influxdb_data:
+  influxdb_config:
+  redis_data:
+  rabbitmq_data:
+  backend_mlflow:
+  gateway_data:
+  prometheus_data:
+  grafana_data:
