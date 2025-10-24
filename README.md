@@ -15,14 +15,53 @@ OptiFlow AI is an **Industrial IoT (IIoT) platform with artificial intelligence*
 
 ## Architecture
 
+### Modular Monolith Design
+
+OptiFlow AI uses a **Modular Monolith** architecture - a single deployable application organized into clear, independent modules with well-defined boundaries. This provides the simplicity and performance of a monolith with the organization and maintainability of microservices.
+
 ```
-FIELD (OT) → GATEWAY → BACKEND CORE → DATABASE → FRONTEND
-    ↓           ↓            ↓              ↓              ↓
-  PLCs      Protocols   APIs REST      InfluxDB       React
- Sensors   Industriais  WebSocket     PostgreSQL      Web App
-  RTUs       Buffer      Celery Tasks    Redis         Mobile
-  IEDs      Edge AI      ML Service                   Dashboards
+┌─────────────────────────────────────────────────────────────┐
+│                    OptiFlow AI Platform                      │
+│                    (Modular Monolith)                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ OptiFlow Core│  │  SmartPort   │  │  ML Engine   │      │
+│  │              │  │              │  │              │      │
+│  │ • Devices    │  │ • Vessels    │  │ • Predictive │      │
+│  │ • Tags       │  │ • Berths     │  │ • Anomaly    │      │
+│  │ • Timeseries │  │ • Loading    │  │ • Forecast   │      │
+│  │ • Alarms     │  │ • Routes     │  │ • Optimize   │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ AI Insights  │  │ Integrations │  │ Core Utils   │      │
+│  │              │  │              │  │              │      │
+│  │ • Patterns   │  │ • GBM API    │  │ • Database   │      │
+│  │ • Trends     │  │ • Webhooks   │  │ • Cache      │      │
+│  │ • RCA        │  │ • Sync       │  │ • Security   │      │
+│  │ • NLG        │  │              │  │ • Logging    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+        ┌─────────────────┴─────────────────┐
+        ↓                                   ↓
+  ┌──────────┐                      ┌──────────┐
+  │ Gateway  │                      │ Frontend │
+  │          │                      │          │
+  │ Protocols│                      │  React   │
+  │ Devices  │                      │  TypeScript│
+  └──────────┘                      └──────────┘
 ```
+
+**Benefits:**
+- ✅ **Zero latency** between modules (direct function calls, no network overhead)
+- ✅ **Shared transactions** across modules (ACID guarantees)
+- ✅ **Simple deployment** (single container/process)
+- ✅ **Clear boundaries** (organized by domain, easy to understand)
+- ✅ **Easy testing** (modules can be tested independently)
+- ✅ **Migration path** (can extract to microservices later if needed)
 
 ## Tech Stack
 
@@ -63,48 +102,103 @@ FIELD (OT) → GATEWAY → BACKEND CORE → DATABASE → FRONTEND
 ## Project Structure
 
 ```
-optiflow-platform/
-├── backend/                 # FastAPI backend
+OptiFlow-AI/
+├── backend/                 # FastAPI backend (Modular Monolith)
 │   ├── app/
-│   │   ├── api/v1/         # REST API endpoints
-│   │   ├── core/           # Core config, security
-│   │   ├── models/         # SQLAlchemy models
-│   │   ├── schemas/        # Pydantic schemas
-│   │   ├── services/       # Business logic
-│   │   ├── db/             # Database utilities
-│   │   ├── websocket/      # WebSocket handlers
-│   │   ├── tasks/          # Celery tasks
-│   │   └── utils/          # Utilities
-│   ├── tests/
+│   │   ├── core/           # ⭐ Core utilities
+│   │   │   ├── config.py          # Application configuration
+│   │   │   ├── database.py        # Database connections
+│   │   │   ├── security.py        # Authentication/authorization
+│   │   │   ├── cache.py           # Redis cache utilities
+│   │   │   └── logging.py         # Structured logging
+│   │   │
+│   │   ├── optiflow/       # ⭐ OptiFlow Core Module (reusable base)
+│   │   │   ├── api/               # Devices, Tags, Timeseries, Alarms
+│   │   │   ├── models/            # SQLAlchemy models
+│   │   │   ├── schemas/           # Pydantic schemas
+│   │   │   ├── services/          # Business logic
+│   │   │   └── websocket/         # Real-time updates
+│   │   │
+│   │   ├── port/           # ⭐ SmartPort Module (vertical)
+│   │   │   ├── api/               # Vessels, Loading, Berths
+│   │   │   ├── models/            # Vessel, Commodity, Routes
+│   │   │   ├── schemas/           # Pydantic schemas
+│   │   │   └── services/          # Port-specific logic
+│   │   │
+│   │   ├── ml/             # ⭐ ML Engine Module
+│   │   │   ├── models/            # Failure, Anomaly, Forecast
+│   │   │   ├── features/          # Feature engineering
+│   │   │   ├── training/          # Model training
+│   │   │   └── api/               # ML predictions API
+│   │   │
+│   │   ├── ai/             # ⭐ AI Insights Engine Module
+│   │   │   ├── insights/          # Pattern detection, RCA
+│   │   │   ├── nlp/               # Text generation, chatbot
+│   │   │   ├── models/            # AI models
+│   │   │   └── api/               # Insights API
+│   │   │
+│   │   ├── integrations/   # ⭐ External Integrations
+│   │   │   ├── gbm/               # GBM partner integration
+│   │   │   └── api/               # Webhooks
+│   │   │
+│   │   ├── tasks/          # Celery background tasks
+│   │   ├── db/             # Database session management
+│   │   └── main.py         # FastAPI application entry point
+│   │
+│   ├── tests/              # Organized tests by module
+│   │   ├── optiflow/
+│   │   ├── port/
+│   │   ├── ml/
+│   │   └── ai/
 │   ├── alembic/            # Database migrations
 │   ├── requirements.txt
 │   └── Dockerfile
+│
 ├── gateway/                # Data collection gateway
 │   ├── app/
-│   │   ├── protocols/      # Industrial protocols
+│   │   ├── protocols/      # OPC UA, Modbus, MQTT, S7, EtherNet/IP
 │   │   ├── core/           # Core functionality
 │   │   └── services/       # Services
-│   ├── config/             # Device configurations
-│   ├── requirements.txt
-│   └── Dockerfile
+│   ├── config/
+│   │   └── devices.yaml    # Device configurations
+│   └── requirements.txt
+│
 ├── frontend/               # React frontend
 │   ├── src/
-│   │   ├── api/            # API client
-│   │   ├── components/     # React components
-│   │   ├── pages/          # Page components
+│   │   ├── api/            # API clients
+│   │   │   ├── optiflow/          # OptiFlow APIs
+│   │   │   └── port/              # SmartPort APIs
+│   │   ├── pages/
+│   │   │   ├── optiflow/          # OptiFlow pages
+│   │   │   └── port/              # SmartPort pages
+│   │   ├── components/
+│   │   │   ├── common/            # Shared components
+│   │   │   ├── optiflow/          # OptiFlow components
+│   │   │   └── port/              # SmartPort components
 │   │   ├── store/          # Redux store
-│   │   ├── hooks/          # Custom hooks
-│   │   └── utils/          # Utilities
+│   │   │   └── slices/
+│   │   │       ├── optiflow/
+│   │   │       └── port/
+│   │   └── hooks/          # Custom React hooks
 │   ├── package.json
 │   └── Dockerfile
+│
+├── docs/                   # Documentation
+│   ├── architecture/       # Architecture docs
+│   ├── api/                # API documentation
+│   │   ├── optiflow/
+│   │   ├── port/
+│   │   └── ml/
+│   ├── deployment/         # Deployment guides
+│   └── development/        # Development guides
+│
 ├── infrastructure/         # Infrastructure as Code
 │   ├── docker/
 │   ├── kubernetes/
 │   └── terraform/
-├── docs/                   # Documentation
+│
 └── monitoring/             # Monitoring configs
-    ├── prometheus/
-    └── grafana/
+    └── prometheus/
 ```
 
 ## Quick Start

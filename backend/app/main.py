@@ -13,6 +13,7 @@ from app.core.database import init_db, close_db
 from app.core.cache import close_redis_connections
 from app.api.v1.api import api_router  # Legacy routers (auth, organizations, sites)
 from app.optiflow.api import optiflow_router  # OptiFlow Core routers
+from app.port.api import smartport_router  # SmartPort routers
 
 # Configure logging
 logging.basicConfig(
@@ -78,6 +79,9 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 # Include OptiFlow Core router
 app.include_router(optiflow_router, prefix=settings.API_V1_PREFIX)
 
+# Include SmartPort router
+app.include_router(smartport_router, prefix=settings.API_V1_PREFIX)
+
 
 @app.get("/")
 async def root():
@@ -90,7 +94,7 @@ async def root():
         "architecture": "Modular Monolith",
         "modules": {
             "optiflow_core": "Gateway, SCADA, Historian, ML",
-            "smartport": "Port terminal operations (coming soon)",
+            "smartport": "Port terminal operations (ACTIVE)",
             "ml_engine": "Machine learning predictions (coming soon)",
             "ai_insights": "AI-powered insights (coming soon)"
         },
