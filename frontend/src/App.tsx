@@ -11,11 +11,19 @@ import { LoginPage } from './pages/LoginPage';
 import { Dashboard } from './pages/Dashboard';
 import { SitesPage } from './pages/SitesPage';
 import { DevicesPage } from './pages/DevicesPage';
+import { TagsPage } from './pages/TagsPage';
+import { AlarmsPage } from './pages/AlarmsPage';
+import { TagDetailsPage } from './pages/TagDetailsPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { Toaster } from './components/Toast/Toaster';
+import { DarkModeProvider } from './components/DarkModeProvider';
 
 function App() {
   return (
     <Provider store={store}>
-      <BrowserRouter>
+      <DarkModeProvider>
+        <Toaster />
+        <BrowserRouter>
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -32,14 +40,17 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="sites" element={<SitesPage />} />
             <Route path="devices" element={<DevicesPage />} />
-            <Route path="tags" element={<div className="p-6 text-gray-600">Tags page coming soon...</div>} />
-            <Route path="alarms" element={<div className="p-6 text-gray-600">Alarms page coming soon...</div>} />
+            <Route path="tags" element={<TagsPage />} />
+            <Route path="tags/:id" element={<TagDetailsPage />} />
+            <Route path="alarms" element={<AlarmsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           {/* Redirect unknown routes */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </DarkModeProvider>
     </Provider>
   );
 }
