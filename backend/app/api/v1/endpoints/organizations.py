@@ -1,17 +1,20 @@
 """
 Organization endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from uuid import UUID
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.db.session import get_db
 from app.models.organization import Organization
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate, OrganizationResponse
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/", response_model=List[OrganizationResponse])
@@ -30,7 +33,9 @@ async def list_organizations(
 
 
 @router.post("/", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")  # 🔒 Limit organization creation
 async def create_organization(
+    request: Request,
     organization_in: OrganizationCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -79,7 +84,9 @@ async def get_organization(
 
 
 @router.put("/{organization_id}", response_model=OrganizationResponse)
+@limiter.limit("20/minute")  # 🔒 Limit organization updates
 async def update_organization(
+    request: Request,
     organization_id: UUID,
     organization_in: OrganizationUpdate,
     db: AsyncSession = Depends(get_db)
@@ -109,7 +116,9 @@ async def update_organization(
 
 
 @router.delete("/{organization_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("20/minute")  # 🔒 Limit organization deletions
 async def delete_organization(
+    request: Request,
     organization_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):

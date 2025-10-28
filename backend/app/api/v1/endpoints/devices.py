@@ -1,17 +1,20 @@
 """
 Device endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from uuid import UUID
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.db.session import get_db
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceUpdate, DeviceResponse
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/", response_model=List[DeviceResponse])
@@ -34,7 +37,9 @@ async def list_devices(
 
 
 @router.post("/", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")  # 🔒 Limit device creation
 async def create_device(
+    request: Request,
     device_in: DeviceCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -66,7 +71,9 @@ async def get_device(
 
 
 @router.put("/{device_id}", response_model=DeviceResponse)
+@limiter.limit("30/minute")  # 🔒 Limit device updates
 async def update_device(
+    request: Request,
     device_id: UUID,
     device_in: DeviceUpdate,
     db: AsyncSession = Depends(get_db)
@@ -93,7 +100,9 @@ async def update_device(
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")  # 🔒 Limit device deletions
 async def delete_device(
+    request: Request,
     device_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
