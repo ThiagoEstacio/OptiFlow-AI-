@@ -1,17 +1,20 @@
 """
 Tag endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from uuid import UUID
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.db.session import get_db
 from app.models.tag import Tag
 from app.schemas.tag import TagCreate, TagUpdate, TagResponse
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/", response_model=List[TagResponse])
@@ -34,7 +37,9 @@ async def list_tags(
 
 
 @router.post("/", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("50/minute")  # 🔒 Limit tag creation (higher for batch operations)
 async def create_tag(
+    request: Request,
     tag_in: TagCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -66,7 +71,9 @@ async def get_tag(
 
 
 @router.put("/{tag_id}", response_model=TagResponse)
+@limiter.limit("50/minute")  # 🔒 Limit tag updates (higher for batch operations)
 async def update_tag(
+    request: Request,
     tag_id: UUID,
     tag_in: TagUpdate,
     db: AsyncSession = Depends(get_db)
@@ -93,7 +100,9 @@ async def update_tag(
 
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("50/minute")  # 🔒 Limit tag deletions (higher for batch operations)
 async def delete_tag(
+    request: Request,
     tag_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):

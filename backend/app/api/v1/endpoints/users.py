@@ -1,11 +1,13 @@
 """
 User endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from uuid import UUID
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.db.session import get_db
 from app.models.user import User
@@ -13,6 +15,7 @@ from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.core.security import get_password_hash
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/", response_model=List[UserResponse])
@@ -29,7 +32,9 @@ async def list_users(
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")  # 🔒 Anti-abuse: Limit user creation attempts
 async def create_user(
+    request: Request,
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db)
 ):
