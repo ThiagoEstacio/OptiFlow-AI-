@@ -9,7 +9,7 @@ from uuid import UUID
 
 from app.db.session import get_db
 from app.models.organization import Site
-from app.schemas.organization import SiteCreate, SiteUpdate, SiteResponse
+from app.schemas.site import SiteCreate, SiteUpdate, SiteResponse
 
 router = APIRouter()
 
@@ -63,3 +63,51 @@ async def get_site(
         )
 
     return site
+
+
+@router.put("/{site_id}", response_model=SiteResponse)
+async def update_site(
+    site_id: UUID,
+    site_in: SiteUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a site"""
+    stmt = select(Site).where(Site.id == site_id)
+    result = await db.execute(stmt)
+    site = result.scalar_one_or_none()
+
+    if not site:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Site not found"
+        )
+
+    # Update only provided fields
+    update_data = site_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(site, field, value)
+
+    await db.commit()
+    await db.refresh(site)
+    return site
+
+
+@router.delete("/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_site(
+    site_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a site"""
+    stmt = select(Site).where(Site.id == site_id)
+    result = await db.execute(stmt)
+    site = result.scalar_one_or_none()
+
+    if not site:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Site not found"
+        )
+
+    await db.delete(site)
+    await db.commit()
+    return None
