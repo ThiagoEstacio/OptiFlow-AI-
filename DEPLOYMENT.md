@@ -7,11 +7,12 @@ Este guia cobre o processo completo de deploy do SmartPort em ambiente de produ�
 1. [Pré-requisitos](#pré-requisitos)
 2. [Preparação do Servidor](#preparação-do-servidor)
 3. [Configuração](#configuração)
-4. [Deploy](#deploy)
-5. [Verificação](#verificação)
-6. [Backup e Restore](#backup-e-restore)
-7. [Monitoramento](#monitoramento)
-8. [Troubleshooting](#troubleshooting)
+4. [Deploy em Staging](#deploy-em-staging)
+5. [Deploy em Produção](#deploy-em-produção)
+6. [Verificação](#verificação)
+7. [Backup e Restore](#backup-e-restore)
+8. [Monitoramento](#monitoramento)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -233,7 +234,118 @@ server {
 
 ---
 
-## 🚀 Deploy
+## 🧪 Deploy em Staging
+
+**IMPORTANTE**: Sempre faça deploy em staging antes de produção!
+
+### 1. Preparar Ambiente Staging
+
+O ambiente de staging deve ser o mais similar possível à produção:
+
+```bash
+# Usar servidor separado ou porta diferente
+# Exemplo: staging.yourdomain.com
+```
+
+### 2. Configurar Variáveis de Staging
+
+```bash
+# Copiar configuração de staging
+cp .env.staging .env
+
+# Ajustar configurações específicas
+nano .env
+```
+
+**Principais diferenças do staging**:
+
+```bash
+ENVIRONMENT=staging
+DEBUG=false
+
+# Domínios de staging
+CORS_ORIGINS=["https://staging.yourdomain.com"]
+NEXT_PUBLIC_API_URL=https://staging-api.yourdomain.com
+
+# SSL Let's Encrypt Staging (evita rate limiting)
+LETSENCRYPT_STAGING=true
+
+# Pode ter retenção menor de dados
+BACKUP_RETENTION_DAYS=7
+
+# Habilitar endpoints de teste (útil para QA)
+ENABLE_TEST_ENDPOINTS=true
+
+# Dados de seed para testes
+SEED_TEST_DATA=true
+```
+
+### 3. Deploy em Staging
+
+```bash
+# Usar script de deploy
+./scripts/deploy.sh
+
+# Ou deploy manual
+docker-compose -f docker-compose.prod.yml build
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### 4. Validar Staging
+
+Execute todos os testes em staging antes de aprovar para produção:
+
+```bash
+# 1. Smoke test
+./scripts/smoke-test.sh
+
+# 2. Testes de integração
+pytest backend/tests/integration/ -v
+
+# 3. Load test (carga reduzida para staging)
+cd load-testing
+k6 run --duration 5m --vus 20 load-test.js
+
+# 4. Teste manual de funcionalidades críticas
+# - Login/logout
+# - CRUD de organizações, sites, devices
+# - Coleta de dados via Gateway
+# - Alarmes e notificações
+# - Dashboards e visualizações
+```
+
+### 5. Checklist de Aprovação para Produção
+
+Antes de promover para produção, verificar:
+
+- [ ] Todos os testes automatizados passando
+- [ ] QA manual completo realizado
+- [ ] Performance aceitável (load test)
+- [ ] Sem erros críticos nos logs
+- [ ] Monitoramento funcionando
+- [ ] Backup/restore testado
+- [ ] Documentação atualizada
+- [ ] Aprovação do product owner
+
+### 6. Diferenças Staging vs Produção
+
+| Aspecto | Staging | Produção |
+|---------|---------|----------|
+| **Domínio** | staging.yourdomain.com | yourdomain.com |
+| **SSL** | Let's Encrypt Staging | Let's Encrypt Production |
+| **Debug** | false | false |
+| **Teste endpoints** | Habilitado | Desabilitado |
+| **Seed data** | Habilitado | Desabilitado |
+| **Backup retenção** | 7 dias | 30 dias |
+| **Rate limits** | Mais leniente | Mais restritivo |
+| **Recursos** | 50% de produção | 100% |
+| **Monitoramento** | Alertas para dev team | Alertas para on-call |
+
+---
+
+## 🚀 Deploy em Produção
+
+**PRÉ-REQUISITO**: Deploy e validação em staging completos!
 
 ### Deploy Automático (Recomendado)
 
