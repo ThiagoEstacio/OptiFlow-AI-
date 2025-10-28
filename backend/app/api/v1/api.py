@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     tags,
     timeseries,
     alarms,
+    analytics,
 )
 
 api_router = APIRouter()
@@ -25,3 +26,4 @@ api_router.include_router(devices.router, prefix="/devices", tags=["Devices"])
 api_router.include_router(tags.router, prefix="/tags", tags=["Tags"])
 api_router.include_router(timeseries.router, prefix="/timeseries", tags=["Time Series"])
 api_router.include_router(alarms.router, prefix="/alarms", tags=["Alarms"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
