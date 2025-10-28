@@ -283,7 +283,12 @@ export const AnalyticsPage: React.FC = () => {
 
         {/* Query Builder */}
         <div className="mb-8">
-          <QueryBuilder onExecute={handleExecuteQuery} loading={loading} />
+          <QueryBuilder
+            onExecute={handleExecuteQuery}
+            onStreamData={(data) => setQueryResult(data)}
+            loading={loading}
+            enableStreaming={true}
+          />
         </div>
 
         {/* Error Display */}
