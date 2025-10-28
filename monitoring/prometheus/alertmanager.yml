@@ -1,0 +1,121 @@
+# SmartPort Alertmanager Configuration
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+  smtp_from: '${SMTP_FROM}'
+  smtp_auth_username: '${SMTP_USER}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+
+  routes:
+    # Critical alerts
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 4h
+
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+
+    # Infrastructure alerts
+    - match:
+        component: infrastructure
+      receiver: 'infrastructure-alerts'
+
+    # Database alerts
+    - match:
+        component: postgres
+      receiver: 'database-alerts'
+    - match:
+        component: influxdb
+      receiver: 'database-alerts'
+    - match:
+        component: redis
+      receiver: 'database-alerts'
+
+    # Gateway alerts
+    - match:
+        component: gateway
+      receiver: 'gateway-alerts'
+
+# Receivers
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: '${ALERT_EMAIL_DEFAULT}'
+        send_resolved: true
+        headers:
+          Subject: '[SmartPort] Alert: {{ .GroupLabels.alertname }}'
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_CRITICAL}'
+        send_resolved: true
+        headers:
+          Subject: '[SmartPort CRITICAL] {{ .GroupLabels.alertname }}'
+    # Add webhook for Slack/Teams/PagerDuty here
+    # webhook_configs:
+    #   - url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_WARNING}'
+        send_resolved: true
+        headers:
+          Subject: '[SmartPort WARNING] {{ .GroupLabels.alertname }}'
+
+  - name: 'infrastructure-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_INFRA}'
+        send_resolved: true
+        headers:
+          Subject: '[SmartPort Infrastructure] {{ .GroupLabels.alertname }}'
+
+  - name: 'database-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_DB}'
+        send_resolved: true
+        headers:
+          Subject: '[SmartPort Database] {{ .GroupLabels.alertname }}'
+
+  - name: 'gateway-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_GATEWAY}'
+        send_resolved: true
+        headers:
+          Subject: '[SmartPort Gateway] {{ .GroupLabels.alertname }}'
+
+# Inhibition rules
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Inhibit any alert if service is down
+  - source_match:
+      alertname: 'BackendDown'
+    target_match_re:
+      alertname: '.*(Backend|API).*'
+    equal: ['instance']
