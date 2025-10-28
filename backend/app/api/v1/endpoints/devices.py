@@ -1,7 +1,7 @@
 """
 Device endpoints
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
@@ -9,11 +9,12 @@ from uuid import UUID
 
 from app.db.session import get_db
 from app.models.device import Device
+from app.schemas.device import DeviceCreate, DeviceUpdate, DeviceResponse
 
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/", response_model=List[DeviceResponse])
 async def list_devices(
     skip: int = 0,
     limit: int = 100,
@@ -29,25 +30,84 @@ async def list_devices(
     stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     devices = result.scalars().all()
-    return [
-        {
-            "id": str(d.id),
-            "name": d.name,
-            "protocol": d.protocol.value,
-            "status": d.status.value,
-            "site_id": str(d.site_id)
-        }
-        for d in devices
-    ]
+    return devices
 
 
-@router.post("/")
-async def create_device(db: AsyncSession = Depends(get_db)):
-    """Create a new device (placeholder)"""
-    return {"message": "Device creation endpoint - to be implemented"}
+@router.post("/", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
+async def create_device(
+    device_in: DeviceCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new device"""
+    device = Device(**device_in.model_dump())
+    db.add(device)
+    await db.commit()
+    await db.refresh(device)
+    return device
 
 
-@router.get("/{device_id}")
-async def get_device(device_id: UUID, db: AsyncSession = Depends(get_db)):
-    """Get device by ID (placeholder)"""
-    return {"message": f"Get device {device_id} - to be implemented"}
+@router.get("/{device_id}", response_model=DeviceResponse)
+async def get_device(
+    device_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get device by ID"""
+    stmt = select(Device).where(Device.id == device_id)
+    result = await db.execute(stmt)
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found"
+        )
+
+    return device
+
+
+@router.put("/{device_id}", response_model=DeviceResponse)
+async def update_device(
+    device_id: UUID,
+    device_in: DeviceUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a device"""
+    stmt = select(Device).where(Device.id == device_id)
+    result = await db.execute(stmt)
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found"
+        )
+
+    # Update only provided fields
+    update_data = device_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(device, field, value)
+
+    await db.commit()
+    await db.refresh(device)
+    return device
+
+
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_device(
+    device_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a device"""
+    stmt = select(Device).where(Device.id == device_id)
+    result = await db.execute(stmt)
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found"
+        )
+
+    await db.delete(device)
+    await db.commit()
+    return None
