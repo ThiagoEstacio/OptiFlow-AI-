@@ -40,6 +40,19 @@ from .alarm import (
     AlarmEventResponse,
     AlarmAcknowledgeRequest,
 )
+from .analytics import (
+    QueryFilter,
+    QueryAggregation,
+    AnalyticsQuery,
+    AnalyticsQueryRequest,
+    AnalyticsQueryResponse,
+    QueryResult,
+    AggregationResult,
+    SavedQuery,
+    SavedQueryCreate,
+    SavedQueryUpdate,
+    SavedQueryResponse,
+)
 
 __all__ = [
     # User
@@ -76,4 +89,16 @@ __all__ = [
     "AlarmDefinitionResponse",
     "AlarmEventResponse",
     "AlarmAcknowledgeRequest",
+    # Analytics
+    "QueryFilter",
+    "QueryAggregation",
+    "AnalyticsQuery",
+    "AnalyticsQueryRequest",
+    "AnalyticsQueryResponse",
+    "QueryResult",
+    "AggregationResult",
+    "SavedQuery",
+    "SavedQueryCreate",
+    "SavedQueryUpdate",
+    "SavedQueryResponse",
 ]
