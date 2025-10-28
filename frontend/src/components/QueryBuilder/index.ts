@@ -1,7 +1,7 @@
 /**
  * QueryBuilder Components
  *
- * Visual query builder for analytics queries
+ * Visual query builder for analytics queries with real-time streaming
  */
 
 export { TagSelector, type Tag, type TagSelectorProps } from './TagSelector';
@@ -25,3 +25,7 @@ export {
   type AnalyticsQuery,
   type QueryBuilderProps,
 } from './QueryBuilder';
+export {
+  StreamControls,
+  type StreamControlsProps,
+} from './StreamControls';
