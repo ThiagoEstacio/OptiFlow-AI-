@@ -38,10 +38,27 @@ export interface Widget {
   };
 }
 
+// Mock tags for when backend is not available
+const MOCK_TAGS = [
+  { id: '1', name: 'CONV1_MOTOR_CURRENT', description: 'Conveyor 1 Motor Current', unit: 'A', category: 'Motors', min_value: 0, max_value: 300, data_type: 'float' },
+  { id: '2', name: 'CONV1_MOTOR_TEMP', description: 'Conveyor 1 Motor Temperature', unit: '°C', category: 'Motors', min_value: 20, max_value: 120, data_type: 'float' },
+  { id: '3', name: 'CONV1_VIBRATION', description: 'Conveyor 1 Vibration', unit: 'mm/s', category: 'Motors', min_value: 0, max_value: 15, data_type: 'float' },
+  { id: '4', name: 'ELEV1_MOTOR_CURRENT', description: 'Elevator Motor Current', unit: 'A', category: 'Motors', min_value: 0, max_value: 400, data_type: 'float' },
+  { id: '5', name: 'SHIP_MOTOR_CURRENT', description: 'Shiploader Motor Current', unit: 'A', category: 'Motors', min_value: 0, max_value: 500, data_type: 'float' },
+  { id: '6', name: 'SHIP_FLOW_RATE', description: 'Shiploader Flow Rate', unit: 't/h', category: 'Production', min_value: 0, max_value: 3000, data_type: 'float' },
+  { id: '7', name: 'VESSEL_PROGRESS', description: 'Vessel Loading Progress', unit: '%', category: 'Production', min_value: 0, max_value: 100, data_type: 'float' },
+  { id: '8', name: 'LOADING_RATE_TOTAL', description: 'Total Loading Rate', unit: 't', category: 'Production', min_value: 0, max_value: 100000, data_type: 'float' },
+  { id: '9', name: 'PRODUCT_MOISTURE', description: 'Product Moisture', unit: '%', category: 'Quality', min_value: 0, max_value: 100, data_type: 'float' },
+  { id: '10', name: 'PRODUCT_TEMP', description: 'Product Temperature', unit: '°C', category: 'Quality', min_value: -10, max_value: 60, data_type: 'float' },
+];
+
 export const DashboardBuilderPage: React.FC = () => {
   const dispatch = useAppDispatch();
-  const tags = useAppSelector((state) => state.tags.items);
+  const tagsFromStore = useAppSelector((state) => state.tags.items);
   const loading = useAppSelector((state) => state.tags.loading);
+
+  // Use mock tags if no tags loaded from backend
+  const tags = tagsFromStore.length > 0 ? tagsFromStore : MOCK_TAGS;
 
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
