@@ -13,6 +13,7 @@ import { SitesPage } from './pages/SitesPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { TagsPage } from './pages/TagsPage';
 import { AlarmsPage } from './pages/AlarmsPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { TagDetailsPage } from './pages/TagDetailsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toaster } from './components/Toast/Toaster';
@@ -43,6 +44,7 @@ function App() {
             <Route path="tags" element={<TagsPage />} />
             <Route path="tags/:id" element={<TagDetailsPage />} />
             <Route path="alarms" element={<AlarmsPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 
