@@ -2,9 +2,55 @@
 
 Simuladores de dispositivos industriais para testar o Gateway SmartPort.
 
+**📋 Ver documentação completa**: [SIMULADOR_E_TAGS.md](../SIMULADOR_E_TAGS.md)
+
 ## Simuladores Disponíveis
 
-### 1. Modbus TCP Device Simulator
+### 🆕 1. Industrial Tags Simulator (RECOMENDADO)
+
+**Arquivo**: `industrial_tags_simulator.py`
+
+Simulador completo com **26 tags industriais** categorizadas, compatível com **PI Vision e Power BI**.
+
+#### ⚡ Instalação e Uso Rápido
+
+```bash
+# 1. Configurar tags no banco de dados (executar uma vez)
+./configurar_tags_simuladas.sh
+
+# 2. Iniciar simulador
+cd simulators
+pip install -r requirements.txt
+python industrial_tags_simulator.py
+```
+
+#### 📊 Tags Disponíveis
+
+- **6 tags de processo**: temperatura, pressão, vazão, nível, pH, condutividade
+- **4 tags de energia**: potência, corrente, tensão, fator de potência
+- **4 tags de produção**: taxa, contador, OEE, qualidade
+- **4 tags de manutenção**: velocidade, temperatura rolamento, vibração X/Y
+- **8 tags de status/alarme**: motores, válvulas, alarmes
+
+#### 🎯 Características
+
+- ✅ Dados realistas com padrões industriais (senóides, correlações, ruído)
+- ✅ Configuração automática no banco de dados
+- ✅ 26 tags pré-configuradas
+- ✅ Compatível com dashboards tipo PI Vision
+- ✅ Modbus TCP padrão (porta 5020)
+
+#### 📖 Documentação Completa
+
+Ver [SIMULADOR_E_TAGS.md](../SIMULADOR_E_TAGS.md) para:
+- Lista completa de tags
+- Exemplos de dashboards
+- Componentes de visualização
+- Casos de uso
+
+---
+
+### 2. Modbus TCP Device Simulator (Básico)
 
 Simula um dispositivo industrial com protocolo Modbus TCP, gerando dados dinâmicos de processo.
 
