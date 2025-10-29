@@ -223,12 +223,12 @@ services:
       dockerfile: Dockerfile
       target: builder
     container_name: optiflow-frontend
-    command: npm run dev -- --host
+    command: npm run dev -- --host --port 3000
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8000
@@ -286,7 +286,7 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "3001:3000"
     networks:
       - optiflow-network
     depends_on:
