@@ -46,8 +46,12 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
     }),
   }));
 
-  // Live data hook
-  const { value, timestamp, loading } = useLiveTagData(widget.config.tagId);
+  // Live data hook with min/max for realistic simulation
+  const { value, timestamp, loading } = useLiveTagData({
+    tagId: widget.config.tagId,
+    min: widget.config.min ?? 0,
+    max: widget.config.max ?? 100,
+  });
 
   // Render widget content based on type
   const renderContent = () => {

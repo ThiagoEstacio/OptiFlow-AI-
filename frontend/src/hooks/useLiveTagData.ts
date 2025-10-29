@@ -15,7 +15,32 @@ interface LiveTagData {
   error: string | null;
 }
 
-export const useLiveTagData = (tagId?: string): LiveTagData => {
+interface UseLiveTagDataOptions {
+  tagId?: string;
+  min?: number;
+  max?: number;
+}
+
+export const useLiveTagData = (
+  tagIdOrOptions?: string | UseLiveTagDataOptions,
+  legacyMin?: number,
+  legacyMax?: number
+): LiveTagData => {
+  // Support both old API (string) and new API (options object)
+  let tagId: string | undefined;
+  let min: number = 0;
+  let max: number = 100;
+
+  if (typeof tagIdOrOptions === 'string') {
+    tagId = tagIdOrOptions;
+    min = legacyMin ?? 0;
+    max = legacyMax ?? 100;
+  } else if (tagIdOrOptions) {
+    tagId = tagIdOrOptions.tagId;
+    min = tagIdOrOptions.min ?? 0;
+    max = tagIdOrOptions.max ?? 100;
+  }
+
   const [data, setData] = useState<LiveTagData>({
     value: null,
     timestamp: null,
@@ -26,6 +51,8 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
 
   const wsRef = useRef<WebSocket | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const receivedDataRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!tagId) {
@@ -40,6 +67,7 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
     }
 
     setData(prev => ({ ...prev, loading: true, error: null }));
+    receivedDataRef.current = false;
 
     // Try WebSocket first
     const connectWebSocket = () => {
@@ -61,6 +89,15 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
           }));
 
           setData(prev => ({ ...prev, loading: false }));
+
+          // Set timeout: if no data received in 3 seconds, fall back to simulation
+          wsTimeoutRef.current = setTimeout(() => {
+            if (!receivedDataRef.current) {
+              console.log(`No data received from WebSocket for tag ${tagId}, falling back to simulation`);
+              ws.close();
+              startPolling();
+            }
+          }, 3000);
         };
 
         ws.onmessage = (event) => {
@@ -68,6 +105,14 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
             const message = JSON.parse(event.data);
 
             if (message.type === 'data' && message.data) {
+              receivedDataRef.current = true;
+
+              // Clear timeout since we received data
+              if (wsTimeoutRef.current) {
+                clearTimeout(wsTimeoutRef.current);
+                wsTimeoutRef.current = null;
+              }
+
               // Extract value from response
               const result = message.data;
               if (result.data && result.data.length > 0) {
@@ -89,12 +134,26 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
           setData(prev => ({ ...prev, error: 'WebSocket connection error' }));
+
+          // Clear timeout
+          if (wsTimeoutRef.current) {
+            clearTimeout(wsTimeoutRef.current);
+            wsTimeoutRef.current = null;
+          }
+
           // Fallback to polling
           startPolling();
         };
 
         ws.onclose = () => {
           console.log('WebSocket closed, falling back to polling');
+
+          // Clear timeout
+          if (wsTimeoutRef.current) {
+            clearTimeout(wsTimeoutRef.current);
+            wsTimeoutRef.current = null;
+          }
+
           startPolling();
         };
 
@@ -119,6 +178,20 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
       }, 2000);
     };
 
+    const generateSimulatedValue = () => {
+      // Generate realistic simulated value with some variation
+      const range = max - min;
+      const baseValue = min + (range * 0.5); // Middle of range
+      const variation = range * 0.3; // 30% variation
+      const randomValue = baseValue + (Math.random() - 0.5) * variation;
+
+      // Add some wave pattern for more realistic data
+      const time = Date.now() / 1000;
+      const wave = Math.sin(time / 10) * (range * 0.2);
+
+      return Math.max(min, Math.min(max, randomValue + wave));
+    };
+
     const fetchLatestValue = async () => {
       try {
         // Try to get latest value from Redis cache or last value endpoint
@@ -133,11 +206,10 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
             error: null,
           });
         } else {
-          // If no endpoint, generate random value for demo
-          // This simulates data from the simulator
+          // If no endpoint, generate realistic simulated value
           setData(prev => ({
             ...prev,
-            value: Math.random() * 100,
+            value: generateSimulatedValue(),
             timestamp: new Date().toISOString(),
             quality: 'simulated',
             loading: false,
@@ -145,10 +217,10 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
         }
       } catch (error) {
         console.error('Error fetching latest value:', error);
-        // Generate demo data
+        // Generate demo data with realistic values
         setData(prev => ({
           ...prev,
-          value: Math.random() * 100,
+          value: generateSimulatedValue(),
           timestamp: new Date().toISOString(),
           quality: 'simulated',
           loading: false,
@@ -168,6 +240,10 @@ export const useLiveTagData = (tagId?: string): LiveTagData => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
+      }
+      if (wsTimeoutRef.current) {
+        clearTimeout(wsTimeoutRef.current);
+        wsTimeoutRef.current = null;
       }
     };
   }, [tagId]);
