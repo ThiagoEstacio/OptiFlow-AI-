@@ -64,7 +64,7 @@ export const useAnalyticsStream = (): UseAnalyticsStreamResult => {
     const token = localStorage.getItem('token');
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost =
-      process.env.REACT_APP_WS_URL ||
+      import.meta.env.VITE_WS_URL ||
       window.location.host.replace('3000', '8000'); // Dev: frontend 3000 -> backend 8000
 
     return `${wsProtocol}//${wsHost}/api/v1/analytics/ws/stream?token=${token}`;
