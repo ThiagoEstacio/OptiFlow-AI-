@@ -1,0 +1,107 @@
+#!/bin/bash
+# SmartPort - Setup Automático
+# Terminal de Grãos e Açúcar
+
+set -e
+
+echo "=============================================================================================="
+echo "🚢 SmartPort - Setup Automático: Terminal de Grãos/Açúcar"
+echo "=============================================================================================="
+echo ""
+
+# Verificar container backend
+if ! docker ps | grep -q optiflow-ai--backend; then
+    echo "❌ ERRO: Container 'backend' não está rodando"
+    echo ""
+    echo "Inicie o backend primeiro:"
+    echo "  docker compose up -d backend postgres"
+    exit 1
+fi
+
+echo "✓ Container backend detectado"
+echo ""
+echo "📥 Copiando script de configuração..."
+
+# Copiar script
+docker cp simulators/setup_smartport_tags.py optiflow-ai--backend:/app/setup_smartport_tags.py
+
+echo "✓ Script copiado"
+echo ""
+echo "🔧 Configurando tags SmartPort..."
+echo ""
+
+# Executar configuração
+docker exec -it optiflow-ai--backend python /app/setup_smartport_tags.py
+
+echo ""
+echo "=============================================================================================="
+echo "✅ CONFIGURAÇÃO CONCLUÍDA!"
+echo "=============================================================================================="
+echo ""
+echo "📦 EQUIPAMENTOS CONFIGURADOS:"
+echo "   • Correia Transportadora 1 (Recebimento)"
+echo "   • Correia Transportadora 2 (Transferência)"
+echo "   • Elevador de Caneca"
+echo "   • Shiploader (Carregador de Navio)"
+echo "   • 2 Silos de Armazenamento"
+echo ""
+echo "📊 TAGS PARA ANOMALIA DETECTION:"
+echo "   • Corrente de motores (A)"
+echo "   • Velocidade (RPM)"
+echo "   • Temperatura motores + rolamentos (°C)"
+echo "   • Vibração (mm/s)"
+echo "   • Fluxo de produto (t/h)"
+echo "   • Níveis de silo (%)"
+echo "   • Qualidade: Umidade + Temperatura"
+echo ""
+echo "=============================================================================================="
+echo "📋 PRÓXIMOS PASSOS:"
+echo "=============================================================================================="
+echo ""
+echo "1️⃣  Iniciar simulador SmartPort:"
+echo "    cd simulators"
+echo "    pip install -r requirements.txt"
+echo "    python smartport_bulk_terminal_simulator.py"
+echo ""
+echo "2️⃣  Acessar frontend:"
+echo "    http://localhost:3000"
+echo ""
+echo "3️⃣  Visualizar tags:"
+echo "    http://localhost:3000/tags"
+echo ""
+echo "4️⃣  Criar dashboards de anomalia detection:"
+echo "    http://localhost:3000/analytics"
+echo ""
+echo "=============================================================================================="
+echo "🔍 ANOMALIAS QUE SERÃO SIMULADAS:"
+echo "=============================================================================================="
+echo ""
+echo "   1. Rolamento Degradando (Correia 1)"
+echo "      • Inicia após 5 minutos"
+echo "      • Vibração aumenta gradualmente"
+echo "      • Temperatura rolamento sobe"
+echo "      • Use para: Manutenção preditiva"
+echo ""
+echo "   2. Sobrecarga Periódica (Elevador)"
+echo "      • A cada 10 minutos: 1 minuto de sobrecarga"
+echo "      • Corrente sobe +80A"
+echo "      • Temperatura motor aumenta"
+echo "      • Use para: Detecção de bloqueio"
+echo ""
+echo "   3. Spikes de Vibração (Shiploader)"
+echo "      • Aleatoriamente (0.2% chance/segundo)"
+echo "      • Vibração pode atingir 12+ mm/s"
+echo "      • Use para: Detecção de desbalanceamento"
+echo ""
+echo "=============================================================================================="
+echo "📈 DASHBOARDS TIPO PI VISION:"
+echo "=============================================================================================="
+echo ""
+echo "   • Motor Health (Corrente + Temperatura + Vibração)"
+echo "   • Predictive Maintenance (Rolamentos)"
+echo "   • Throughput Analysis (Fluxo t/h)"
+echo "   • Energy Efficiency (Consumo kWh)"
+echo "   • Vessel Loading Progress (% Carregamento)"
+echo ""
+echo "=============================================================================================="
+echo ""
