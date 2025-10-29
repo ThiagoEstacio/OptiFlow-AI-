@@ -252,7 +252,7 @@ export const AnalyticsPage: React.FC = () => {
         </div>
 
         {/* Examples Panel */}
-        {showExamples && examples.length > 0 && (
+        {showExamples && examples?.length > 0 && (
           <div className="mb-8 bg-white rounded-lg shadow-lg p-6 border border-purple-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Lightbulb size={20} className="text-purple-600" />
