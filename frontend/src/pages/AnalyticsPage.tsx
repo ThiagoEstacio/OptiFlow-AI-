@@ -219,14 +219,14 @@ export const AnalyticsPage: React.FC = () => {
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="text-sm text-gray-600">Available Functions</div>
               <div className="text-2xl font-bold text-blue-600">
-                {functions.length}
+                {functions?.length || 0}
               </div>
             </div>
 
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="text-sm text-gray-600">Example Queries</div>
               <div className="text-2xl font-bold text-green-600">
-                {examples.length}
+                {examples?.length || 0}
               </div>
             </div>
 
