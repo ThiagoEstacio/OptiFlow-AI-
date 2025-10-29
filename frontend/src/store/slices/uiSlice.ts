@@ -35,6 +35,9 @@ const uiSlice = createSlice({
     setTheme: (state, action: PayloadAction<'light' | 'dark'>) => {
       state.theme = action.payload;
     },
+    toggleDarkMode: (state) => {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+    },
     addNotification: (state, action: PayloadAction<Omit<Notification, 'id' | 'timestamp'>>) => {
       state.notifications.push({
         ...action.payload,
@@ -55,6 +58,7 @@ export const {
   toggleSidebar,
   setSidebarOpen,
   setTheme,
+  toggleDarkMode,
   addNotification,
   removeNotification,
   clearNotifications,

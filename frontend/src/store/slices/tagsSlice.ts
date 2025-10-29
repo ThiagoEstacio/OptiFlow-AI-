@@ -28,6 +28,13 @@ export const fetchTags = createAsyncThunk(
   }
 );
 
+export const fetchTag = createAsyncThunk(
+  'tags/fetchOne',
+  async (id: string) => {
+    return await apiClient.getTag(id);
+  }
+);
+
 export const fetchTagData = createAsyncThunk(
   'tags/fetchData',
   async (params: { tag_id: string; range?: string }) => {
@@ -35,6 +42,8 @@ export const fetchTagData = createAsyncThunk(
     return { tag_id: params.tag_id, data };
   }
 );
+
+export const fetchTagTimeseries = fetchTagData;
 
 export const createTag = createAsyncThunk(
   'tags/create',
@@ -89,6 +98,17 @@ const tagsSlice = createSlice({
       .addCase(fetchTags.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || 'Failed to fetch tags';
+      })
+      .addCase(fetchTag.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchTag.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selectedTag = action.payload;
+      })
+      .addCase(fetchTag.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Failed to fetch tag';
       })
       .addCase(fetchTagData.fulfilled, (state, action) => {
         state.tagData[action.payload.tag_id] = action.payload.data;

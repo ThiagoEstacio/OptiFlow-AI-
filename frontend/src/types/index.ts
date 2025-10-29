@@ -6,9 +6,11 @@
 export interface User {
   id: string;
   email: string;
+  username?: string;
   full_name: string;
   role: "admin" | "engineer" | "operator" | "viewer";
   is_active: boolean;
+  severity?: AlarmSeverity;
   is_superuser: boolean;
   organization_id?: string;
   created_at: string;
@@ -31,6 +33,7 @@ export interface Organization {
   name: string;
   description?: string;
   is_active: boolean;
+  severity?: AlarmSeverity;
   settings?: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -50,10 +53,12 @@ export interface Site {
   state?: string;
   country?: string;
   postal_code?: string;
+  zip_code?: string;
   latitude?: number;
   longitude?: number;
   timezone?: string;
   is_active: boolean;
+  severity?: AlarmSeverity;
   settings?: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -61,6 +66,7 @@ export interface Site {
 
 // Device types
 export type DeviceProtocol = "opc_ua" | "modbus" | "mqtt" | "s7" | "ethernet_ip" | "http";
+export type ProtocolType = DeviceProtocol;
 
 export interface Device {
   id: string;
@@ -72,8 +78,11 @@ export interface Device {
   ip_address?: string;
   port?: number;
   connection_config?: Record<string, any>;
+  config?: Record<string, any>;
   scan_rate?: number;
+  timeout?: number;
   enabled: boolean;
+  log_enabled?: boolean;
   status?: string;
   last_seen?: string;
   error_count?: number;
@@ -85,6 +94,7 @@ export interface Device {
 
 // Tag types
 export type TagDataType = "boolean" | "integer" | "float" | "string" | "double";
+export type DataType = TagDataType;
 export type TagCategory = "process" | "energy" | "quality" | "production" | "maintenance" | "alarm" | "setpoint" | "status";
 
 export interface Tag {
@@ -97,12 +107,16 @@ export interface Tag {
   unit?: string;
   category?: TagCategory;
   scan_rate?: number;
+  timeout?: number;
   deadband?: number;
   scaling_factor?: number;
+  scale_factor?: number;
   scaling_offset?: number;
+  offset?: number;
   min_value?: number;
   max_value?: number;
   enabled: boolean;
+  log_enabled?: boolean;
   settings?: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -144,7 +158,9 @@ export interface AlarmDefinition {
   deadband?: number;
   delay?: number;
   enabled: boolean;
+  log_enabled?: boolean;
   notification_enabled: boolean;
+  log_enabled?: boolean;
   notification_emails?: string[];
   notification_sms?: string[];
   message_template?: string;
@@ -163,6 +179,7 @@ export interface AlarmEvent {
   message: string;
   acknowledged_by?: string;
   is_active: boolean;
+  severity?: AlarmSeverity;
 }
 
 // Dashboard types
@@ -231,3 +248,5 @@ export interface AlarmUpdate {
   message: string;
   timestamp: string;
 }
+
+export type Alarm = AlarmDefinition;
