@@ -3,15 +3,15 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
-import { fetchAlarms, acknowledgeAlarm } from '../store/slices/alarmsSlice';
+import { fetchActiveAlarms, acknowledgeAlarm } from '../store/slices/alarmsSlice';
 import { fetchTags } from '../store/slices/tagsSlice';
-import { Alarm, AlarmSeverity } from '../types';
+import { AlarmEvent, AlarmSeverity } from '../types';
 import { showToast } from '../utils/toast';
 import { format } from 'date-fns';
 
 export const AlarmsPage: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { items: alarms, loading } = useAppSelector((state) => state.alarms);
+  const { activeAlarms: alarms, loading } = useAppSelector((state) => state.alarms);
   const { items: tags } = useAppSelector((state) => state.tags);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,15 +19,15 @@ export const AlarmsPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('active');
 
   useEffect(() => {
-    dispatch(fetchAlarms());
-    dispatch(fetchTags());
+    dispatch(fetchActiveAlarms());
+    dispatch(fetchTags({}));
   }, [dispatch]);
 
-  const handleAcknowledge = async (alarm: Alarm) => {
+  const handleAcknowledge = async (alarm: AlarmEvent) => {
     try {
       await dispatch(acknowledgeAlarm(alarm.id)).unwrap();
       showToast.success('Alarm acknowledged successfully!');
-      dispatch(fetchAlarms());
+      dispatch(fetchActiveAlarms());
     } catch (error: any) {
       showToast.error(error.message || 'Failed to acknowledge alarm');
     }
@@ -76,16 +76,16 @@ export const AlarmsPage: React.FC = () => {
 
     const matchesStatus =
       !filterStatus ||
-      (filterStatus === 'active' && alarm.status === 'active') ||
-      (filterStatus === 'acknowledged' && alarm.status === 'acknowledged') ||
-      (filterStatus === 'resolved' && alarm.status === 'resolved');
+      (filterStatus === 'active' && alarm.is_active && !alarm.acknowledged_at) ||
+      (filterStatus === 'acknowledged' && alarm.acknowledged_at && !alarm.resolved_at) ||
+      (filterStatus === 'resolved' && alarm.resolved_at);
 
     return matchesSearch && matchesSeverity && matchesStatus;
   });
 
-  const activeAlarms = alarms.filter((a) => a.status === 'active');
-  const acknowledgedAlarms = alarms.filter((a) => a.status === 'acknowledged');
-  const resolvedAlarms = alarms.filter((a) => a.status === 'resolved');
+  const activeAlarms = alarms.filter((a) => a.is_active && !a.acknowledged_at);
+  const acknowledgedAlarms = alarms.filter((a) => a.acknowledged_at && !a.resolved_at);
+  const resolvedAlarms = alarms.filter((a) => a.resolved_at);
 
   if (loading) {
     return (
@@ -239,18 +239,22 @@ export const AlarmsPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        alarm.status === 'active'
+                        alarm.is_active && !alarm.acknowledged_at
                           ? 'bg-red-100 text-red-800'
-                          : alarm.status === 'acknowledged'
+                          : alarm.acknowledged_at && !alarm.resolved_at
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-green-100 text-green-800'
                       }`}
                     >
-                      {alarm.status.toUpperCase()}
+                      {alarm.resolved_at
+                        ? 'RESOLVED'
+                        : alarm.acknowledged_at
+                        ? 'ACKNOWLEDGED'
+                        : 'ACTIVE'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {alarm.status === 'active' && (
+                    {alarm.is_active && !alarm.acknowledged_at && (
                       <button
                         onClick={() => handleAcknowledge(alarm)}
                         className="text-blue-600 hover:text-blue-900"
@@ -258,10 +262,10 @@ export const AlarmsPage: React.FC = () => {
                         Acknowledge
                       </button>
                     )}
-                    {alarm.status === 'acknowledged' && (
+                    {alarm.acknowledged_at && !alarm.resolved_at && (
                       <span className="text-gray-400">Acknowledged</span>
                     )}
-                    {alarm.status === 'resolved' && (
+                    {alarm.resolved_at && (
                       <span className="text-green-600">Resolved</span>
                     )}
                   </td>
