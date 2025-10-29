@@ -1,234 +1,225 @@
-# SmartPort Device Simulators
+# 🚢 SmartPort - Simuladores
 
-Simuladores de dispositivos industriais para testar o Gateway SmartPort.
+Simuladores de terminal portuário de grãos e açúcar para detecção de anomalias.
 
-**📋 Ver documentação completa**: [SIMULADOR_E_TAGS.md](../SIMULADOR_E_TAGS.md)
+**📋 Ver documentação completa**: [SMARTPORT_README.md](../SMARTPORT_README.md)
 
-## Simuladores Disponíveis
+---
 
-### 🆕 1. Industrial Tags Simulator (RECOMENDADO)
+## 🎯 Simuladores Disponíveis
 
-**Arquivo**: `industrial_tags_simulator.py`
+### ⭐ 1. SmartPort Bulk Terminal Simulator (RECOMENDADO)
 
-Simulador completo com **26 tags industriais** categorizadas, compatível com **PI Vision e Power BI**.
+**Arquivo**: `smartport_bulk_terminal_simulator.py`
 
-#### ⚡ Instalação e Uso Rápido
+**Simulador completo de Terminal de Grãos/Açúcar** com 35+ tags para anomalia detection tipo **PI Vision/Power BI**.
+
+#### 📦 Equipamentos Simulados
+
+- **Correia Transportadora 1** (Recebimento)
+- **Correia Transportadora 2** (Transferência)
+- **Elevador de Caneca** (Transporte vertical)
+- **Shiploader** (Carregador de navio) ⭐ Principal
+- **2 Silos** de armazenamento
+
+#### 🏷️ Tags para Anomalia Detection
+
+**Por motor/equipamento**:
+- 🔌 Corrente elétrica (A) - detecta sobrecarga
+- ⚙️ Velocidade (RPM) - detecta variações
+- 🌡️ Temperatura (motor + rolamento) - manutenção preditiva
+- 📳 Vibração (mm/s) - desbalanceamento
+
+**Processo**:
+- 📊 Fluxo de produto (t/h)
+- 📏 Nível de silo (%)
+- 🌡️ Temperatura produto (°C)
+- 💧 Umidade produto (%)
+
+**KPIs**:
+- 📦 Toneladas carregadas (acumulado)
+- 📈 Progresso navio (0-100%)
+- ⚡ Consumo energia (kWh)
+
+#### 🔍 Anomalias Simuladas
+
+1. **Rolamento degradando** (Correia 1)
+   - Após 5 minutos
+   - Vibração + temperatura crescentes
+   - Para manutenção preditiva
+
+2. **Sobrecarga periódica** (Elevador)
+   - A cada 10 minutos
+   - Corrente +80A
+   - Simula bloqueio
+
+3. **Spikes de vibração** (Shiploader)
+   - Aleatoriamente (0.2%/s)
+   - Até 12+ mm/s
+   - Simula desbalanceamento
+
+#### ⚡ Instalação e Uso
 
 ```bash
-# 1. Configurar tags no banco de dados (executar uma vez)
-./configurar_tags_simuladas.sh
+# 1. Configurar tags no banco (uma vez)
+./setup_smartport.sh
 
 # 2. Iniciar simulador
 cd simulators
 pip install -r requirements.txt
-python industrial_tags_simulator.py
+python smartport_bulk_terminal_simulator.py
 ```
 
-#### 📊 Tags Disponíveis
+**Opções**:
+```bash
+# Porta customizada
+python smartport_bulk_terminal_simulator.py --port 5030
 
-- **6 tags de processo**: temperatura, pressão, vazão, nível, pH, condutividade
-- **4 tags de energia**: potência, corrente, tensão, fator de potência
-- **4 tags de produção**: taxa, contador, OEE, qualidade
-- **4 tags de manutenção**: velocidade, temperatura rolamento, vibração X/Y
-- **8 tags de status/alarme**: motores, válvulas, alarmes
-
-#### 🎯 Características
-
-- ✅ Dados realistas com padrões industriais (senóides, correlações, ruído)
-- ✅ Configuração automática no banco de dados
-- ✅ 26 tags pré-configuradas
-- ✅ Compatível com dashboards tipo PI Vision
-- ✅ Modbus TCP padrão (porta 5020)
-
-#### 📖 Documentação Completa
-
-Ver [SIMULADOR_E_TAGS.md](../SIMULADOR_E_TAGS.md) para:
-- Lista completa de tags
-- Exemplos de dashboards
-- Componentes de visualização
-- Casos de uso
+# Intervalo mais rápido
+python smartport_bulk_terminal_simulator.py --interval 0.5
+```
 
 ---
 
-### 2. Modbus TCP Device Simulator (Básico)
+### 2. Industrial Tags Simulator (Genérico)
 
-Simula um dispositivo industrial com protocolo Modbus TCP, gerando dados dinâmicos de processo.
+**Arquivo**: `industrial_tags_simulator.py`
 
-#### Dados Simulados
+Simulador genérico com 26 tags industriais para uso geral.
 
-| Endereço | Tipo | Descrição | Range | Unidade |
-|----------|------|-----------|-------|---------|
-| 40001 | Holding Register | Temperatura | 20-100 | °C (×10) |
-| 40011 | Holding Register | Pressão | 0-10 | bar (×10) |
-| 40021 | Holding Register | Vazão | 0-1000 | L/min |
-| 40031 | Holding Register | Nível | 0-100 | % |
-| 40041 | Holding Register | Potência | 0-10000 | W |
-| 40051 | Holding Register | Velocidade | 0-3000 | RPM |
-| Coil 1 | Digital | Motor Running | 0/1 | - |
-| Coil 2 | Digital | Válvula Aberta | 0/1 | - |
-| Coil 3 | Digital | Alarme Ativo | 0/1 | - |
-| Coil 4 | Digital | Emergency Stop | 0/1 | - |
+Ver [SIMULADOR_E_TAGS.md](../SIMULADOR_E_TAGS.md) para detalhes.
 
-#### Instalação
+---
+
+### 3. Modbus TCP Device Simulator (Básico)
+
+**Arquivo**: `modbus_device_simulator.py`
+
+Simulador básico com 6 registros analógicos e 4 coils.
+
+#### Uso
+
+```bash
+python modbus_device_simulator.py --port 5020
+```
+
+---
+
+## 📊 Comparação de Simuladores
+
+| Feature | SmartPort Bulk | Industrial Tags | Modbus Basic |
+|---------|----------------|-----------------|--------------|
+| **Tags** | 35 tags | 26 tags | 10 tags |
+| **Anomalias** | ✅ 3 tipos | ❌ Não | ❌ Não |
+| **Foco** | Terminal portuário | Indústria geral | Teste básico |
+| **ML Ready** | ✅ Sim | ⚠️ Parcial | ❌ Não |
+| **Realismo** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐ |
+
+---
+
+## 🚀 Quick Start
+
+### Opção 1: SmartPort Completo (Recomendado)
+
+```bash
+# Passo 1: Backend
+docker compose up -d backend postgres influxdb
+
+# Passo 2: Configurar tags
+./setup_smartport.sh
+
+# Passo 3: Simulador
+cd simulators
+python smartport_bulk_terminal_simulator.py
+
+# Passo 4: Frontend
+# Abrir http://localhost:3000
+```
+
+### Opção 2: Teste Rápido
 
 ```bash
 cd simulators
 pip install -r requirements.txt
-```
-
-#### Uso
-
-**Modo Básico:**
-```bash
-python modbus_device_simulator.py
-```
-
-**Com Parâmetros:**
-```bash
-python modbus_device_simulator.py --host 0.0.0.0 --port 502 --update-interval 1.0
-```
-
-**Opções:**
-- `--host`: Endereço para bind (padrão: 0.0.0.0)
-- `--port`: Porta para escutar (padrão: 502)
-- `--update-interval`: Intervalo de atualização em segundos (padrão: 1.0)
-
-**Nota:** Porta 502 requer privilégios de superusuário:
-```bash
-sudo python modbus_device_simulator.py
-```
-
-Ou use porta alternativa (≥1024):
-```bash
 python modbus_device_simulator.py --port 5020
 ```
 
-## Testando com Gateway
+---
 
-### 1. Iniciar o Simulador
+## 📈 Dashboards Recomendados
 
-```bash
-cd simulators
-python modbus_device_simulator.py --port 5020
-```
+### Para SmartPort Bulk Terminal:
 
-### 2. Configurar Device no SmartPort
+1. **Motor Health Monitoring**
+   - Tags: `CONV1_MOTOR_CURRENT`, `CONV1_MOTOR_TEMP`, `CONV1_VIBRATION`
+   - Tipo: Gauges + Time Series
 
-Via API ou Frontend, criar device com:
-```json
-{
-  "name": "Simulated PLC",
-  "protocol": "modbus_tcp",
-  "ip_address": "localhost",
-  "port": 5020,
-  "site_id": "your-site-id",
-  "enabled": true,
-  "scan_rate": 1000
-}
-```
+2. **Manutenção Preditiva**
+   - Tags: `CONV1_BEARING_TEMP`, `CONV1_VIBRATION`
+   - Tipo: Multi-axis Chart + ML prediction
 
-### 3. Configurar Tags
+3. **Throughput Analysis**
+   - Tags: `SHIP_FLOW_RATE`, `LOADING_RATE_TOTAL`, `VESSEL_PROGRESS`
+   - Tipo: Gauge + Progress bar
 
-Exemplo de tag para temperatura:
-```json
-{
-  "name": "Temperature_Tank1",
-  "address": "40001",
-  "data_type": "FLOAT",
-  "device_id": "device-id",
-  "unit": "°C",
-  "scale_factor": 0.1,
-  "enabled": true,
-  "log_enabled": true
-}
-```
+4. **Energy Efficiency**
+   - Tags: `ENERGY_TOTAL`, todas correntes de motores
+   - Tipo: Pie Chart + Dual-axis
 
-### 4. Verificar Dados
+Ver [SMARTPORT_README.md](../SMARTPORT_README.md) para exemplos visuais completos.
 
-Os dados começarão a aparecer no dashboard SmartPort automaticamente.
+---
 
-## Desenvolvimento de Novos Simuladores
+## 🔧 Troubleshooting
 
-Para criar novos simuladores para outros protocolos:
-
-1. Copie `modbus_device_simulator.py` como template
-2. Substitua a biblioteca de protocolo (pymodbus → outra)
-3. Adapte a lógica de atualização de dados
-4. Adicione ao requirements.txt
-
-### Protocolos Suportados para Futuros Simuladores
-
-- **OPC UA**: usando `asyncua`
-- **MQTT**: usando `paho-mqtt`
-- **Siemens S7**: usando `python-snap7`
-- **Ethernet/IP**: usando `pycomm3`
-
-## Docker
-
-### Executar Simulador em Container
+### Problema: Porta 5020 em uso
 
 ```bash
-docker run -it --rm \
-  -p 5020:502 \
-  -v $(pwd):/app \
-  python:3.11-slim \
-  bash -c "pip install pymodbus && python /app/modbus_device_simulator.py --host 0.0.0.0 --port 502"
+# Verificar o que está usando a porta
+netstat -an | grep 5020
+
+# Usar outra porta
+python smartport_bulk_terminal_simulator.py --port 5030
 ```
 
-## Troubleshooting
+### Problema: Tags não aparecem no frontend
 
-### Erro: Permission denied (porta 502)
-
-Solução 1: Use sudo
 ```bash
-sudo python modbus_device_simulator.py
+# Reconfigurar tags
+./setup_smartport.sh
+
+# Verificar logs do backend
+docker logs optiflow-ai--backend
 ```
 
-Solução 2: Use porta ≥1024
+### Problema: Permissão negada
+
 ```bash
-python modbus_device_simulator.py --port 5020
+chmod +x setup_smartport.sh
 ```
 
-Solução 3: Configure capabilities no Linux
-```bash
-sudo setcap 'cap_net_bind_service=+ep' $(which python3)
-```
+---
 
-### Erro: Address already in use
+## 📚 Documentação
 
-Outra aplicação está usando a porta. Mude a porta:
-```bash
-python modbus_device_simulator.py --port 5021
-```
+- **SmartPort completo**: [SMARTPORT_README.md](../SMARTPORT_README.md)
+- **Simuladores genéricos**: [SIMULADOR_E_TAGS.md](../SIMULADOR_E_TAGS.md)
+- **API Backend**: [/docs/API.md](../docs/API.md)
 
-### Gateway não conecta
+---
 
-1. Verifique se o simulador está rodando
-2. Verifique o IP/porta configurados no device
-3. Verifique firewall (permitir porta do simulador)
-4. Use `telnet localhost 5020` para testar conectividade
+## 🎯 Roadmap
 
-## Logs
+- [x] SmartPort Bulk Terminal Simulator
+- [x] Anomalia detection (3 tipos)
+- [ ] RTG Crane Simulator (pátio)
+- [ ] Gate Operations Simulator
+- [ ] STS Crane Simulator (ship-to-shore)
+- [ ] ML models pré-treinados
+- [ ] Digital Twin integration
 
-O simulador imprime logs a cada 10 iterações mostrando os valores atuais:
+---
 
-```
-2024-10-28 15:30:00 - __main__ - INFO - Simulated Data - Temp: 65.3°C, Pressure: 5.2 bar, Flow: 580 L/min, Level: 62%, Power: 5450 W, RPM: 1680, Motor: 1, Alarm: 0
-```
-
-## Performance
-
-- Update interval recomendado: 1-5 segundos
-- O simulador pode simular múltiplos tags simultaneamente
-- Consumo de CPU: ~1-2%
-- Memória: ~30MB
-
-## Próximas Funcionalidades
-
-- [ ] Simulador OPC UA
-- [ ] Simulador MQTT
-- [ ] Simulador Siemens S7
-- [ ] Simulador Ethernet/IP
-- [ ] Interface web para controle dos simuladores
-- [ ] Cenários pré-configurados (startup, shutdown, alarm)
-- [ ] Gravação/replay de dados reais
+**Desenvolvido por**: OptiFlow AI Team
+**Versão**: 1.0.0
+**Data**: 2025-01-29
