@@ -52,7 +52,6 @@
     "@types/react": "^18.2.45",
     "@types/react-datepicker": "^4.19.5",
     "@types/react-dom": "^18.2.18",
-    "@types/react-draggable": "^4.4.6",
     "@types/react-plotly.js": "^2.6.3",
     "@types/react-resizable": "^3.0.4",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
