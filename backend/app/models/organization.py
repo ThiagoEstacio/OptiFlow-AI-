@@ -37,6 +37,7 @@ class Organization(Base):
     # Relationships
     sites = relationship("Site", back_populates="organization", cascade="all, delete-orphan")
     users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="organization", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Organization {self.name}>"
