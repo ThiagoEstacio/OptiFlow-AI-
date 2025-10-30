@@ -19,13 +19,15 @@ import { SettingsPage } from './pages/SettingsPage';
 import { DashboardBuilderPage } from './pages/DashboardBuilderPage';
 import { Toaster } from './components/Toast/Toaster';
 import { DarkModeProvider } from './components/DarkModeProvider';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   return (
     <Provider store={store}>
       <DarkModeProvider>
-        <Toaster />
-        <BrowserRouter>
+        <ThemeProvider>
+          <Toaster />
+          <BrowserRouter>
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -54,6 +56,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+        </ThemeProvider>
       </DarkModeProvider>
     </Provider>
   );
