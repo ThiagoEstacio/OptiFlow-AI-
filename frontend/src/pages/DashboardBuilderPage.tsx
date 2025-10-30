@@ -14,11 +14,20 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { fetchTags } from '../store/slices/tagsSlice';
 import { TagsPanel } from '../components/DashboardBuilder/TagsPanel';
 import { WidgetCanvas } from '../components/DashboardBuilder/WidgetCanvas';
 import { WidgetToolbar } from '../components/DashboardBuilder/WidgetToolbar';
+import { PropertyPanel } from '../components/DashboardBuilder/PropertyPanel';
+import { GridBackground } from '../components/DashboardBuilder/GridBackground';
+import { TemplateSelector } from '../components/DashboardBuilder/TemplateSelector';
+import { DashboardManager } from '../components/DashboardBuilder/DashboardManager';
+import { ThemeToggle } from '../components/ThemeToggle';
+import { useGridSnapping } from '../hooks/useGridSnapping';
+import { useDashboardManager } from '../hooks/useDashboardManager';
+import { getTemplate, type DashboardTemplate } from '../data/dashboardTemplates';
 import { showToast } from '../utils/toast';
 
 export interface Widget {
@@ -84,10 +93,24 @@ export const DashboardBuilderPage: React.FC = () => {
   // Use mock tags if no tags loaded from backend
   const tags = tagsFromStore.length > 0 ? tagsFromStore : MOCK_TAGS;
 
+  // State
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
   const [showTagsPanel, setShowTagsPanel] = useState(true);
+  const [showPropertyPanel, setShowPropertyPanel] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
   const [dashboardName, setDashboardName] = useState('My Dashboard');
+
+  // Modal states
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showDashboardManager, setShowDashboardManager] = useState(false);
+
+  // Advanced hooks
+  const gridSnapping = useGridSnapping({ gridSize: 10, enabled: true });
+  const dashboardManager = useDashboardManager();
+
+  // Current dashboard ID (for multi-dashboard support)
+  const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
 
   // Load tags on mount
   useEffect(() => {
@@ -217,47 +240,164 @@ export const DashboardBuilderPage: React.FC = () => {
     }
   }, []);
 
+  // Template functions
+  const handleSelectTemplate = useCallback((template: DashboardTemplate) => {
+    const templateWidgets: Widget[] = template.widgets.map((w, index) => ({
+      ...w,
+      id: `widget-${Date.now()}-${index}`,
+    } as Widget));
+
+    setWidgets(templateWidgets);
+    setDashboardName(template.name);
+    showToast.success(`Template "${template.name}" loaded`);
+  }, []);
+
+  // Dashboard Manager functions
+  const handleSelectDashboard = useCallback((dashboard: any) => {
+    setWidgets(dashboard.widgets);
+    setDashboardName(dashboard.name);
+    setCurrentDashboardId(dashboard.id);
+    showToast.success(`Dashboard "${dashboard.name}" loaded`);
+  }, []);
+
+  const handleCreateDashboard = useCallback((name: string, description?: string) => {
+    dashboardManager.createDashboard(name, widgets, description);
+    showToast.success(`Dashboard "${name}" created`);
+  }, [dashboardManager, widgets]);
+
+  const handleExportDashboard = useCallback((dashboard: any) => {
+    dashboardManager.downloadDashboard(dashboard);
+    showToast.success('Dashboard exported');
+  }, [dashboardManager]);
+
+  const handleImportDashboard = useCallback(async (file: File) => {
+    const imported = await dashboardManager.importDashboardFromFile(file);
+    if (imported) {
+      showToast.success('Dashboard imported successfully');
+    } else {
+      showToast.error('Failed to import dashboard');
+    }
+  }, [dashboardManager]);
+
+  const handleShareDashboard = useCallback((id: string) => {
+    const url = dashboardManager.shareDashboard(id);
+    navigator.clipboard.writeText(url);
+    showToast.success('Share link copied to clipboard!');
+  }, [dashboardManager]);
+
+  // Auto-open property panel when widget is selected
+  useEffect(() => {
+    if (selectedWidget) {
+      setShowPropertyPanel(true);
+    }
+  }, [selectedWidget]);
+
+  // Get selected widget object
+  const selectedWidgetObj = selectedWidget
+    ? widgets.find(w => w.id === selectedWidget) || null
+    : null;
+
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="h-screen flex flex-col bg-gray-50">
+      <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold text-gray-900">Dashboard Builder</h1>
-            <input
-              type="text"
-              value={dashboardName}
-              onChange={(e) => setDashboardName(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded text-sm"
-              placeholder="Dashboard name"
-            />
-          </div>
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+          <div className="flex items-center justify-between">
+            {/* Left side - Title and name */}
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Dashboard Builder</h1>
+              <input
+                type="text"
+                value={dashboardName}
+                onChange={(e) => setDashboardName(e.target.value)}
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Dashboard name"
+              />
+            </div>
 
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowTagsPanel(!showTagsPanel)}
-              className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded"
-            >
-              {showTagsPanel ? '◀ Hide' : '▶ Show'} Tags
-            </button>
-            <button
-              onClick={handleLoad}
-              className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded"
-            >
-              📂 Load
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded"
-            >
-              💾 Save
-            </button>
-            <button
-              onClick={handleClear}
-              className="px-3 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded"
-            >
-              🗑️ Clear
-            </button>
+            {/* Right side - Actions */}
+            <div className="flex items-center space-x-2">
+              {/* Templates */}
+              <button
+                onClick={() => setShowTemplateSelector(true)}
+                className="flex items-center space-x-1 px-3 py-2 text-sm bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 hover:bg-purple-200 dark:hover:bg-purple-800 rounded transition-colors"
+                title="Load Template"
+              >
+                <Layout className="w-4 h-4" />
+                <span>Templates</span>
+              </button>
+
+              {/* Dashboard Manager */}
+              <button
+                onClick={() => setShowDashboardManager(true)}
+                className="flex items-center space-x-1 px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                title="Manage Dashboards"
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span>Dashboards</span>
+              </button>
+
+              {/* Grid Toggle */}
+              <button
+                onClick={() => setShowGrid(!showGrid)}
+                className={`flex items-center space-x-1 px-3 py-2 text-sm rounded transition-colors ${
+                  showGrid
+                    ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+                }`}
+                title="Toggle Grid"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </button>
+
+              {/* Snap Toggle */}
+              <button
+                onClick={gridSnapping.toggleSnapping}
+                className={`px-3 py-2 text-xs rounded transition-colors ${
+                  gridSnapping.isSnapping
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                }`}
+                title="Toggle Grid Snapping"
+              >
+                {gridSnapping.isSnapping ? '🧲 Snap ON' : '🧲 Snap OFF'}
+              </button>
+
+              {/* Tags Panel Toggle */}
+              <button
+                onClick={() => setShowTagsPanel(!showTagsPanel)}
+                className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+              >
+                {showTagsPanel ? '◀ Hide Tags' : '▶ Show Tags'}
+              </button>
+
+              {/* Properties Panel Toggle */}
+              <button
+                onClick={() => setShowPropertyPanel(!showPropertyPanel)}
+                className={`flex items-center space-x-1 px-3 py-2 text-sm rounded transition-colors ${
+                  showPropertyPanel
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+                title="Toggle Properties Panel"
+              >
+                <Settings className="w-4 h-4" />
+                <span>Properties</span>
+              </button>
+
+              {/* Theme Toggle */}
+              <ThemeToggle variant="icon" size="md" />
+
+              {/* Save */}
+              <button
+                onClick={handleSave}
+                className="flex items-center space-x-1 px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors"
+                title="Save Dashboard"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -276,30 +416,71 @@ export const DashboardBuilderPage: React.FC = () => {
           )}
 
           {/* Canvas */}
-          <WidgetCanvas
-            widgets={widgets}
-            selectedWidget={selectedWidget}
-            onSelectWidget={setSelectedWidget}
-            onUpdateWidget={handleUpdateWidget}
-            onDeleteWidget={handleDeleteWidget}
-            onBindTag={handleBindTag}
-          />
+          <div className="flex-1 relative bg-white dark:bg-gray-800">
+            {/* Grid Background */}
+            <GridBackground
+              gridSize={gridSnapping.gridSize}
+              show={showGrid}
+            />
+
+            <WidgetCanvas
+              widgets={widgets}
+              selectedWidget={selectedWidget}
+              onSelectWidget={setSelectedWidget}
+              onUpdateWidget={handleUpdateWidget}
+              onDeleteWidget={handleDeleteWidget}
+              onBindTag={handleBindTag}
+            />
+          </div>
+
+          {/* Property Panel */}
+          {showPropertyPanel && (
+            <PropertyPanel
+              widget={selectedWidgetObj}
+              onUpdate={handleUpdateWidget}
+              onClose={() => setShowPropertyPanel(false)}
+            />
+          )}
         </div>
 
         {/* Status Bar */}
-        <div className="bg-gray-800 text-white px-4 py-2 text-sm flex items-center justify-between">
+        <div className="bg-gray-800 dark:bg-gray-900 text-white px-4 py-2 text-sm flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <span>Widgets: {widgets.length}</span>
             <span>Tags: {tags.length}</span>
+            {selectedWidget && <span>• Selected: {selectedWidgetObj?.type}</span>}
+            <span>• Grid: {showGrid ? 'ON' : 'OFF'}</span>
+            <span>• Snap: {gridSnapping.isSnapping ? 'ON' : 'OFF'}</span>
             <span className="flex items-center">
-              <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-              Connected
+              <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+              Live
             </span>
           </div>
           <div className="text-gray-400">
-            💡 Tip: Drag tags from the left panel onto widgets to bind data
+            💡 Tip: Use Templates for quick start • Right-click widgets for options
           </div>
         </div>
+
+        {/* Modals */}
+        <TemplateSelector
+          isOpen={showTemplateSelector}
+          onClose={() => setShowTemplateSelector(false)}
+          onSelectTemplate={handleSelectTemplate}
+        />
+
+        <DashboardManager
+          isOpen={showDashboardManager}
+          onClose={() => setShowDashboardManager(false)}
+          dashboards={dashboardManager.dashboards}
+          currentDashboardId={currentDashboardId}
+          onSelectDashboard={handleSelectDashboard}
+          onCreateDashboard={handleCreateDashboard}
+          onDeleteDashboard={dashboardManager.deleteDashboard}
+          onDuplicateDashboard={dashboardManager.duplicateDashboard}
+          onExportDashboard={handleExportDashboard}
+          onImportDashboard={handleImportDashboard}
+          onShareDashboard={handleShareDashboard}
+        />
       </div>
     </DndProvider>
   );
