@@ -18,46 +18,43 @@ import { TagDetailsPage } from './pages/TagDetailsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DashboardBuilderPage } from './pages/DashboardBuilderPage';
 import { Toaster } from './components/Toast/Toaster';
-import { DarkModeProvider } from './components/DarkModeProvider';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   return (
     <Provider store={store}>
-      <DarkModeProvider>
-        <ThemeProvider>
-          <Toaster />
-          <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
+      <ThemeProvider>
+        <Toaster />
+        <BrowserRouter>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<LoginPage />} />
 
-          {/* Private Routes */}
-          <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <AppLayout />
-              </PrivateRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="sites" element={<SitesPage />} />
-            <Route path="devices" element={<DevicesPage />} />
-            <Route path="tags" element={<TagsPage />} />
-            <Route path="tags/:id" element={<TagDetailsPage />} />
-            <Route path="alarms" element={<AlarmsPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="dashboard-builder" element={<DashboardBuilderPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
+            {/* Private Routes */}
+            <Route
+              path="/"
+              element={
+                <PrivateRoute>
+                  <AppLayout />
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="sites" element={<SitesPage />} />
+              <Route path="devices" element={<DevicesPage />} />
+              <Route path="tags" element={<TagsPage />} />
+              <Route path="tags/:id" element={<TagDetailsPage />} />
+              <Route path="alarms" element={<AlarmsPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="dashboard-builder" element={<DashboardBuilderPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
 
-          {/* Redirect unknown routes */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-        </ThemeProvider>
-      </DarkModeProvider>
+            {/* Redirect unknown routes */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
     </Provider>
   );
 }
