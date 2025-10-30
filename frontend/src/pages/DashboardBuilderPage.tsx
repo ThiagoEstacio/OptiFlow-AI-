@@ -23,11 +23,12 @@ import { showToast } from '../utils/toast';
 
 export interface Widget {
   id: string;
-  type: 'gauge' | 'timeseries' | 'value' | 'chart';
+  type: 'gauge' | 'timeseries' | 'value' | 'chart' | 'kpi' | 'status' | 'table' | 'progress' | 'sparkline' | 'pie' | 'bar' | 'heatmap';
   position: { x: number; y: number };
   size: { width: number; height: number };
   config: {
     tagId?: string;
+    tagIds?: string[]; // For multi-tag widgets like tables
     tagName?: string;
     title?: string;
     unit?: string;
@@ -35,6 +36,29 @@ export interface Widget {
     max?: number;
     timeRange?: string;
     color?: string;
+    // KPI specific
+    previousValue?: number;
+    target?: number;
+    trend?: 'up' | 'down' | 'neutral';
+    format?: 'number' | 'percentage' | 'currency';
+    decimals?: number;
+    // Status specific
+    status?: 'running' | 'stopped' | 'warning' | 'alarm' | 'offline' | 'idle' | 'maintenance';
+    // Progress specific
+    progressType?: 'bar' | 'circular';
+    thresholds?: {
+      warning?: number;
+      critical?: number;
+    };
+    // Sparkline specific
+    sparklineStyle?: 'line' | 'area' | 'bar';
+    showMinMax?: boolean;
+    showTrend?: boolean;
+    // Table specific
+    columns?: any[];
+    // General
+    theme?: 'default' | 'minimal' | 'modern' | 'industrial';
+    size?: 'sm' | 'md' | 'lg';
   };
 }
 
@@ -72,18 +96,45 @@ export const DashboardBuilderPage: React.FC = () => {
 
   // Add new widget
   const handleAddWidget = useCallback((type: Widget['type']) => {
+    // Determine widget size based on type
+    const getWidgetSize = (widgetType: Widget['type']) => {
+      switch (widgetType) {
+        case 'kpi':
+          return { width: 280, height: 180 };
+        case 'status':
+          return { width: 250, height: 150 };
+        case 'progress':
+          return { width: 300, height: 180 };
+        case 'sparkline':
+          return { width: 280, height: 160 };
+        case 'table':
+          return { width: 500, height: 350 };
+        case 'timeseries':
+        case 'bar':
+        case 'pie':
+        case 'heatmap':
+          return { width: 400, height: 300 };
+        case 'gauge':
+          return { width: 280, height: 280 };
+        case 'value':
+          return { width: 220, height: 180 };
+        default:
+          return { width: 250, height: 250 };
+      }
+    };
+
     const newWidget: Widget = {
       id: `widget-${Date.now()}`,
       type,
       position: { x: 50 + widgets.length * 20, y: 50 + widgets.length * 20 },
-      size: {
-        width: type === 'timeseries' || type === 'chart' ? 400 : 250,
-        height: type === 'timeseries' || type === 'chart' ? 300 : 250
-      },
+      size: getWidgetSize(type),
       config: {
         title: `${type.charAt(0).toUpperCase() + type.slice(1)} Widget`,
         timeRange: '1h',
         color: '#3B82F6',
+        size: 'md',
+        decimals: 1,
+        showTrend: true,
       },
     };
 

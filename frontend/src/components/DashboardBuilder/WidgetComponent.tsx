@@ -11,7 +11,16 @@ import 'react-resizable/css/styles.css';
 import type { Widget } from '../../pages/DashboardBuilderPage';
 import { GaugeChart } from '../Visualizations/GaugeChart';
 import { TimeSeriesChart } from '../Charts/TimeSeriesChart';
+import { PieChart } from '../Visualizations/PieChart';
+import { BarChart } from '../Visualizations/BarChart';
+import { HeatmapChart } from '../Visualizations/HeatmapChart';
+import { KPICard } from '../Widgets/KPICard';
+import { StatusIndicator } from '../Widgets/StatusIndicator';
+import { DataTable } from '../Widgets/DataTable';
+import { ProgressWidget } from '../Widgets/ProgressWidget';
+import { SparklineWidget } from '../Widgets/SparklineWidget';
 import { useLiveTagData } from '../../hooks/useLiveTagData';
+import { Activity } from 'lucide-react';
 
 interface WidgetComponentProps {
   widget: Widget;
@@ -123,6 +132,148 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
           <div className="p-4 text-center text-gray-500">
             Chart widget - Coming soon
           </div>
+        );
+
+      case 'kpi':
+        return (
+          <KPICard
+            title={widget.config.title || 'KPI'}
+            value={typeof value === 'number' ? value : 0}
+            unit={widget.config.unit}
+            previousValue={widget.config.previousValue}
+            target={widget.config.target}
+            trend={widget.config.trend}
+            format={widget.config.format}
+            decimals={widget.config.decimals || 1}
+            status={typeof value === 'number' && widget.config.max
+              ? value >= widget.config.max * 0.9 ? 'critical' : value >= widget.config.max * 0.75 ? 'warning' : 'good'
+              : 'neutral'}
+            theme={widget.config.theme}
+            size={widget.config.size}
+            icon={<Activity className="w-5 h-5" />}
+          />
+        );
+
+      case 'status':
+        const determineStatus = () => {
+          if (widget.config.status) return widget.config.status;
+          if (typeof value === 'number' && widget.config.max) {
+            if (value >= widget.config.max * 0.9) return 'alarm';
+            if (value >= widget.config.max * 0.75) return 'warning';
+            if (value > widget.config.min!) return 'running';
+          }
+          return 'idle';
+        };
+
+        return (
+          <StatusIndicator
+            label={widget.config.title || 'Status'}
+            status={determineStatus()}
+            value={typeof value === 'number' ? value : undefined}
+            unit={widget.config.unit}
+            size={widget.config.size}
+          />
+        );
+
+      case 'progress':
+        return (
+          <ProgressWidget
+            title={widget.config.title || 'Progress'}
+            value={typeof value === 'number' ? value : 0}
+            max={widget.config.max}
+            min={widget.config.min}
+            unit={widget.config.unit}
+            target={widget.config.target}
+            thresholds={widget.config.thresholds}
+            type={widget.config.progressType || 'bar'}
+            size={widget.config.size}
+            showPercentage={true}
+            showValue={true}
+          />
+        );
+
+      case 'sparkline':
+        // Generate mock historical data for sparkline
+        const generateSparklineData = () => {
+          const dataPoints = 20;
+          const data: number[] = [];
+          const current = typeof value === 'number' ? value : 50;
+          const range = (widget.config.max ?? 100) - (widget.config.min ?? 0);
+
+          for (let i = 0; i < dataPoints; i++) {
+            const variation = (Math.random() - 0.5) * (range * 0.2);
+            data.push(Math.max(widget.config.min ?? 0, Math.min(widget.config.max ?? 100, current + variation)));
+          }
+          return data;
+        };
+
+        return (
+          <SparklineWidget
+            title={widget.config.title || 'Trend'}
+            data={generateSparklineData()}
+            currentValue={typeof value === 'number' ? value : undefined}
+            unit={widget.config.unit}
+            style={widget.config.sparklineStyle}
+            showMinMax={widget.config.showMinMax}
+            showTrend={widget.config.showTrend}
+            decimals={widget.config.decimals || 1}
+          />
+        );
+
+      case 'pie':
+        // Mock data for pie chart
+        const pieData = [
+          { name: 'Running', value: typeof value === 'number' ? value : 60 },
+          { name: 'Idle', value: 25 },
+          { name: 'Stopped', value: 15 },
+        ];
+        return (
+          <PieChart
+            data={pieData}
+            title={widget.config.title || 'Distribution'}
+            height={widget.size.height - 60}
+          />
+        );
+
+      case 'bar':
+        // Mock data for bar chart
+        const barData = [
+          { category: 'Conv 1', value: typeof value === 'number' ? value : 120 },
+          { category: 'Conv 2', value: 150 },
+          { category: 'Elevator', value: 180 },
+          { category: 'Shiploader', value: 200 },
+        ];
+        return (
+          <BarChart
+            data={barData}
+            title={widget.config.title || 'Comparison'}
+            height={widget.size.height - 60}
+          />
+        );
+
+      case 'table':
+        // Mock table data
+        const tableData = [
+          { id: 1, name: 'Conveyor 1', value: typeof value === 'number' ? value.toFixed(1) : '0', status: 'good', unit: widget.config.unit },
+          { id: 2, name: 'Conveyor 2', value: '145.3', status: 'good', unit: widget.config.unit },
+          { id: 3, name: 'Elevator', value: '180.2', status: 'warning', unit: widget.config.unit },
+          { id: 4, name: 'Shiploader', value: '220.5', status: 'good', unit: widget.config.unit },
+        ];
+
+        const tableColumns = [
+          { key: 'name', label: 'Equipment', sortable: true },
+          { key: 'value', label: 'Value', format: 'number', decimals: 1, sortable: true },
+          { key: 'unit', label: 'Unit', sortable: false },
+          { key: 'status', label: 'Status', format: 'status', align: 'center' },
+        ];
+
+        return (
+          <DataTable
+            columns={tableColumns}
+            data={tableData}
+            title={widget.config.title}
+            size={widget.config.size}
+          />
         );
 
       default:
