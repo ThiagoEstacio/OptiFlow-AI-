@@ -17,6 +17,7 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { TagDetailsPage } from './pages/TagDetailsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DashboardBuilderPage } from './pages/DashboardBuilderPage';
+import { AIInsightsPage } from './pages/AIInsightsPage';
 import { Toaster } from './components/Toast/Toaster';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -47,6 +48,7 @@ function App() {
               <Route path="alarms" element={<AlarmsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="dashboard-builder" element={<DashboardBuilderPage />} />
+              <Route path="ai-insights" element={<AIInsightsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 

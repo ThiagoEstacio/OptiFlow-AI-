@@ -13,6 +13,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: '📊' },
     { path: '/dashboard-builder', label: 'Builder', icon: '🎨' },
+    { path: '/ai-insights', label: 'AI Insights', icon: '🤖' },
     { path: '/sites', label: 'Sites', icon: '🏭' },
     { path: '/devices', label: 'Devices', icon: '🔌' },
     { path: '/tags', label: 'Tags', icon: '🏷️' },
