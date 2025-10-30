@@ -379,19 +379,312 @@ async def get_dashboard_summary(
 
 @router.get("/models", response_model=ModelListResponse)
 async def list_models(
+    model_type: Optional[str] = Query(None, description="Filter by model type"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    is_active: Optional[bool] = Query(None, description="Filter by deployment status"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     List all ML models
 
-    Returns information about deployed ML models
+    Returns information about deployed ML models (Phase 2)
     """
-    # Placeholder - will be implemented in Phase 2
-    return ModelListResponse(
-        models=[],
-        total=0
-    )
+    from app.services.model_manager import get_model_manager
+    from app.models.ml_model import ModelType, ModelStatus
+
+    try:
+        model_manager = get_model_manager()
+
+        # Convert string to enum if provided
+        type_filter = ModelType(model_type) if model_type else None
+        status_filter = ModelStatus(status) if status else None
+
+        models = model_manager.list_models(
+            db=db,
+            model_type=type_filter,
+            status=status_filter,
+            is_active=is_active
+        )
+
+        # Convert to response format
+        model_list = [
+            ModelInfo(
+                id=str(model.id),
+                name=model.name,
+                model_type=model.model_type.value,
+                status=model.status.value,
+                algorithm=model.algorithm,
+                version=model.version,
+                is_active=model.is_active,
+                metrics=model.metrics,
+                created_at=model.created_at.isoformat(),
+                deployed_at=model.deployed_at.isoformat() if model.deployed_at else None
+            )
+            for model in models
+        ]
+
+        return ModelListResponse(
+            models=model_list,
+            total=len(model_list)
+        )
+
+    except Exception as e:
+        logger.error(f"Error listing models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Forecasting Endpoints (Phase 2)
+# ============================================================================
+
+@router.post("/forecast/generate")
+async def generate_forecast(
+    tag_id: str = Query(..., description="Tag ID to forecast"),
+    periods: int = Query(24, description="Number of periods to forecast"),
+    freq: str = Query("H", description="Frequency (H=hourly, D=daily)"),
+    start: Optional[datetime] = Query(None, description="Start time for historical data"),
+    end: Optional[datetime] = Query(None, description="End time for historical data"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate forecast for a tag using Prophet (Phase 2)
+
+    Returns forecast with confidence intervals
+    """
+    from app.services.forecasting import get_forecasting_service
+    from app.services.influx_connector import get_influx_connector
+
+    try:
+        # Get tag
+        tag = db.query(Tag).filter(Tag.id == tag_id).first()
+
+        if not tag:
+            raise HTTPException(status_code=404, detail="Tag not found")
+
+        # Default time range (last 7 days)
+        if not end:
+            end = datetime.utcnow()
+        if not start:
+            start = end - timedelta(days=7)
+
+        # Get data from InfluxDB
+        influx = get_influx_connector()
+        data = influx.query_tag_data(tag_id=tag_id, start=start, end=end)
+
+        if data.empty:
+            raise HTTPException(status_code=400, detail="Insufficient historical data for forecasting")
+
+        # Generate forecast
+        forecasting_service = get_forecasting_service()
+        forecast = forecasting_service.generate_forecast(
+            tag_id=tag_id,
+            tag_name=tag.name,
+            data=data,
+            forecast_type="prophet",
+            periods=periods,
+            freq=freq
+        )
+
+        return forecast
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating forecast: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Predictive Maintenance Endpoints (Phase 2)
+# ============================================================================
+
+@router.post("/predictive-maintenance/analyze")
+async def analyze_equipment_health(
+    equipment_id: str = Query(..., description="Equipment ID"),
+    include_rul: bool = Query(True, description="Include RUL estimation"),
+    include_failure_prediction: bool = Query(True, description="Include failure prediction"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Analyze equipment health with predictive maintenance (Phase 2)
+
+    Returns:
+    - Remaining Useful Life (RUL) estimation
+    - Failure probability
+    - Health score
+    - Maintenance recommendations
+    """
+    from app.services.predictive_maintenance import get_predictive_maintenance_service
+    from app.services.influx_connector import get_influx_connector
+
+    try:
+        # Get equipment sensor data
+        # Note: This assumes equipment has associated sensor tags
+        # You may need to adjust based on your data model
+
+        end = datetime.utcnow()
+        start = end - timedelta(hours=24)
+
+        # Get sensor data for equipment
+        influx = get_influx_connector()
+
+        # Mock sensor data for now - replace with actual equipment sensor query
+        sensor_data = pd.DataFrame({
+            'timestamp': pd.date_range(start=start, end=end, freq='1min'),
+            'temperature': np.random.normal(75, 10, (end - start).seconds // 60 + 1),
+            'vibration': np.random.normal(0.5, 0.1, (end - start).seconds // 60 + 1),
+            'pressure': np.random.normal(100, 5, (end - start).seconds // 60 + 1)
+        })
+
+        # Analyze
+        pm_service = get_predictive_maintenance_service()
+        analysis = pm_service.analyze_equipment(
+            equipment_id=equipment_id,
+            equipment_name=f"Equipment {equipment_id}",
+            sensor_data=sensor_data,
+            include_rul=include_rul,
+            include_failure_prediction=include_failure_prediction
+        )
+
+        return analysis
+
+    except Exception as e:
+        logger.error(f"Error analyzing equipment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Root Cause Analysis Endpoints (Phase 2)
+# ============================================================================
+
+@router.post("/root-cause/analyze")
+async def analyze_root_cause(
+    anomaly_tag_id: str = Query(..., description="Tag ID with anomaly"),
+    anomaly_timestamp: datetime = Query(..., description="When anomaly occurred"),
+    related_tag_ids: List[str] = Query(..., description="Related tags to analyze"),
+    time_window_minutes: int = Query(60, description="Analysis time window"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Perform root cause analysis for an anomaly (Phase 2)
+
+    Returns:
+    - Correlated tags
+    - Causal chains
+    - Likely root causes
+    - Recommendations
+    """
+    from app.services.root_cause_analysis import get_root_cause_analysis_service
+    from app.services.influx_connector import get_influx_connector
+
+    try:
+        # Get anomaly tag
+        anomaly_tag = db.query(Tag).filter(Tag.id == anomaly_tag_id).first()
+
+        if not anomaly_tag:
+            raise HTTPException(status_code=404, detail="Anomaly tag not found")
+
+        # Get time window
+        start_time = anomaly_timestamp - timedelta(minutes=time_window_minutes)
+        end_time = anomaly_timestamp + timedelta(minutes=time_window_minutes // 2)
+
+        # Get data for all tags
+        influx = get_influx_connector()
+        all_tag_ids = [anomaly_tag_id] + related_tag_ids
+
+        # Query multivariate data
+        multivariate_data = influx.query_multivariate(
+            tag_ids=all_tag_ids,
+            start=start_time,
+            end=end_time
+        )
+
+        if multivariate_data.empty:
+            raise HTTPException(status_code=400, detail="Insufficient data for root cause analysis")
+
+        # Get tag metadata
+        related_tags = db.query(Tag).filter(Tag.id.in_(related_tag_ids)).all()
+        tag_metadata = {str(tag.id): tag.name for tag in related_tags}
+        tag_metadata[anomaly_tag_id] = anomaly_tag.name
+
+        # Perform root cause analysis
+        rca_service = get_root_cause_analysis_service()
+        analysis = rca_service.analyze_anomaly(
+            anomaly_tag_id=anomaly_tag_id,
+            anomaly_tag_name=anomaly_tag.name,
+            anomaly_timestamp=anomaly_timestamp,
+            all_tags_data=multivariate_data,
+            tag_metadata=tag_metadata,
+            time_window_minutes=time_window_minutes
+        )
+
+        return analysis
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error performing root cause analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Advanced Anomaly Detection Endpoints (Phase 2)
+# ============================================================================
+
+@router.post("/anomalies/detect-lstm")
+async def detect_anomalies_lstm(
+    tag_ids: List[str] = Query(..., description="Tag IDs to analyze"),
+    start: datetime = Query(..., description="Start time"),
+    end: datetime = Query(..., description="End time"),
+    train_first: bool = Query(True, description="Train model on this data first"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Detect anomalies using LSTM Autoencoder (Phase 2)
+
+    Deep learning-based anomaly detection
+    """
+    from app.services.advanced_anomaly import get_advanced_anomaly_service
+    from app.services.influx_connector import get_influx_connector
+
+    try:
+        # Get data
+        influx = get_influx_connector()
+        multivariate_data = influx.query_multivariate(
+            tag_ids=tag_ids,
+            start=start,
+            end=end
+        )
+
+        if multivariate_data.empty:
+            raise HTTPException(status_code=400, detail="No data available")
+
+        # Get feature columns
+        features = [col for col in multivariate_data.columns if col.startswith('tag_')]
+
+        if not features:
+            raise HTTPException(status_code=400, detail="No valid features found")
+
+        # Detect anomalies
+        advanced_anomaly = get_advanced_anomaly_service()
+        result = advanced_anomaly.detect_lstm(
+            data=multivariate_data,
+            features=features,
+            train_first=train_first
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error detecting anomalies with LSTM: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
