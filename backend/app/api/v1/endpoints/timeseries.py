@@ -53,9 +53,30 @@ async def write_batch(
         }
 
 
+@router.get("/tags/{tag_id}/latest")
+async def get_latest_value(
+    tag_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the latest value for a tag (for demo purposes, returns simulated data)
+    """
+    import random
+    
+    # Generate realistic simulated data
+    # In production, this would query InfluxDB for the actual latest value
+    value = round(random.uniform(0, 100), 2)
+    
+    return {
+        "value": value,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "quality": "good"
+    }
+
+
 @router.get("/tags/{tag_id}")
 async def query_tag_data(
-    tag_id: UUID,
+    tag_id: str,
     start_time: datetime,
     end_time: datetime = None,
     aggregation: str = None,

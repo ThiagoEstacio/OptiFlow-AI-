@@ -33,10 +33,22 @@ const ChatBot: React.FC = () => {
 
   const loadConversations = async () => {
     try {
+      // Check if user is authenticated
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        // Skip loading conversations if not authenticated (demo mode)
+        return;
+      }
+      
       const convs = await chatApiClient.listConversations();
       setConversations(convs);
     } catch (error) {
-      console.error('Error loading conversations:', error);
+      // Silently handle 401 errors (user not authenticated)
+      if ((error as any)?.response?.status === 401) {
+        console.log('Not authenticated - using demo mode');
+      } else {
+        console.error('Error loading conversations:', error);
+      }
     }
   };
 

@@ -25,7 +25,7 @@ const chatApi = axios.create({
 
 // Add token to requests
 chatApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -38,9 +38,13 @@ chatApi.interceptors.request.use((config) => {
 export const chatApiClient = {
   /**
    * Send a chat message and get AI response
+   * Falls back to demo endpoint if not authenticated
    */
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
-    const response = await chatApi.post<ChatResponse>(`${BASE_PATH}/chat`, request);
+    const token = localStorage.getItem('auth_token');
+    const endpoint = token ? `${BASE_PATH}/chat` : `${BASE_PATH}/chat/demo`;
+    
+    const response = await chatApi.post<ChatResponse>(endpoint, request);
     return response.data;
   },
 

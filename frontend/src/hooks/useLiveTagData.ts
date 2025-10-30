@@ -195,26 +195,14 @@ export const useLiveTagData = (
     const fetchLatestValue = async () => {
       try {
         // Try to get latest value from Redis cache or last value endpoint
-        const response = await fetch(`/api/v1/tags/${tagId}/latest`);
-        if (response.ok) {
-          const result = await response.json();
-          setData({
-            value: result.value,
-            timestamp: result.timestamp,
-            quality: result.quality || 'good',
-            loading: false,
-            error: null,
-          });
-        } else {
-          // If no endpoint, generate realistic simulated value
-          setData(prev => ({
-            ...prev,
-            value: generateSimulatedValue(),
-            timestamp: new Date().toISOString(),
-            quality: 'simulated',
-            loading: false,
-          }));
-        }
+        const response = await apiClient.getLatestValue(tagId);
+        setData({
+          value: response.value,
+          timestamp: response.timestamp,
+          quality: response.quality || 'good',
+          loading: false,
+          error: null,
+        });
       } catch (error) {
         console.error('Error fetching latest value:', error);
         // Generate demo data with realistic values
