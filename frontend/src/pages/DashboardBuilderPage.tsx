@@ -18,6 +18,7 @@ import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap } from 'luci
 import { useAppDispatch, useAppSelector } from '../store';
 import { fetchTags } from '../store/slices/tagsSlice';
 import { TagsPanel } from '../components/DashboardBuilder/TagsPanel';
+import { TagEditModal } from '../components/DashboardBuilder/TagEditModal';
 import { WidgetCanvas } from '../components/DashboardBuilder/WidgetCanvas';
 import { WidgetToolbar } from '../components/DashboardBuilder/WidgetToolbar';
 import { PropertyPanel } from '../components/DashboardBuilder/PropertyPanel';
@@ -30,7 +31,7 @@ import { useGridSnapping } from '../hooks/useGridSnapping';
 import { useDashboardManager } from '../hooks/useDashboardManager';
 import { getTemplate, type DashboardTemplate } from '../data/dashboardTemplates';
 import { showToast } from '../utils/toast';
-import { PORT_GRAIN_TERMINAL_TAGS } from '../data/portGrainTerminalTags';
+import { PORT_GRAIN_TERMINAL_TAGS, type Tag as PortTag } from '../data/portGrainTerminalTags';
 
 export interface Widget {
   id: string;
@@ -78,11 +79,6 @@ export const DashboardBuilderPage: React.FC = () => {
   const tagsFromStore = useAppSelector((state) => state.tags.items);
   const loading = useAppSelector((state) => state.tags.loading);
 
-  // Use realistic port grain terminal tags (80+ tags with correlations)
-  // These simulate a complete grain export terminal with reception, conveyors,
-  // silos, shiploader, quality control, and utilities
-  const tags = tagsFromStore.length > 0 ? tagsFromStore : PORT_GRAIN_TERMINAL_TAGS;
-
   // State
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
@@ -95,6 +91,11 @@ export const DashboardBuilderPage: React.FC = () => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showDashboardManager, setShowDashboardManager] = useState(false);
   const [showSimulationPanel, setShowSimulationPanel] = useState(false);
+  const [tagEditModal, setTagEditModal] = useState<{ isOpen: boolean; tag: PortTag | null }>({
+    isOpen: false,
+    tag: null,
+  });
+  const [editableTags, setEditableTags] = useState<PortTag[]>(PORT_GRAIN_TERMINAL_TAGS);
 
   // Advanced hooks
   const gridSnapping = useGridSnapping({ gridSize: 10, enabled: true });
@@ -102,6 +103,21 @@ export const DashboardBuilderPage: React.FC = () => {
 
   // Current dashboard ID (for multi-dashboard support)
   const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
+
+  // Handle tag edit
+  const handleEditTag = useCallback((tag: PortTag) => {
+    setTagEditModal({ isOpen: true, tag });
+  }, []);
+
+  const handleSaveTag = useCallback((updatedTag: PortTag) => {
+    setEditableTags(prev =>
+      prev.map(t => (t.id === updatedTag.id ? updatedTag : t))
+    );
+    showToast.success(`Tag "${updatedTag.name}" atualizada com sucesso`);
+  }, []);
+
+  // Use editable tags
+  const displayTags = tagsFromStore.length > 0 ? tagsFromStore : editableTags;
 
   // Load tags on mount
   useEffect(() => {
@@ -160,7 +176,17 @@ export const DashboardBuilderPage: React.FC = () => {
   // Update widget (position, size, config)
   const handleUpdateWidget = useCallback((widgetId: string, updates: Partial<Widget>) => {
     setWidgets(prev =>
-      prev.map(w => w.id === widgetId ? { ...w, ...updates } : w)
+      prev.map(w => {
+        if (w.id !== widgetId) return w;
+        
+        // Deep merge config if provided
+        const newWidget = { ...w, ...updates };
+        if (updates.config) {
+          newWidget.config = { ...w.config, ...updates.config };
+        }
+        
+        return newWidget;
+      })
     );
   }, []);
 
@@ -175,26 +201,69 @@ export const DashboardBuilderPage: React.FC = () => {
 
   // Bind tag to widget (drag-and-drop)
   const handleBindTag = useCallback((widgetId: string, tagId: string) => {
-    const tag = tags.find(t => t.id === tagId);
+    console.log('🔥 handleBindTag CALLED:', { widgetId, tagId });
+    
+    const tag = displayTags.find((t: any) => t.id === tagId);
     if (!tag) {
       showToast.error('Tag not found');
       return;
     }
 
-    handleUpdateWidget(widgetId, {
-      config: {
-        ...widgets.find(w => w.id === widgetId)?.config,
-        tagId: tag.id,
-        tagName: tag.name,
-        title: tag.description || tag.name,
-        unit: tag.unit,
-        min: tag.min_value,
-        max: tag.max_value,
+    // Use setWidgets with functional update to access latest state
+    setWidgets(prev => {
+      const widget = prev.find(w => w.id === widgetId);
+      console.log('🔥 Found widget:', widget);
+      if (!widget) return prev;
+
+      // For timeseries and table widgets, support multiple tags
+      const supportsMultipleTags = ['timeseries', 'table'].includes(widget.type);
+      console.log('🔥 Widget type:', widget.type, 'supportsMultipleTags:', supportsMultipleTags);
+
+      if (supportsMultipleTags) {
+        // Add to tagIds array (don't duplicate)
+        const currentTagIds = widget.config.tagIds || [];
+        console.log('handleBindTag - Before adding:', { widgetId, currentTagIds, newTagId: tag.id });
+        
+        if (currentTagIds.includes(tag.id)) {
+          showToast.error(`Tag "${tag.name}" already added`);
+          return prev;
+        }
+
+        const newTagIds = [...currentTagIds, tag.id];
+        console.log('handleBindTag - After adding:', { widgetId, newTagIds });
+        
+        showToast.success(`Tag "${tag.name}" added (${newTagIds.length} total)`);
+        
+        // Update the widget with new tagIds
+        return prev.map(w => w.id === widgetId ? {
+          ...w,
+          config: {
+            ...w.config,
+            tagIds: newTagIds,
+            tagId: currentTagIds.length === 0 ? tag.id : w.config.tagId,
+            tagName: currentTagIds.length === 0 ? tag.name : w.config.tagName,
+            title: w.config.title || tag.description || tag.name,
+          }
+        } : w);
+      } else {
+        // Single tag widgets - replace the tag
+        showToast.success(`Tag "${tag.name}" bound to widget`);
+        
+        return prev.map(w => w.id === widgetId ? {
+          ...w,
+          config: {
+            ...w.config,
+            tagId: tag.id,
+            tagName: tag.name,
+            title: tag.description || tag.name,
+            unit: tag.unit,
+            min: tag.min_value,
+            max: tag.max_value,
+          }
+        } : w);
       }
     });
-
-    showToast.success(`Tag "${tag.name}" bound to widget`);
-  }, [tags, widgets, handleUpdateWidget]);
+  }, [displayTags]);
 
   // Save dashboard
   const handleSave = useCallback(() => {
@@ -410,9 +479,10 @@ export const DashboardBuilderPage: React.FC = () => {
           {/* Tags Panel */}
           {showTagsPanel && (
             <TagsPanel
-              tags={tags}
+              tags={displayTags as any}
               loading={loading}
               onClose={() => setShowTagsPanel(false)}
+              onEditTag={handleEditTag}
             />
           )}
 
@@ -448,7 +518,7 @@ export const DashboardBuilderPage: React.FC = () => {
         <div className="bg-gray-800 dark:bg-gray-900 text-white px-4 py-2 text-sm flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <span>Widgets: {widgets.length}</span>
-            <span>Tags: {tags.length}</span>
+            <span>Tags: {displayTags.length}</span>
             {selectedWidget && <span>• Selected: {selectedWidgetObj?.type}</span>}
             <span>• Grid: {showGrid ? 'ON' : 'OFF'}</span>
             <span>• Snap: {gridSnapping.isSnapping ? 'ON' : 'OFF'}</span>
@@ -482,6 +552,16 @@ export const DashboardBuilderPage: React.FC = () => {
           onImportDashboard={handleImportDashboard}
           onShareDashboard={handleShareDashboard}
         />
+
+        {/* Tag Edit Modal */}
+        {tagEditModal.tag && (
+          <TagEditModal
+            tag={tagEditModal.tag}
+            isOpen={tagEditModal.isOpen}
+            onClose={() => setTagEditModal({ isOpen: false, tag: null })}
+            onSave={handleSaveTag}
+          />
+        )}
 
         {/* Simulation Control Panel Modal */}
         {showSimulationPanel && (

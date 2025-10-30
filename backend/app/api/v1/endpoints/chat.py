@@ -2,12 +2,13 @@
 Chat/Chatbot API endpoints
 """
 from typing import List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from uuid import UUID
 
-from app.api.deps import get_db, get_current_user
+from app.core.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.chat import Conversation, Message, MessageRole
 from app.schemas.chat import (
@@ -194,6 +195,70 @@ async def chat(
     Send a message and get AI response.
     Creates a new conversation if conversation_id is not provided.
     """
+    return await _process_chat(request, db, current_user)
+
+
+@router.post("/chat/demo")
+async def chat_demo(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Demo chat endpoint without authentication - for testing/demo purposes.
+    Returns simplified response without conversation persistence.
+    """
+    # Create a demo user context (no DB persistence)
+    class DemoUser:
+        id = "demo-user"
+        organization_id = "demo-org"
+    
+    demo_user = DemoUser()
+    
+    # Process chat without saving to database for demo
+    return await _process_chat_demo(request, db)
+
+
+async def _process_chat_demo(request: ChatRequest, db: AsyncSession):
+    """Process chat for demo mode without user authentication"""
+    # Get AI response without saving to database
+    try:
+        # Build context from request
+        message_list = [{"role": "user", "content": request.message}]
+        
+        # Get AI response using the AIService
+        ai_response = await ai_service.generate_response(
+            messages=message_list,
+            context={
+                "mode": "demo",
+                "platform": "OptiFlow AI",
+                "capabilities": [
+                    "Consultar valores de tags em tempo real",
+                    "Analisar dados históricos",
+                    "Insights de otimização de processos",
+                    "Monitoramento de alarmes e eventos"
+                ]
+            }
+        )
+        
+        # Return simplified response for demo mode (not using ChatResponse schema)
+        return {
+            "conversation_id": None,
+            "message": ai_response,
+            "mode": "demo",
+            "model": ai_service.model if ai_service.api_key else "fallback",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing chat: {str(e)}"
+        )
+
+
+async def _process_chat(request: ChatRequest, db: AsyncSession, current_user: User):
+    """Process authenticated chat request"""
     # Get or create conversation
     if request.conversation_id:
         query = select(Conversation).where(

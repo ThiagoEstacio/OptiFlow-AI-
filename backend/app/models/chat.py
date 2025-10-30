@@ -55,7 +55,7 @@ class Message(Base):
 
     role = Column(SQLEnum(MessageRole), nullable=False)
     content = Column(Text, nullable=False)
-    metadata = Column(JSON, nullable=True, comment="Additional metadata like tokens, model used, etc.")
+    message_metadata = Column(JSON, nullable=True, comment="Additional metadata like tokens, model used, etc.")
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

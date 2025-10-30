@@ -41,7 +41,7 @@ export const WidgetCanvas: React.FC<WidgetCanvasProps> = ({
     <div
       ref={drop}
       className={`
-        flex-1 overflow-auto relative bg-gray-100
+        absolute inset-0 overflow-auto bg-gray-100
         ${isOver ? 'bg-blue-50' : ''}
       `}
       onClick={() => onSelectWidget(null)}

@@ -76,16 +76,17 @@ if settings.ENVIRONMENT == "production":
     logger.info(f"🔒 CORS configured for PRODUCTION with origins: {allowed_origins}")
 else:
     # Development: Permissive CORS
-    allowed_origins = settings.CORS_ORIGINS if settings.CORS_ORIGINS != ["*"] else ["http://localhost:3000", "http://localhost:5173"]
+    allowed_origins = settings.CORS_ORIGINS if settings.CORS_ORIGINS != ["*"] else ["http://localhost:3000", "http://localhost:3002", "http://localhost:5173"]
     logger.warning(f"⚠️  CORS configured for {settings.ENVIRONMENT.upper()} with origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_methods=["*"],  # Allow all methods including OPTIONS
     allow_headers=["*"],
     expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # GZip compression

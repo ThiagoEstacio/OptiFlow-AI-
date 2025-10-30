@@ -21,21 +21,43 @@ from app.schemas.alarm import (
 router = APIRouter()
 
 
+@router.get("/events", response_model=List[AlarmEventResponse])
+async def list_alarm_events(
+    skip: int = 0,
+    limit: int = 100,
+    active: bool = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """List alarm events (alias endpoint for frontend compatibility)"""
+    stmt = select(AlarmEvent)
+
+    if active is not None:
+        if active:
+            stmt = stmt.where(AlarmEvent.state == AlarmState.ACTIVE)
+        else:
+            stmt = stmt.where(AlarmEvent.state.in_([AlarmState.ACKNOWLEDGED, AlarmState.CLEARED]))
+
+    stmt = stmt.offset(skip).limit(limit).order_by(AlarmEvent.trigger_timestamp.desc())
+    result = await db.execute(stmt)
+    alarms = result.scalars().all()
+    return alarms
+
+
 @router.get("/", response_model=List[AlarmEventResponse])
 async def list_alarms(
     skip: int = 0,
     limit: int = 100,
-    status_filter: str = None,  # active, acknowledged, resolved
+    status_filter: str = None,  # active, acknowledged, cleared
     db: AsyncSession = Depends(get_db)
 ):
     """List all alarm events"""
     stmt = select(AlarmEvent)
 
     if status_filter:
-        if status_filter.upper() in ['ACTIVE', 'ACKNOWLEDGED', 'RESOLVED']:
-            stmt = stmt.where(AlarmEvent.status == status_filter.upper())
+        if status_filter.upper() in ['ACTIVE', 'ACKNOWLEDGED', 'CLEARED']:
+            stmt = stmt.where(AlarmEvent.state == AlarmState[status_filter.upper()])
 
-    stmt = stmt.offset(skip).limit(limit).order_by(AlarmEvent.triggered_at.desc())
+    stmt = stmt.offset(skip).limit(limit).order_by(AlarmEvent.trigger_timestamp.desc())
     result = await db.execute(stmt)
     alarms = result.scalars().all()
     return alarms

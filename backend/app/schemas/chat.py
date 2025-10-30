@@ -16,14 +16,14 @@ class MessageBase(BaseModel):
 
 class MessageCreate(MessageBase):
     """Schema for creating a new message"""
-    metadata: Optional[Dict[str, Any]] = None
+    message_metadata: Optional[Dict[str, Any]] = None
 
 
 class MessageResponse(MessageBase):
     """Schema for message response"""
     id: UUID4
     conversation_id: UUID4
-    metadata: Optional[Dict[str, Any]] = None
+    message_metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     class Config:

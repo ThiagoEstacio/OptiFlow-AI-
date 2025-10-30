@@ -42,6 +42,9 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
   const nodeRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Debug log
+  console.log('WidgetComponent rendering:', widget.id, widget.type, widget.position);
+
   // Drop target for tags
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'TAG',
@@ -114,18 +117,90 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
         );
 
       case 'timeseries':
-        // For time series, we would fetch historical data
-        // For now, show a placeholder
-        return (
-          <div className="p-4">
-            <p className="text-sm text-gray-600 mb-2">Time Series Chart</p>
-            <p className="text-xs text-gray-500">Tag: {widget.config.tagName}</p>
-            <p className="text-xs text-gray-500">Current: {typeof value === 'number' ? value.toFixed(2) : value?.toString()}</p>
-            <div className="mt-4 h-full bg-gray-100 rounded flex items-center justify-center text-gray-400">
-              Historical chart would appear here
-            </div>
-          </div>
-        );
+        // Check if we have multiple tags
+        const hasMultipleTags = widget.config.tagIds && widget.config.tagIds.length > 1;
+        
+        console.log('Timeseries widget config:', {
+          tagId: widget.config.tagId,
+          tagIds: widget.config.tagIds,
+          hasMultipleTags
+        });
+        
+        if (hasMultipleTags) {
+          // Generate data for multiple series
+          const generateMultiSeriesData = () => {
+            const data: Array<{ timestamp: string; [key: string]: any }> = [];
+            const now = Date.now();
+            const points = 50;
+            
+            for (let i = points; i >= 0; i--) {
+              const timestamp = new Date(now - i * 60000).toISOString();
+              const dataPoint: any = { timestamp };
+              
+              // Generate data for each tag
+              widget.config.tagIds!.forEach((tagId, index) => {
+                const range = 100; // Default range
+                const baseValue = 50 + (index * 10); // Offset each series
+                const variation = (Math.random() - 0.5) * (range * 0.3);
+                const wave = Math.sin((points - i) / 5 + index) * (range * 0.2);
+                dataPoint[tagId] = Math.max(0, Math.min(100, baseValue + variation + wave));
+              });
+              
+              data.push(dataPoint);
+            }
+            return data;
+          };
+
+          // Create series config for each tag
+          const seriesConfig = widget.config.tagIds!.map((tagId, index) => ({
+            dataKey: tagId,
+            label: tagId, // TODO: Get tag name from tags list
+            color: ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6'][index % 5],
+            yAxisId: index < 2 ? 'left' : 'right', // First 2 on left, rest on right
+          }));
+
+          return (
+            <TimeSeriesChart
+              data={generateMultiSeriesData()}
+              series={seriesConfig}
+              title={widget.config.title || 'Multi-Variable Chart'}
+              height={widget.size.height - 60}
+              showLegend={true}
+            />
+          );
+        } else {
+          // Single tag - original behavior
+          const generateTimeSeriesData = () => {
+            const data: Array<{ timestamp: string; value: number }> = [];
+            const now = Date.now();
+            const points = 50;
+            const range = (widget.config.max ?? 100) - (widget.config.min ?? 0);
+            const baseValue = typeof value === 'number' ? value : (widget.config.min ?? 0) + range * 0.5;
+
+            for (let i = points; i >= 0; i--) {
+              const timestamp = new Date(now - i * 60000).toISOString();
+              const variation = (Math.random() - 0.5) * (range * 0.3);
+              const wave = Math.sin((points - i) / 5) * (range * 0.2);
+              const dataValue = Math.max(
+                widget.config.min ?? 0,
+                Math.min(widget.config.max ?? 100, baseValue + variation + wave)
+              );
+              data.push({ timestamp, value: dataValue });
+            }
+            return data;
+          };
+
+          return (
+            <TimeSeriesChart
+              data={generateTimeSeriesData()}
+              title={widget.config.title || widget.config.tagName || 'Time Series'}
+              height={widget.size.height - 60}
+              showLegend={false}
+              color={widget.config.color || '#3B82F6'}
+              unit={widget.config.unit}
+            />
+          );
+        }
 
       case 'chart':
         return (
@@ -297,6 +372,7 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
           position: 'absolute',
           width: widget.size.width,
           height: widget.size.height,
+          zIndex: isSelected ? 100 : 10,
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -317,9 +393,14 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
             className={`
               w-full h-full bg-white rounded-lg shadow-md
               border-2 transition-all
-              ${isSelected ? 'border-blue-500 shadow-lg' : 'border-transparent'}
+              ${isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-300'}
               ${isOver && canDrop ? 'border-green-400 bg-green-50' : ''}
             `}
+            style={{
+              backgroundColor: 'white',
+              minHeight: '150px',
+              minWidth: '200px',
+            }}
           >
             {/* Header */}
             <div className="widget-handle flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg cursor-move">

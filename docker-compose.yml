@@ -125,7 +125,13 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 15
 
       # CORS
-      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000"]'
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:3002"]'
+
+      # OpenAI API (configure in .env file)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4-turbo-preview}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-1500}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.7}
 
       # Gateway
       GATEWAY_API_KEY: secure-gateway-api-key-change-in-production
