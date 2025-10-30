@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, NavLink } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layers, Tag, LayoutDashboard, Home } from 'lucide-react';
+import { Layers, Tag, LayoutDashboard, Home, MessageCircle, X } from 'lucide-react';
 import DevicesPage from './pages/DevicesPage';
 import TagsPage from './pages/TagsPage';
+import ChatBot from './components/ChatBot';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -23,7 +24,7 @@ function HomePage() {
           OptiFlow AI - SmartPort
         </h1>
         <p className="text-xl text-gray-600">
-          Industrial IoT Platform with OPC UA Integration
+          Industrial IoT Platform with OPC UA Integration + AI Assistant
         </p>
       </div>
 
@@ -91,7 +92,37 @@ function HomePage() {
             <span className="font-semibold mr-2">5.</span>
             <span>Use tags in your dashboards for real-time monitoring</span>
           </li>
+          <li className="flex items-start">
+            <span className="font-semibold mr-2">6.</span>
+            <span>💬 Click the <strong>AI Assistant</strong> button to get help anytime!</span>
+          </li>
         </ol>
+      </div>
+
+      {/* AI Assistant Feature Highlight */}
+      <div className="mt-8 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-6">
+        <div className="flex items-center mb-3">
+          <MessageCircle className="h-6 w-6 text-purple-600 mr-2" />
+          <h2 className="text-lg font-semibold text-purple-900">AI Assistant Available</h2>
+        </div>
+        <p className="text-sm text-purple-800 mb-4">
+          Get intelligent insights about your devices, tags, and system status. The AI assistant
+          can help you troubleshoot issues, analyze data, and optimize your operations.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div className="bg-white/60 p-3 rounded">
+            <div className="font-semibold text-purple-900 mb-1">🤖 Smart Analysis</div>
+            <div className="text-purple-700">Get insights about your industrial data</div>
+          </div>
+          <div className="bg-white/60 p-3 rounded">
+            <div className="font-semibold text-purple-900 mb-1">📊 Real-time Monitoring</div>
+            <div className="text-purple-700">Check alarms and device status</div>
+          </div>
+          <div className="bg-white/60 p-3 rounded">
+            <div className="font-semibold text-purple-900 mb-1">💡 Recommendations</div>
+            <div className="text-purple-700">Optimization suggestions</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -175,6 +206,8 @@ function Navigation() {
 }
 
 function App() {
+  const [showChat, setShowChat] = useState(false);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -186,6 +219,38 @@ function App() {
             <Route path="/tags" element={<TagsPage />} />
             <Route path="/dashboard" element={<DashboardPlaceholder />} />
           </Routes>
+
+          {/* Floating AI Assistant Button */}
+          {!showChat && (
+            <button
+              onClick={() => setShowChat(true)}
+              className="fixed bottom-6 right-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all z-50"
+              title="Open AI Assistant"
+            >
+              <MessageCircle className="h-6 w-6" />
+            </button>
+          )}
+
+          {/* AI Assistant Chat Window */}
+          {showChat && (
+            <div className="fixed bottom-6 right-6 w-96 h-[600px] bg-white rounded-lg shadow-2xl z-50 flex flex-col border border-gray-200">
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-t-lg flex justify-between items-center">
+                <div className="flex items-center">
+                  <MessageCircle className="h-5 w-5 mr-2" />
+                  <h3 className="font-semibold">AI Assistant</h3>
+                </div>
+                <button
+                  onClick={() => setShowChat(false)}
+                  className="text-white hover:bg-white/20 rounded p-1 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <ChatBot />
+              </div>
+            </div>
+          )}
         </div>
       </BrowserRouter>
     </QueryClientProvider>
