@@ -14,7 +14,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout } from 'lucide-react';
+import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { fetchTags } from '../store/slices/tagsSlice';
 import { TagsPanel } from '../components/DashboardBuilder/TagsPanel';
@@ -24,11 +24,13 @@ import { PropertyPanel } from '../components/DashboardBuilder/PropertyPanel';
 import { GridBackground } from '../components/DashboardBuilder/GridBackground';
 import { TemplateSelector } from '../components/DashboardBuilder/TemplateSelector';
 import { DashboardManager } from '../components/DashboardBuilder/DashboardManager';
+import { SimulationControlPanel } from '../components/SimulationControlPanel';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useGridSnapping } from '../hooks/useGridSnapping';
 import { useDashboardManager } from '../hooks/useDashboardManager';
 import { getTemplate, type DashboardTemplate } from '../data/dashboardTemplates';
 import { showToast } from '../utils/toast';
+import { PORT_GRAIN_TERMINAL_TAGS } from '../data/portGrainTerminalTags';
 
 export interface Widget {
   id: string;
@@ -71,27 +73,15 @@ export interface Widget {
   };
 }
 
-// Mock tags for when backend is not available
-const MOCK_TAGS = [
-  { id: '1', name: 'CONV1_MOTOR_CURRENT', description: 'Conveyor 1 Motor Current', unit: 'A', category: 'Motors', min_value: 0, max_value: 300, data_type: 'float' },
-  { id: '2', name: 'CONV1_MOTOR_TEMP', description: 'Conveyor 1 Motor Temperature', unit: '°C', category: 'Motors', min_value: 20, max_value: 120, data_type: 'float' },
-  { id: '3', name: 'CONV1_VIBRATION', description: 'Conveyor 1 Vibration', unit: 'mm/s', category: 'Motors', min_value: 0, max_value: 15, data_type: 'float' },
-  { id: '4', name: 'ELEV1_MOTOR_CURRENT', description: 'Elevator Motor Current', unit: 'A', category: 'Motors', min_value: 0, max_value: 400, data_type: 'float' },
-  { id: '5', name: 'SHIP_MOTOR_CURRENT', description: 'Shiploader Motor Current', unit: 'A', category: 'Motors', min_value: 0, max_value: 500, data_type: 'float' },
-  { id: '6', name: 'SHIP_FLOW_RATE', description: 'Shiploader Flow Rate', unit: 't/h', category: 'Production', min_value: 0, max_value: 3000, data_type: 'float' },
-  { id: '7', name: 'VESSEL_PROGRESS', description: 'Vessel Loading Progress', unit: '%', category: 'Production', min_value: 0, max_value: 100, data_type: 'float' },
-  { id: '8', name: 'LOADING_RATE_TOTAL', description: 'Total Loading Rate', unit: 't', category: 'Production', min_value: 0, max_value: 100000, data_type: 'float' },
-  { id: '9', name: 'PRODUCT_MOISTURE', description: 'Product Moisture', unit: '%', category: 'Quality', min_value: 0, max_value: 100, data_type: 'float' },
-  { id: '10', name: 'PRODUCT_TEMP', description: 'Product Temperature', unit: '°C', category: 'Quality', min_value: -10, max_value: 60, data_type: 'float' },
-];
-
 export const DashboardBuilderPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const tagsFromStore = useAppSelector((state) => state.tags.items);
   const loading = useAppSelector((state) => state.tags.loading);
 
-  // Use mock tags if no tags loaded from backend
-  const tags = tagsFromStore.length > 0 ? tagsFromStore : MOCK_TAGS;
+  // Use realistic port grain terminal tags (80+ tags with correlations)
+  // These simulate a complete grain export terminal with reception, conveyors,
+  // silos, shiploader, quality control, and utilities
+  const tags = tagsFromStore.length > 0 ? tagsFromStore : PORT_GRAIN_TERMINAL_TAGS;
 
   // State
   const [widgets, setWidgets] = useState<Widget[]>([]);
@@ -104,6 +94,7 @@ export const DashboardBuilderPage: React.FC = () => {
   // Modal states
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showDashboardManager, setShowDashboardManager] = useState(false);
+  const [showSimulationPanel, setShowSimulationPanel] = useState(false);
 
   // Advanced hooks
   const gridSnapping = useGridSnapping({ gridSize: 10, enabled: true });
@@ -385,6 +376,16 @@ export const DashboardBuilderPage: React.FC = () => {
                 <span>Properties</span>
               </button>
 
+              {/* Simulation Control */}
+              <button
+                onClick={() => setShowSimulationPanel(!showSimulationPanel)}
+                className="flex items-center space-x-1 px-3 py-2 text-sm bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 hover:bg-orange-200 dark:hover:bg-orange-800 rounded transition-colors"
+                title="Simulation Control"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Simulation</span>
+              </button>
+
               {/* Theme Toggle */}
               <ThemeToggle variant="icon" size="md" />
 
@@ -481,6 +482,15 @@ export const DashboardBuilderPage: React.FC = () => {
           onImportDashboard={handleImportDashboard}
           onShareDashboard={handleShareDashboard}
         />
+
+        {/* Simulation Control Panel Modal */}
+        {showSimulationPanel && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="max-w-2xl w-full">
+              <SimulationControlPanel onClose={() => setShowSimulationPanel(false)} />
+            </div>
+          </div>
+        )}
       </div>
     </DndProvider>
   );
