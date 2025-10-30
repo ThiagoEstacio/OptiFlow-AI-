@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     MLFLOW_EXPERIMENT_NAME: str = "optiflow-ml"
     ML_MODEL_REGISTRY: str = "models"
 
+    # AI / OpenAI
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4-turbo-preview"
+    OPENAI_MAX_TOKENS: int = 1000
+    OPENAI_TEMPERATURE: float = 0.7
+
     # Gateway
     GATEWAY_API_KEY: str = "secure-gateway-api-key-change-in-production"
 
