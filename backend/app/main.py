@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.api.routes.simulator import router as simulator_router
+from app.api.v1.endpoints.websocket import router as websocket_router
 from app.db.session import init_db
 
 # Configure logging
@@ -98,6 +99,9 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 # Include Simulator router (no authentication required for demo)
 app.include_router(simulator_router, prefix="/api/v1")
+
+# Include WebSocket router for real-time streaming
+app.include_router(websocket_router, prefix="/api/v1")
 
 
 @app.get("/")

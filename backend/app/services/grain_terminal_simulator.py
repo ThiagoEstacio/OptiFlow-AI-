@@ -3,6 +3,8 @@ Grain Terminal Process Simulator - Python Backend
 Real physics-based simulation of 1500 t/h export line
 
 This is the Python port of the TypeScript simulator for backend OPC-UA server
+Extended with InterlockManager, AlarmManager, MaintenanceManager, EnergyManager
+Integrated with InfluxDB for real-time data persistence
 """
 
 import math
@@ -10,6 +12,27 @@ import time
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+import logging
+from datetime import datetime
+
+# Import new managers
+from app.services.interlock_manager import InterlockManager
+from app.services.alarm_manager import AlarmManager
+from app.services.maintenance_energy import MaintenanceManager, EnergyManager
+
+# Import InfluxDB service
+try:
+    from app.services.influxdb import influxdb_service
+    INFLUXDB_AVAILABLE = True
+except Exception as e:
+    influxdb_service = None
+    INFLUXDB_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
+
+# Log InfluxDB availability after logger is initialized
+if not INFLUXDB_AVAILABLE:
+    logger.warning("InfluxDB service not available - data will not be persisted")
 
 
 # ============================================================================
@@ -265,17 +288,17 @@ class GrainTerminalSimulator:
         # Control
         self.pi_controller = PIControllerState()
 
-        # Energy
+        # Energy (legacy - mantido para compatibilidade)
         self.total_kWh = 0.0
         self.total_mass_t = 0.0
         self.kWh_per_ton = 0.0
         self.cost_BRL = 0.0
 
-        # Alarms
+        # Alarms (legacy - mantido para compatibilidade)
         self.alarms: List[AlarmState] = []
         self.trips: List[AlarmState] = []
 
-        # Health
+        # Health (legacy - mantido para compatibilidade)
         self.health: Dict[str, float] = {}
         for gate in self.gates:
             self.health[f'GATE{gate.id:02d}'] = 100.0
@@ -284,6 +307,36 @@ class GrainTerminalSimulator:
         self.health['ELV01'] = 100.0
         self.health['BAL01'] = 100.0
         self.health['SLD01'] = 100.0
+        
+        # ========================================================================
+        # NEW: Advanced Systems
+        # ========================================================================
+        
+        # Interlock Manager
+        self.interlock_manager = InterlockManager()
+        logger.info("✅ InterlockManager initialized")
+        
+        # Alarm Manager
+        self.alarm_manager = AlarmManager()
+        logger.info("✅ AlarmManager initialized")
+        
+        # Maintenance Manager
+        self.maintenance_manager = MaintenanceManager()
+        for belt_id in self.belts.keys():
+            self.maintenance_manager.register_equipment(belt_id)
+        self.maintenance_manager.register_equipment('ELV01')
+        self.maintenance_manager.register_equipment('BAL01')
+        self.maintenance_manager.register_equipment('SLD01')
+        logger.info("✅ MaintenanceManager initialized")
+        
+        # Energy Manager
+        self.energy_manager = EnergyManager()
+        for belt_id, belt in self.belts.items():
+            self.energy_manager.register_equipment(belt_id, belt.motor_kW)
+        self.energy_manager.register_equipment('ELV01', 225.0)
+        self.energy_manager.register_equipment('BAL01', 50.0)
+        self.energy_manager.register_equipment('SLD01', 320.0)
+        logger.info("✅ EnergyManager initialized")
 
     # ------------------------------------------------------------------------
     # PUBLIC API
@@ -414,6 +467,44 @@ class GrainTerminalSimulator:
 
         return None
 
+    def write_to_influxdb(self, tag_mapping: Dict[str, str]):
+        """
+        Write current simulator values to InfluxDB
+        
+        Args:
+            tag_mapping: Dict mapping tag names to tag UUIDs
+                        e.g., {'CORR01_FLOW_TPH_PV': 'uuid-1234-...'}
+        """
+        if not INFLUXDB_AVAILABLE or not influxdb_service:
+            return
+        
+        try:
+            points = []
+            timestamp = datetime.utcnow()
+            
+            # Collect all current values
+            for tag_name, tag_id in tag_mapping.items():
+                value = self.get_tag_value(tag_name)
+                
+                if value is not None:
+                    points.append({
+                        'tag_id': tag_id,
+                        'value': float(value),
+                        'timestamp': timestamp,
+                        'quality': 'good'
+                    })
+            
+            # Write batch to InfluxDB
+            if points:
+                success = influxdb_service.write_batch(points)
+                if success:
+                    logger.debug(f"✅ Wrote {len(points)} points to InfluxDB")
+                else:
+                    logger.warning(f"⚠️ Failed to write {len(points)} points to InfluxDB")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error writing to InfluxDB: {e}")
+
     def step(self, dt_s: float = None):
         """Execute one simulation step"""
         if dt_s is None:
@@ -439,6 +530,35 @@ class GrainTerminalSimulator:
 
         # 5. Belt CORR02
         self._step_belt('CORR02', dt_s)
+
+        # 6. Balance
+        self._step_balance(dt_s)
+
+        # 7. Belt CORR03
+        self._step_belt('CORR03', dt_s)
+
+        # 8. Shiploader
+        self._step_shiploader(dt_s)
+
+        # 9. Energy (legacy + new system)
+        self._step_energy(dt_s)
+
+        # 10. Alarms (old system + new AlarmManager)
+        self._step_alarms()
+        self._step_alarm_manager(dt_s)
+
+        # 11. Interlocks (NEW)
+        self._step_interlocks()
+
+        # 12. Maintenance (old system + new MaintenanceManager)
+        self._step_maintenance(dt_s)
+        self._step_maintenance_manager(dt_s)
+
+        # 13. Warehouse
+        self._step_warehouse(dt_s)
+        
+        # 14. Update legacy values from new managers
+        self._sync_legacy_values()
 
         # 6. Balance
         self._step_balance(dt_s)
@@ -973,6 +1093,174 @@ class GrainTerminalSimulator:
         for belt in self.belts.values():
             self._cool_down_belt(belt, dt_s)
         self._cool_down_elevator(dt_s)
+    
+    # ------------------------------------------------------------------------
+    # NEW SYSTEMS INTEGRATION
+    # ------------------------------------------------------------------------
+    
+    def _step_alarm_manager(self, dt_s: float):
+        """Avalia todos os alarmes via AlarmManager"""
+        
+        # Alarmes térmicos
+        for belt_id, belt in self.belts.items():
+            self.alarm_manager.evaluate(
+                f'AL_{belt_id}_BEARING_TEMP_ALTA',
+                belt.temp_bearing_C >= Config.TEMP_BEARING_ALARM,
+                self.time_s, dt_s
+            )
+            self.alarm_manager.evaluate(
+                f'TRIP_{belt_id}_BEARING_SOBRETEMP',
+                belt.temp_bearing_C >= Config.TEMP_BEARING_TRIP,
+                self.time_s, dt_s
+            )
+            
+            # Alarmes mecânicos
+            self.alarm_manager.evaluate(
+                f'AL_{belt_id}_DESALINHAMENTO',
+                belt.misaligned,
+                self.time_s, dt_s
+            )
+            self.alarm_manager.evaluate(
+                f'AL_{belt_id}_SUBVELOCIDADE',
+                belt.underspeed_alarm,
+                self.time_s, dt_s
+            )
+            self.alarm_manager.evaluate(
+                f'TRIP_{belt_id}_RASGO',
+                belt.torn,
+                self.time_s, dt_s
+            )
+            
+            # Alarmes de chute
+            self.alarm_manager.evaluate(
+                f'AL_CHT{["01","02","03"][list(self.belts.keys()).index(belt_id)]}_ACUMULO',
+                belt.chute_level_pct >= 80,
+                self.time_s, dt_s
+            )
+            self.alarm_manager.evaluate(
+                f'TRIP_CHT{["01","02","03"][list(self.belts.keys()).index(belt_id)]}_ENTALO',
+                belt.chute_plugged,
+                self.time_s, dt_s
+            )
+        
+        # Alarmes do elevador
+        self.alarm_manager.evaluate(
+            'AL_ELV01_MOTOR_TEMP_ALTA',
+            self.elevator.temp_motor_C >= Config.TEMP_MOTOR_ALARM,
+            self.time_s, dt_s
+        )
+        self.alarm_manager.evaluate(
+            'TRIP_ELV01_MOTOR_SOBRETEMP',
+            self.elevator.temp_motor_C >= Config.TEMP_MOTOR_TRIP,
+            self.time_s, dt_s
+        )
+        self.alarm_manager.evaluate(
+            'AL_ELV01_ESCORREGAMENTO',
+            self.elevator.slip,
+            self.time_s, dt_s
+        )
+        
+        # Alarmes elétricos
+        for belt_id in self.belts.keys():
+            if belt_id in self.energy_manager.electrical_states:
+                elec = self.energy_manager.electrical_states[belt_id]
+                self.alarm_manager.evaluate(
+                    'AL_FP_BAIXO',
+                    elec.power_kW > 0.1 * elec.motor_kW and elec.power_factor < 0.85,
+                    self.time_s, dt_s
+                )
+        
+        # Alarmes de manutenção
+        for eq_id in self.maintenance_manager.maintenance_states.keys():
+            maint = self.maintenance_manager.maintenance_states[eq_id]
+            alarm_tag = maint.get_alarm_tag()
+            if alarm_tag:
+                self.alarm_manager.evaluate(
+                    alarm_tag,
+                    True,
+                    self.time_s, dt_s
+                )
+    
+    def _step_interlocks(self):
+        """Avalia matriz de intertravamentos"""
+        executed = self.interlock_manager.evaluate(self, self.time_s)
+        
+        if executed:
+            logger.warning(f"⚠️  Interlocks executed: {len(executed)} actions")
+    
+    def _step_maintenance_manager(self, dt_s: float):
+        """Atualiza MaintenanceManager para todos equipamentos"""
+        
+        # Belts
+        for belt_id, belt in self.belts.items():
+            # Conta eventos (alarmes ativos)
+            events = len([a for a in self.alarm_manager.get_active_alarms() 
+                         if belt_id in a['tag']])
+            
+            self.maintenance_manager.update_equipment(
+                belt_id, dt_s, belt.load_pct, events, belt.running
+            )
+            
+            # Atualiza energia também
+            if belt_id in self.energy_manager.electrical_states:
+                self.energy_manager.electrical_states[belt_id].update(
+                    dt_s, belt.load_pct, belt.running
+                )
+        
+        # Elevator
+        events_elv = len([a for a in self.alarm_manager.get_active_alarms() 
+                         if 'ELV' in a['tag']])
+        load_elv = (self.elevator.flow_tph / 1650) * 100 if self.elevator.running else 0
+        self.maintenance_manager.update_equipment(
+            'ELV01', dt_s, load_elv, events_elv, self.elevator.running
+        )
+        
+        if 'ELV01' in self.energy_manager.electrical_states:
+            self.energy_manager.electrical_states['ELV01'].update(
+                dt_s, load_elv, self.elevator.running
+            )
+        
+        # Balance
+        load_bal = 50 if self.balance.running else 0
+        self.maintenance_manager.update_equipment(
+            'BAL01', dt_s, load_bal, 0, self.balance.running
+        )
+        
+        # Shiploader
+        load_sld = (self.shiploader.flow_pv_tph / 1500) * 100 if self.shiploader.running else 0
+        self.maintenance_manager.update_equipment(
+            'SLD01', dt_s, load_sld, 0, self.shiploader.running
+        )
+        
+        if 'SLD01' in self.energy_manager.electrical_states:
+            self.energy_manager.electrical_states['SLD01'].update(
+                dt_s, load_sld, self.shiploader.running
+            )
+        
+        # Atualiza Energy Manager global
+        import datetime
+        hour_of_day = datetime.datetime.now().hour
+        self.energy_manager.update(dt_s, hour_of_day)
+        
+        # Atualiza produção
+        flow_tph = self.shiploader.flow_pv_tph
+        mass_t_step = (flow_tph * dt_s) / 3600
+        self.energy_manager.update_production(mass_t_step)
+    
+    def _sync_legacy_values(self):
+        """Sincroniza valores legacy com novos sistemas"""
+        
+        # Energia
+        energy_summary = self.energy_manager.get_electrical_summary()
+        self.total_kWh = energy_summary['total_kWh']
+        self.kWh_per_ton = energy_summary['kWh_per_ton']
+        self.total_mass_t = self.energy_manager.total_mass_t
+        self.cost_BRL = energy_summary['cost_total_BRL']
+        
+        # Health (média dos novos estados de manutenção)
+        for eq_id in self.maintenance_manager.maintenance_states.keys():
+            if eq_id in self.health:
+                self.health[eq_id] = self.maintenance_manager.maintenance_states[eq_id].health_pct
 
     # ------------------------------------------------------------------------
     # STATE EXPORT

@@ -5,18 +5,23 @@ Simulator Control API Endpoints
 REST API for controlling and monitoring the grain terminal simulator
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 import sys
 sys.path.insert(0, 'backend')
 
 from app.services.grain_terminal_simulator import GrainTerminalSimulator
+from app.db.session import get_db
+from app.models.tag import Tag
 
 router = APIRouter(prefix="/simulator", tags=["simulator"])
 
 # Global simulator instance (in production, use dependency injection)
 _simulator_instance: Optional[GrainTerminalSimulator] = None
+_tag_mapping: Optional[Dict[str, str]] = None
 
 
 def get_simulator() -> GrainTerminalSimulator:
@@ -110,6 +115,42 @@ async def step_simulation(dt_s: float = 1.0):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/step-and-record", response_model=CommandResponse)
+async def step_and_record(dt_s: float = 1.0, db: AsyncSession = Depends(get_db)):
+    """
+    Step simulation and record values to InfluxDB
+    
+    This endpoint:
+    1. Executes one simulation step
+    2. Retrieves tag mapping from database
+    3. Writes all values to InfluxDB for real-time persistence
+    """
+    try:
+        global _tag_mapping
+        sim = get_simulator()
+        
+        # Load tag mapping from database (cache it)
+        if _tag_mapping is None:
+            stmt = select(Tag).where(Tag.is_active == True)
+            result = await db.execute(stmt)
+            tags = result.scalars().all()
+            
+            _tag_mapping = {tag.name: str(tag.id) for tag in tags}
+            
+        # Execute simulation step
+        sim.step(dt_s)
+        
+        # Write to InfluxDB
+        sim.write_to_influxdb(_tag_mapping)
+        
+        return CommandResponse(
+            success=True, 
+            message=f"✅ Simulação avançada {dt_s}s e {len(_tag_mapping)} tags gravados no InfluxDB"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro: {str(e)}")
+
+
 # ============================================================================
 # STATUS MONITORING
 # ============================================================================
@@ -130,8 +171,7 @@ async def get_system_status():
                 "total_kWh": sim.total_kWh,
                 "total_mass_t": sim.total_mass_t,
                 "cost_BRL": sim.cost_BRL,
-                "kWh_per_ton": sim.kWh_per_ton,
-                "availability_pct": sim.availability_pct
+                "kWh_per_ton": sim.kWh_per_ton
             },
             "gates": [
                 {
@@ -207,7 +247,56 @@ async def get_system_status():
                     "count": trip.count
                 }
                 for trip in sim.trips if trip.active or trip.latched
-            ]
+            ],
+            "interlocks": {
+                "active_count": len([i for i in sim.interlock_manager.rules if i.active]),
+                "active_interlocks": [
+                    {
+                        "id": rule.id,
+                        "cause": rule.cause,
+                        "type": rule.type.value,
+                        "effects": rule.effects,
+                        "active": rule.active,
+                        "can_reset": rule.reset.value != "MANUAL" or not rule.active
+                    }
+                    for rule in sim.interlock_manager.rules
+                    if rule.active
+                ]
+            },
+            "maintenance": {
+                "avg_health_pct": sum(m.health_pct for m in sim.maintenance_manager.maintenance_states.values()) / len(sim.maintenance_manager.maintenance_states) if sim.maintenance_manager.maintenance_states else 100.0,
+                "equipment": {
+                    equip_id: {
+                        "health_pct": maint.health_pct,
+                        "vibration_mm_s": maint.vibration_mm_s,
+                        "oil_temp_C": maint.oil_temp_C,
+                        "hours_running": maint.hours_running,
+                        "alarm_count": maint.alarm_count,
+                        "trip_count": maint.trip_count
+                    }
+                    for equip_id, maint in sim.maintenance_manager.maintenance_states.items()
+                }
+            },
+            "energy": {
+                "total_power_kW": sum(e.power_kW for e in sim.energy_manager.electrical_states.values()),
+                "avg_power_factor": sum(e.power_factor for e in sim.energy_manager.electrical_states.values()) / len(sim.energy_manager.electrical_states) if sim.energy_manager.electrical_states else 1.0,
+                "total_kWh": sum(e.kWh_total for e in sim.energy_manager.electrical_states.values()),
+                "cost_peak_BRL": sim.energy_manager.cost_peak_BRL,
+                "cost_offpeak_BRL": sim.energy_manager.cost_offpeak_BRL,
+                "cost_total_BRL": sim.energy_manager.cost_peak_BRL + sim.energy_manager.cost_offpeak_BRL,
+                "equipment": {
+                    equip_id: {
+                        "voltage_V": elec.voltage_ll,
+                        "current_A": elec.current_A,
+                        "power_kW": elec.power_kW,
+                        "reactive_kvar": elec.reactive_kvar,
+                        "apparent_kVA": elec.apparent_kVA,
+                        "power_factor": elec.power_factor,
+                        "kwh": elec.kWh_total
+                    }
+                    for equip_id, elec in sim.energy_manager.electrical_states.items()
+                }
+            }
         }
 
         return status

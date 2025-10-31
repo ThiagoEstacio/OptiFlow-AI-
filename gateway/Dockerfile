@@ -41,4 +41,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import os; exit(0 if os.path.exists('/app/data/gateway.health') else 1)"
 
 # Default command
-CMD ["python", "app/main.py"]
+CMD ["python", "-m", "app.main"]

@@ -31,12 +31,18 @@ import {
   Settings,
   Assessment,
   Notifications,
+  Lock,
+  Build,
+  Bolt,
 } from '@mui/icons-material';
 import { useSimulator } from '../hooks/useSimulator';
 import SystemOverview from '../components/simulator/SystemOverview';
 import EquipmentControls from '../components/simulator/EquipmentControls';
 import AlarmsPanel from '../components/simulator/AlarmsPanel';
 import TrendsPanel from '../components/simulator/TrendsPanel';
+import InterlockMonitor from '../components/simulator/InterlockMonitor';
+import MaintenanceDashboard from '../components/simulator/MaintenanceDashboard';
+import EnergyDashboard from '../components/simulator/EnergyDashboard';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -69,7 +75,7 @@ export default function SimulatorPage() {
     resetSystem,
     setGateSetpoint,
     setAllGatesSetpoint,
-    setShipload erSetpoint,
+    setShiploaderSetpoint,
     acknowledgeAllAlarms,
     refreshStatus,
   } = useSimulator();
@@ -205,7 +211,7 @@ export default function SimulatorPage() {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => {}}>
           <AlertTitle>Erro</AlertTitle>
-          {error}
+          {typeof error === 'string' ? error : JSON.stringify(error)}
         </Alert>
       )}
 
@@ -216,10 +222,19 @@ export default function SimulatorPage() {
           onChange={handleTabChange}
           aria-label="simulator tabs"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
+          variant="scrollable"
+          scrollButtons="auto"
         >
           <Tab icon={<Speed />} label="Overview" />
           <Tab icon={<Settings />} label="Controles" />
-          <Tab icon={<Assessment />} label="Tendências" />
+          <Tab
+            icon={
+              <Badge badgeContent={status?.interlocks?.active_count || 0} color="error">
+                <Lock />
+              </Badge>
+            }
+            label="Interlocks"
+          />
           <Tab
             icon={
               <Badge badgeContent={activeAlarms + activeTrips} color="error">
@@ -228,6 +243,9 @@ export default function SimulatorPage() {
             }
             label="Alarmes"
           />
+          <Tab icon={<Build />} label="Manutenção" />
+          <Tab icon={<Bolt />} label="Energia" />
+          <Tab icon={<Assessment />} label="Tendências" />
         </Tabs>
 
         <TabPanel value={activeTab} index={0}>
@@ -245,7 +263,10 @@ export default function SimulatorPage() {
         </TabPanel>
 
         <TabPanel value={activeTab} index={2}>
-          <TrendsPanel status={status} />
+          <InterlockMonitor
+            interlocks={status?.interlocks}
+            loading={loading}
+          />
         </TabPanel>
 
         <TabPanel value={activeTab} index={3}>
@@ -254,6 +275,18 @@ export default function SimulatorPage() {
             trips={status?.trips || []}
             onAcknowledgeAll={acknowledgeAllAlarms}
           />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={4}>
+          <MaintenanceDashboard maintenance={status?.maintenance} />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={5}>
+          <EnergyDashboard energy={status?.energy} />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={6}>
+          <TrendsPanel status={status} />
         </TabPanel>
       </Paper>
 

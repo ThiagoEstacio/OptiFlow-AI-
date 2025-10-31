@@ -9,7 +9,8 @@ Endpoints for AI-powered process insights:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime, timedelta
 import pandas as pd
@@ -19,6 +20,7 @@ from app.core.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.tag import Tag
 from app.services.ai_insights import get_ai_insights_service
+from app.services.influxdb import influxdb_service
 from app.schemas.ai_insights import (
     AnomalyDetectionRequest,
     AnomalyDetectionResult,
@@ -45,7 +47,7 @@ router = APIRouter()
 @router.post("/insights/generate", response_model=InsightFeed)
 async def generate_insights(
     request: InsightGenerationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -70,14 +72,37 @@ async def generate_insights(
 
         # Analyze each tag
         for tag in tags:
-            # Generate mock data for demonstration
-            # TODO: Replace with actual InfluxDB query
-            data = _generate_mock_tag_data(
-                tag_id=str(tag.id),
-                start=request.start,
-                end=request.end,
-                base_value=float(tag.last_value) if tag.last_value else 50.0
-            )
+            # Query real data from InfluxDB
+            try:
+                influx_data = influxdb_service.query_tag_data(
+                    tag_id=str(tag.id),
+                    start_time=request.start,
+                    end_time=request.end
+                )
+                
+                # Convert to DataFrame format expected by AI service
+                if influx_data:
+                    data = pd.DataFrame(influx_data)
+                    data['timestamp'] = pd.to_datetime(data['timestamp'])
+                    data = data.set_index('timestamp')
+                else:
+                    # Fallback to mock if no data available
+                    logger.warning(f"No InfluxDB data for tag {tag.id}, using mock data")
+                    data = _generate_mock_tag_data(
+                        tag_id=str(tag.id),
+                        start=request.start,
+                        end=request.end,
+                        base_value=float(tag.last_value) if tag.last_value else 50.0
+                    )
+            except Exception as e:
+                logger.error(f"Error querying InfluxDB for tag {tag.id}: {e}")
+                # Fallback to mock data on error
+                data = _generate_mock_tag_data(
+                    tag_id=str(tag.id),
+                    start=request.start,
+                    end=request.end,
+                    base_value=float(tag.last_value) if tag.last_value else 50.0
+                )
 
             # Analyze
             analysis = ai_service.analyze_tag_data(
@@ -112,7 +137,7 @@ async def get_tag_insights(
     tag_id: str,
     start: Optional[datetime] = Query(None, description="Start time (default: last 24h)"),
     end: Optional[datetime] = Query(None, description="End time (default: now)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -137,13 +162,34 @@ async def get_tag_insights(
         if not start:
             start = end - timedelta(hours=24)
 
-        # Get data
-        data = _generate_mock_tag_data(
-            tag_id=tag_id,
-            start=start,
-            end=end,
-            base_value=float(tag.last_value) if tag.last_value else 50.0
-        )
+        # Get real data from InfluxDB
+        try:
+            influx_data = influxdb_service.query_tag_data(
+                tag_id=tag_id,
+                start_time=start,
+                end_time=end
+            )
+            
+            if influx_data:
+                data = pd.DataFrame(influx_data)
+                data['timestamp'] = pd.to_datetime(data['timestamp'])
+                data = data.set_index('timestamp')
+            else:
+                logger.warning(f"No InfluxDB data for tag {tag_id}, using mock data")
+                data = _generate_mock_tag_data(
+                    tag_id=tag_id,
+                    start=start,
+                    end=end,
+                    base_value=float(tag.last_value) if tag.last_value else 50.0
+                )
+        except Exception as e:
+            logger.error(f"Error querying InfluxDB for tag {tag_id}: {e}")
+            data = _generate_mock_tag_data(
+                tag_id=tag_id,
+                start=start,
+                end=end,
+                base_value=float(tag.last_value) if tag.last_value else 50.0
+            )
 
         # Analyze
         ai_service = get_ai_insights_service()
@@ -170,7 +216,7 @@ async def get_tag_insights(
 @router.post("/anomalies/detect", response_model=AnomalyDetectionResult)
 async def detect_anomalies(
     request: AnomalyDetectionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -237,7 +283,7 @@ async def detect_anomalies(
 @router.post("/baseline/update", response_model=BaselineUpdateResponse)
 async def update_baseline(
     request: BaselineUpdateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -295,7 +341,7 @@ async def update_baseline(
 
 @router.get("/dashboard/summary", response_model=AIDashboardSummary)
 async def get_dashboard_summary(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -315,12 +361,37 @@ async def get_dashboard_summary(
         start = end - timedelta(hours=1)
 
         for tag in tags[:10]:  # Limit to 10 for summary
-            data = _generate_mock_tag_data(
-                tag_id=str(tag.id),
-                start=start,
-                end=end,
-                base_value=float(tag.last_value) if tag.last_value else 50.0
-            )
+            # Query real data from InfluxDB
+            try:
+                influx_data = influxdb_service.query_tag_data(
+                    tag_id=str(tag.id),
+                    start_time=start,
+                    end_time=end
+                )
+                
+                # Convert to DataFrame format
+                if influx_data:
+                    data = pd.DataFrame(influx_data)
+                    data['timestamp'] = pd.to_datetime(data['timestamp'])
+                    data = data.set_index('timestamp')
+                else:
+                    # Fallback to mock if no data available
+                    logger.warning(f"No InfluxDB data for tag {tag.id}, using mock data")
+                    data = _generate_mock_tag_data(
+                        tag_id=str(tag.id),
+                        start=start,
+                        end=end,
+                        base_value=float(tag.last_value) if tag.last_value else 50.0
+                    )
+            except Exception as e:
+                logger.error(f"Error querying InfluxDB for tag {tag.id}: {e}")
+                # Fallback to mock data on error
+                data = _generate_mock_tag_data(
+                    tag_id=str(tag.id),
+                    start=start,
+                    end=end,
+                    base_value=float(tag.last_value) if tag.last_value else 50.0
+                )
 
             analysis = ai_service.analyze_tag_data(
                 tag_id=str(tag.id),
@@ -373,6 +444,111 @@ async def get_dashboard_summary(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/dashboard/summary/public", response_model=AIDashboardSummary)
+async def get_dashboard_summary_public(db: AsyncSession = Depends(get_db)):
+    """
+    Get AI dashboard summary (public endpoint for testing)
+    
+    Same as /dashboard/summary but without authentication
+    """
+    try:
+        # Get all active tags using async syntax
+        stmt = select(Tag).where(Tag.is_active == True).limit(20)
+        result = await db.execute(stmt)
+        tags = list(result.scalars().all())
+
+        ai_service = get_ai_insights_service()
+        tag_analyses = []
+
+        # Quick analysis of recent data
+        end = datetime.utcnow()
+        start = end - timedelta(hours=1)
+
+        for tag in tags[:10]:  # Limit to 10 for summary
+            # Query real data from InfluxDB
+            try:
+                influx_data = influxdb_service.query_tag_data(
+                    tag_id=str(tag.id),
+                    start_time=start,
+                    end_time=end
+                )
+                
+                # Convert to DataFrame format
+                if influx_data:
+                    data = pd.DataFrame(influx_data)
+                    data['timestamp'] = pd.to_datetime(data['timestamp'])
+                    data = data.set_index('timestamp')
+                    logger.info(f"✅ Using REAL data from InfluxDB for tag {tag.name}: {len(influx_data)} points")
+                else:
+                    # Fallback to mock if no data available
+                    logger.warning(f"⚠️ No InfluxDB data for tag {tag.id}, using mock data")
+                    data = _generate_mock_tag_data(
+                        tag_id=str(tag.id),
+                        start=start,
+                        end=end,
+                        base_value=float(tag.last_value) if tag.last_value else 50.0
+                    )
+            except Exception as e:
+                logger.error(f"❌ Error querying InfluxDB for tag {tag.id}: {e}")
+                # Fallback to mock data on error
+                data = _generate_mock_tag_data(
+                    tag_id=str(tag.id),
+                    start=start,
+                    end=end,
+                    base_value=float(tag.last_value) if tag.last_value else 50.0
+                )
+
+            analysis = ai_service.analyze_tag_data(
+                tag_id=str(tag.id),
+                tag_name=tag.name,
+                data=data,
+                generate_insights=True
+            )
+
+            tag_analyses.append(analysis)
+
+        # Get insights
+        recent_insights = ai_service.get_top_insights(tag_analyses, limit=10)
+
+        # Count by severity
+        critical_count = len([i for i in recent_insights if i.get("severity") == "critical"])
+        warning_count = len([i for i in recent_insights if i.get("severity") == "warning"])
+
+        # Calculate health score (simple heuristic)
+        base_score = 100.0
+        score_penalty = (critical_count * 10) + (warning_count * 5)
+        health_score_value = max(0, min(100, base_score - score_penalty))
+
+        # Determine status
+        if health_score_value >= 80:
+            status = "healthy"
+        elif health_score_value >= 50:
+            status = "degraded"
+        else:
+            status = "critical"
+
+        health_score = AIHealthScore(
+            score=health_score_value,
+            status=status,
+            anomaly_count=0,
+            critical_insights=critical_count,
+            warning_insights=warning_count
+        )
+
+        return AIDashboardSummary(
+            health_score=health_score,
+            recent_insights=recent_insights,
+            anomalies_detected=0,
+            tags_monitored=len(tags),
+            models_active=0,
+            last_analysis=datetime.utcnow().isoformat()
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting dashboard summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # Model Management Endpoints (Placeholder for Phase 2)
 # ============================================================================
@@ -382,7 +558,7 @@ async def list_models(
     model_type: Optional[str] = Query(None, description="Filter by model type"),
     status: Optional[str] = Query(None, description="Filter by status"),
     is_active: Optional[bool] = Query(None, description="Filter by deployment status"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -445,7 +621,7 @@ async def generate_forecast(
     freq: str = Query("H", description="Frequency (H=hourly, D=daily)"),
     start: Optional[datetime] = Query(None, description="Start time for historical data"),
     end: Optional[datetime] = Query(None, description="End time for historical data"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -505,7 +681,7 @@ async def analyze_equipment_health(
     equipment_id: str = Query(..., description="Equipment ID"),
     include_rul: bool = Query(True, description="Include RUL estimation"),
     include_failure_prediction: bool = Query(True, description="Include failure prediction"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -566,7 +742,7 @@ async def analyze_root_cause(
     anomaly_timestamp: datetime = Query(..., description="When anomaly occurred"),
     related_tag_ids: List[str] = Query(..., description="Related tags to analyze"),
     time_window_minutes: int = Query(60, description="Analysis time window"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -641,7 +817,7 @@ async def detect_anomalies_lstm(
     start: datetime = Query(..., description="Start time"),
     end: datetime = Query(..., description="End time"),
     train_first: bool = Query(True, description="Train model on this data first"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """

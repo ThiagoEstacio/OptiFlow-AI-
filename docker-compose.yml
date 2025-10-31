@@ -222,6 +222,30 @@ services:
     depends_on:
       - backend
 
+  # OPC UA Simulator Server
+  opcua-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: optiflow-opcua-server
+    command: python scripts/run_opcua_server.py --endpoint opc.tcp://0.0.0.0:4840/optiflow/terminal
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    ports:
+      - "4840:4840"
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: INFO
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s = socket.socket(); s.connect((\"localhost\", 4840)); s.close()'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   # Frontend Web Application
   frontend:
     build:

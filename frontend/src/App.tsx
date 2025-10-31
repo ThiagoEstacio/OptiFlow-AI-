@@ -53,6 +53,7 @@ function App() {
               <Route path="ai-insights" element={<AIInsightsPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="simulator" element={<SimulatorPage />} />
+              <Route path="simulador" element={<SimulatorPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 

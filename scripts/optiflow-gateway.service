@@ -1,0 +1,22 @@
+[Unit]
+Description=OptiFlow Gateway - Simulador para InfluxDB
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=thiestacio
+WorkingDirectory=/home/thiestacio/OptiFlow-AI-
+ExecStartPre=/bin/sleep 10
+ExecStart=/bin/bash -c 'source /home/thiestacio/anaconda3/bin/activate && python /home/thiestacio/OptiFlow-AI-/scripts/simple_gateway.py'
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/optiflow-gateway.log
+StandardError=append:/var/log/optiflow-gateway.log
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/home/thiestacio/anaconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+[Install]
+WantedBy=multi-user.target
