@@ -200,6 +200,15 @@ class GrainTerminalOPCUAServer:
                 self.idx, "SUBVELOCIDADE.AL", False
             )
 
+            # New safety tags for chute monitoring
+            self.nodes[f'{belt_id}_CHUTE_LEVEL'] = await belt_obj.add_variable(
+                self.idx, "CHUTE.NIVEL.PV", 0.0
+            )
+
+            self.nodes[f'{belt_id}_CHUTE_PLUGGED'] = await belt_obj.add_variable(
+                self.idx, "CHUTE.ENTUPIDO.AL", False
+            )
+
         # ================================================================
         # ELEVATOR
         # ================================================================
@@ -441,6 +450,8 @@ class GrainTerminalOPCUAServer:
                 await self.nodes[f'{belt_id}_TEMP_DRUM'].write_value(belt.temp_drum_C)
                 await self.nodes[f'{belt_id}_UNDERSPEED_WARN'].write_value(belt.underspeed_warn)
                 await self.nodes[f'{belt_id}_UNDERSPEED_ALARM'].write_value(belt.underspeed_alarm)
+                await self.nodes[f'{belt_id}_CHUTE_LEVEL'].write_value(belt.chute_level_pct)
+                await self.nodes[f'{belt_id}_CHUTE_PLUGGED'].write_value(belt.chute_plugged)
 
             # Elevator
             await self.nodes['ELV01_RUNNING'].write_value(self.simulator.elevator.running)
