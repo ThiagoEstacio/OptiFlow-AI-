@@ -115,6 +115,11 @@ class BeltState:
     chute_level_pct: float = 0.0
     chute_plugged: bool = False
 
+    # Internal safety timers
+    _underspeed_time_s: float = 0.0
+    _overload_time_s: float = 0.0
+    _chute_high_time_s: float = 0.0
+
 
 @dataclass
 class ElevatorState:
@@ -609,6 +614,9 @@ class GrainTerminalSimulator:
         belt.underspeed_warn = rpm_pct < 90
         belt.underspeed_alarm = rpm_pct < 80
 
+        # Chute level dynamics and safety
+        self._update_chute_and_safety(belt, belt_id, input_flow, dt_s)
+
     def _update_belt_thermal(self, belt: BeltState, dt_s: float):
         ambient_C = 25
         heating_rate = 0.005 * belt.load_pct
@@ -624,6 +632,107 @@ class GrainTerminalSimulator:
         belt.temp_bearing_C += (ambient_C - belt.temp_bearing_C) * cool_rate * dt_s
         belt.temp_belt_C += (ambient_C - belt.temp_belt_C) * cool_rate * dt_s
         belt.temp_drum_C += (ambient_C - belt.temp_drum_C) * cool_rate * dt_s
+
+    def _update_chute_and_safety(self, belt: BeltState, belt_id: str, input_flow: float, dt_s: float):
+        """
+        Models material accumulation in transfer chute and safety trips
+
+        Physics:
+        - If input > output → material accumulates in chute
+        - If chute level > 95% → plugs automatically
+        - If underspeed > 10s → trips belt motor
+        - If overload > 120% for > 30s → trips belt motor
+        """
+
+        # Output capacity (what actually moves on the belt)
+        capacity = 1650  # t/h
+        actual_output = min(input_flow, capacity * (belt.speed_mps / belt.speed_mps_nom))
+
+        # Chute level dynamics
+        if not belt.chute_plugged:
+            # Flow difference affects chute level
+            # 1% per second per 100 t/h difference
+            flow_diff_tph = input_flow - actual_output
+            level_rate_pct_per_s = flow_diff_tph / 100.0
+
+            belt.chute_level_pct += level_rate_pct_per_s * dt_s
+            belt.chute_level_pct = max(0, min(100, belt.chute_level_pct))
+
+            # Auto-plugging when level too high
+            if belt.chute_level_pct > 95:
+                belt.chute_plugged = True
+                self._set_trip(f'TRIP_{belt_id}_CHUTE_ENTUPIDO')
+                self._set_alarm(f'AL_{belt_id}_CHUTE_NIVEL_ALTO')
+        else:
+            # When plugged, level stays at 100%
+            belt.chute_level_pct = 100.0
+
+            # Can only unplug manually (would require maintenance)
+            # In real system, operator would need to clear the chute
+
+        # Chute high level alarm (before plugging)
+        if belt.chute_level_pct > 80 and not belt.chute_plugged:
+            belt._chute_high_time_s += dt_s
+            if belt._chute_high_time_s > 5:  # 5 seconds of high level
+                self._set_alarm(f'AL_{belt_id}_CHUTE_NIVEL_ALTO')
+        else:
+            belt._chute_high_time_s = 0.0
+
+        # Underspeed trip (persistent underspeed > 10s)
+        if belt.underspeed_alarm:
+            belt._underspeed_time_s += dt_s
+            if belt._underspeed_time_s > 10.0:
+                # Trip the belt motor
+                belt.running = False
+                self._set_trip(f'TRIP_{belt_id}_SUBVELOCIDADE')
+                # Cascade: stop upstream equipment
+                self._cascade_stop_upstream(belt_id)
+        else:
+            belt._underspeed_time_s = 0.0
+
+        # Overload trip (> 120% for > 30s)
+        if belt.load_pct > 120:
+            belt._overload_time_s += dt_s
+            if belt._overload_time_s > 30.0:
+                # Trip the belt motor
+                belt.running = False
+                self._set_trip(f'TRIP_{belt_id}_SOBRECARGA')
+                # Cascade: stop upstream equipment
+                self._cascade_stop_upstream(belt_id)
+        else:
+            belt._overload_time_s = 0.0
+
+    def _cascade_stop_upstream(self, belt_id: str):
+        """
+        Cascade shutdown: when a belt trips, stop upstream equipment
+
+        Chain: GATES → CORR01 → ELEVATOR → CORR02 → BALANCE → CORR03 → SHIPLOADER
+        """
+        if belt_id == 'CORR01':
+            # Close all gates immediately
+            for gate in self.gates:
+                gate.open_pct_sp = 0.0
+            self._set_alarm('AL_SYSTEM_PARADA_EMERGENCIA_CORR01')
+
+        elif belt_id == 'CORR02':
+            # Stop elevator
+            self.elevator.running = False
+            # Reduce CORR01 flow
+            for gate in self.gates:
+                gate.open_pct_sp = min(gate.open_pct_sp, 20.0)  # Reduce to 20%
+            self._set_alarm('AL_SYSTEM_PARADA_EMERGENCIA_CORR02')
+
+        elif belt_id == 'CORR03':
+            # Stop balance
+            self.balance.running = False
+            # Stop CORR02
+            self.belts['CORR02'].running = False
+            # Stop elevator
+            self.elevator.running = False
+            # Reduce gates to minimum
+            for gate in self.gates:
+                gate.open_pct_sp = min(gate.open_pct_sp, 10.0)
+            self._set_alarm('AL_SYSTEM_PARADA_EMERGENCIA_CORR03')
 
     # ------------------------------------------------------------------------
     # PRIVATE: ELEVATOR
