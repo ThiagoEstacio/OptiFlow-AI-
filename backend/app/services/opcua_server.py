@@ -103,7 +103,6 @@ class GrainTerminalOPCUAServer:
 
         # Root: TEAG
         teag = await objects.add_object(self.idx, "TEAG")
-        await teag.set_display_name(ua.LocalizedText("Terminal Exportador de Grãos"))
 
         # System-level vars
         self.nodes['SYSTEM_RUNNING'] = await teag.add_variable(
@@ -123,7 +122,6 @@ class GrainTerminalOPCUAServer:
         # GATES (Vazadores)
         # ================================================================
         arz = await teag.add_object(self.idx, "ARZ")
-        await arz.set_display_name(ua.LocalizedText("Armazém"))
 
         gates_folder = await arz.add_object(self.idx, "GATES")
 
@@ -206,7 +204,6 @@ class GrainTerminalOPCUAServer:
         # ELEVATOR
         # ================================================================
         elv = await teag.add_object(self.idx, "ELV")
-        await elv.set_display_name(ua.LocalizedText("Elevador"))
 
         elv01 = await elv.add_object(self.idx, "ELV01")
 
@@ -250,7 +247,6 @@ class GrainTerminalOPCUAServer:
         # BALANCE (Balança)
         # ================================================================
         bal = await teag.add_object(self.idx, "BAL")
-        await bal.set_display_name(ua.LocalizedText("Balança"))
 
         bal01 = await bal.add_object(self.idx, "BAL01")
 
@@ -286,7 +282,6 @@ class GrainTerminalOPCUAServer:
         # SHIPLOADER
         # ================================================================
         sld = await teag.add_object(self.idx, "SLD")
-        await sld.set_display_name(ua.LocalizedText("Shiploader"))
 
         sld01 = await sld.add_object(self.idx, "SLD01")
 
@@ -315,7 +310,6 @@ class GrainTerminalOPCUAServer:
         # KPIs (at root level)
         # ================================================================
         kpis = await teag.add_object(self.idx, "KPIs")
-        await kpis.set_display_name(ua.LocalizedText("Indicadores de Performance"))
 
         self.nodes['TOTAL_KWH'] = await kpis.add_variable(
             self.idx, "ENERGIA_TOTAL.TOT", 0.0
@@ -337,7 +331,6 @@ class GrainTerminalOPCUAServer:
         # CONTROL (Commands)
         # ================================================================
         control = await teag.add_object(self.idx, "CONTROL")
-        await control.set_display_name(ua.LocalizedText("Comandos"))
 
         # Command: Start System
         @uamethod
@@ -484,7 +477,7 @@ class GrainTerminalOPCUAServer:
             await self.nodes['TOTAL_KWH'].write_value(self.simulator.total_kWh)
             await self.nodes['TOTAL_MASS'].write_value(self.simulator.total_mass_t)
             await self.nodes['KWH_PER_TON'].write_value(self.simulator.kWh_per_ton)
-            await self.nodes['COST'].write_value(self.simulator.cost_R$)
+            await self.nodes['COST'].write_value(self.simulator.cost_BRL)
 
         except Exception as e:
             logger.error(f"Error updating nodes: {e}")

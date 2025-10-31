@@ -145,15 +145,15 @@ class BalanceState:
     running: bool = False
     cycle_state: CycleState = CycleState.IDLE
     weight_kg: float = 0.0
-    target_kg: float = 1000.0
+    target_kg: float = 4500.0  # 4.5 tons per batch for 1500 t/h system
     cycle_count: int = 0
     total_mass_t: float = 0.0
     avg_flow_tph: float = 0.0
     failure: bool = False
 
-    # Internal timing
-    _fill_time_s: float = 12.0
-    _discharge_time_s: float = 5.0
+    # Internal timing (8s fill + 2s discharge = 10s cycle, 360 cycles/h, 1620 t/h capacity)
+    _fill_time_s: float = 8.0
+    _discharge_time_s: float = 2.0
     _cycle_elapsed_s: float = 0.0
 
 
@@ -264,7 +264,7 @@ class GrainTerminalSimulator:
         self.total_kWh = 0.0
         self.total_mass_t = 0.0
         self.kWh_per_ton = 0.0
-        self.cost_R$ = 0.0
+        self.cost_BRL = 0.0
 
         # Alarms
         self.alarms: List[AlarmState] = []
@@ -642,11 +642,12 @@ class GrainTerminalSimulator:
         input_flow = self.belts['CORR01'].flow_tph
 
         # Capacity (buckets × volume × density × speed)
-        buckets_per_s = 2.1 * 5  # speed × buckets_per_m
-        capacity_tph = buckets_per_s * (9 / 1000) * Config.BULK_DENSITY_T_M3 * 3600
+        # Designed for 1650 t/h (10% margin): 2.5 m/s speed, 4.5 buckets/m, 54L buckets
+        buckets_per_s = 2.5 * 4.5  # speed × buckets_per_m
+        capacity_tph = buckets_per_s * (54 / 1000) * Config.BULK_DENSITY_T_M3 * 3600
 
         self.elevator.flow_tph = min(input_flow, capacity_tph)
-        self.elevator.speed_mps = 2.1
+        self.elevator.speed_mps = 2.5
 
         # Power
         load_ratio = input_flow / capacity_tph if capacity_tph > 0 else 0
@@ -713,10 +714,13 @@ class GrainTerminalSimulator:
                 self.balance.weight_kg = 0.0
                 self.balance._cycle_elapsed_s = 0.0
 
-        # Average flow
+        # Average flow (limited by input - conservation of mass)
         cycle_time_s = self.balance._fill_time_s + self.balance._discharge_time_s
         cycles_per_hour = 3600 / cycle_time_s
-        self.balance.avg_flow_tph = (self.balance.target_kg / 1000) * cycles_per_hour
+        theoretical_capacity_tph = (self.balance.target_kg / 1000) * cycles_per_hour
+
+        # Balance can't output more than what comes in (with 95% efficiency for losses)
+        self.balance.avg_flow_tph = min(input_flow_tph * 0.95, theoretical_capacity_tph)
 
     # ------------------------------------------------------------------------
     # PRIVATE: SHIPLOADER
@@ -761,7 +765,7 @@ class GrainTerminalSimulator:
             self.kWh_per_ton = self.total_kWh / self.total_mass_t
 
         # Cost
-        self.cost_R$ += energy_kWh_step * Config.TARIFF_PEAK_R_KWH
+        self.cost_BRL += energy_kWh_step * Config.TARIFF_PEAK_R_KWH
 
     # ------------------------------------------------------------------------
     # PRIVATE: ALARMS
@@ -915,7 +919,7 @@ class GrainTerminalSimulator:
                 'total_kWh': self.total_kWh,
                 'total_mass_t': self.total_mass_t,
                 'kWh_per_ton': self.kWh_per_ton,
-                'cost_R$': self.cost_R$
+                'cost_BRL': self.cost_BRL
             },
             'alarms': [{'tag': a.tag, 'active': a.active, 'count': a.count} for a in self.alarms if a.active],
             'trips': [{'tag': t.tag, 'active': t.active, 'count': t.count} for t in self.trips if t.active]
