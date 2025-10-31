@@ -37,7 +37,7 @@ class Device(Base):
     __tablename__ = "devices"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="CASCADE"), nullable=False, index=True)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Basic info
     name = Column(String(255), nullable=False, index=True)

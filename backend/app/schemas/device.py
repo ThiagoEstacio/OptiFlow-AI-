@@ -11,7 +11,7 @@ class DeviceBase(BaseModel):
     """Base schema for Device"""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    device_type: str = Field(..., description="Type of device: PLC, Sensor, Gateway, etc")
+    device_type: Optional[str] = Field(None, description="Type of device: PLC, Sensor, Gateway, etc")
     protocol: str = Field(..., description="Communication protocol")
 
     # Connection
@@ -44,7 +44,7 @@ class DeviceBase(BaseModel):
 
 class DeviceCreate(DeviceBase):
     """Schema for creating a new Device"""
-    site_id: UUID
+    site_id: Optional[UUID] = None
 
 
 class DeviceUpdate(BaseModel):

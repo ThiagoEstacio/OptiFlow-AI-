@@ -8,6 +8,8 @@ Server URL: opc.tcp://localhost:4840/optiflow/terminal
 Namespace: http://optiflow.com/terminal
 
 Compatible with: UAExpert, Prosys OPC UA Browser, Ignition, etc.
+
+Extended with advanced systems: Interlocks, Alarms, Maintenance, Energy
 """
 
 import asyncio
@@ -19,6 +21,7 @@ from asyncua import Server, ua
 from asyncua.common.methods import uamethod
 
 from app.services.grain_terminal_simulator import GrainTerminalSimulator
+from app.services.opcua_server_extensions import create_advanced_nodes, update_advanced_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -373,6 +376,12 @@ class GrainTerminalOPCUAServer:
         await control.add_method(
             self.idx, "CMD_EMERGENCY_STOP", emergency_stop, [], [ua.VariantType.Boolean]
         )
+        
+        # ================================================================
+        # ADVANCED SYSTEMS (Interlocks, Alarms, Maintenance, Energy)
+        # ================================================================
+        logger.info("Creating advanced system nodes...")
+        await create_advanced_nodes(self, teag, self.idx)
 
         logger.info(f"Created {len(self.nodes)} OPC-UA nodes")
 
@@ -489,6 +498,11 @@ class GrainTerminalOPCUAServer:
             await self.nodes['TOTAL_MASS'].write_value(self.simulator.total_mass_t)
             await self.nodes['KWH_PER_TON'].write_value(self.simulator.kWh_per_ton)
             await self.nodes['COST'].write_value(self.simulator.cost_BRL)
+            
+            # ====================================================================
+            # UPDATE ADVANCED NODES (Interlocks, Alarms, Maintenance, Energy)
+            # ====================================================================
+            await update_advanced_nodes(self)
 
         except Exception as e:
             logger.error(f"Error updating nodes: {e}")

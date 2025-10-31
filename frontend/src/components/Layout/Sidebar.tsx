@@ -13,12 +13,13 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: '📊' },
     { path: '/dashboard-builder', label: 'Builder', icon: '🎨' },
-    { path: '/ai-insights', label: 'AI Insights', icon: '🤖' },
-    { path: '/chat', label: 'AI Assistant', icon: '💬' },
+    { path: '/ai-insights', label: 'Insights de IA', icon: '🤖' },
+    { path: '/chat', label: 'Assistente IA', icon: '💬' },
+    { path: '/simulator', label: 'Simulador', icon: '⚙️' },
     { path: '/sites', label: 'Sites', icon: '🏭' },
-    { path: '/devices', label: 'Devices', icon: '🔌' },
+    { path: '/devices', label: 'Dispositivos', icon: '🔌' },
     { path: '/tags', label: 'Tags', icon: '🏷️' },
-    { path: '/alarms', label: 'Alarms', icon: '🚨' },
+    { path: '/alarms', label: 'Alarmes', icon: '🚨' },
     { path: '/analytics', label: 'Analytics', icon: '📈' },
   ];
 

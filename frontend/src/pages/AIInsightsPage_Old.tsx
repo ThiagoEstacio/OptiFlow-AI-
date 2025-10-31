@@ -1,11 +1,11 @@
 /**
- * Página de Insights de IA - OptiFlow
+ * Página de Insights de IA
  *
- * Dashboard de análise inteligente em tempo real:
- * - Detecção de anomalias com IA
+ * Dashboard de insights em tempo real com IA:
+ * - Detecção de anomalias
  * - Feed automatizado de insights
- * - Score de saúde do sistema
- * - Chat com ChatGPT para análises personalizadas
+ * - Scores de saúde do sistema
+ * - Análises preditivas com ChatGPT
  */
 
 import React, { useState, useEffect } from 'react';
@@ -21,13 +21,11 @@ import {
   BarChart3,
   RefreshCw,
   Download,
+  Settings,
+  Info,
   MessageSquare,
   Sparkles,
-  Send,
-  Loader,
 } from 'lucide-react';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface Insight {
   type: string;
@@ -36,7 +34,7 @@ interface Insight {
   tag_id?: string;
   tag_name?: string;
   data?: any;
-  ai_analysis?: string;
+  ai_analysis?: string;  // Análise gerada pelo ChatGPT
 }
 
 interface HealthScore {
@@ -64,14 +62,13 @@ export const AIInsightsPage: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatResponse, setChatResponse] = useState<string>('');
-  const [showChat, setShowChat] = useState(false);
+  const [chatResponse, setChatResponse] = useState('');
 
-  // Buscar resumo do dashboard
+  // Fetch dashboard summary
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/api/v1/ai/dashboard/summary`, {
+      const response = await fetch('/api/v1/ai/dashboard/summary', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -81,68 +78,16 @@ export const AIInsightsPage: React.FC = () => {
         const data = await response.json();
         setSummary(data);
       } else {
-        // Usar dados mock para demonstração
+        console.error('Failed to fetch AI summary');
+        // Set mock data for demo
         setSummary(getMockSummary());
       }
     } catch (error) {
-      console.error('Erro ao buscar resumo AI:', error);
+      console.error('Error fetching AI summary:', error);
+      // Set mock data for demo
       setSummary(getMockSummary());
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Enviar mensagem para o ChatGPT
-  const sendChatMessage = async () => {
-    if (!chatMessage.trim()) return;
-
-    try {
-      setChatLoading(true);
-      setChatResponse('');
-
-      const response = await fetch(`${API_BASE}/api/v1/chat/conversations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({
-          title: 'Análise de Insights',
-        }),
-      });
-
-      if (!response.ok) throw new Error('Erro ao criar conversa');
-
-      const conversation = await response.json();
-
-      // Enviar mensagem
-      const messageResponse = await fetch(
-        `${API_BASE}/api/v1/chat/conversations/${conversation.id}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          },
-          body: JSON.stringify({
-            content: chatMessage,
-            include_context: true,
-          }),
-        }
-      );
-
-      if (!messageResponse.ok) throw new Error('Erro ao enviar mensagem');
-
-      const messageData = await messageResponse.json();
-      setChatResponse(messageData.ai_response || 'Resposta não disponível');
-      setChatMessage('');
-    } catch (error) {
-      console.error('Erro no chat:', error);
-      setChatResponse(
-        'Desculpe, não foi possível processar sua mensagem. Verifique se a API do ChatGPT está configurada corretamente.'
-      );
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -150,7 +95,7 @@ export const AIInsightsPage: React.FC = () => {
     fetchSummary();
   }, []);
 
-  // Auto-refresh a cada 30 segundos
+  // Auto-refresh every 30 seconds
   useEffect(() => {
     if (!autoRefresh) return;
 
@@ -161,40 +106,40 @@ export const AIInsightsPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
-  // Filtrar insights por severidade
-  const filteredInsights = summary?.recent_insights.filter((insight) => {
+  // Filter insights by severity
+  const filteredInsights = summary?.recent_insights.filter(insight => {
     if (selectedSeverity === 'all') return true;
     return insight.severity === selectedSeverity;
   }) || [];
 
-  // Badge de severidade
+  // Get severity icon and color
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case 'critical':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
             <AlertCircle className="w-3 h-3 mr-1" />
-            Crítico
+            Critical
           </span>
         );
       case 'warning':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
             <AlertCircle className="w-3 h-3 mr-1" />
-            Aviso
+            Warning
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-            <Sparkles className="w-3 h-3 mr-1" />
+            <Info className="w-3 h-3 mr-1" />
             Info
           </span>
         );
     }
   };
 
-  // Cor do status de saúde
+  // Get health status color
   const getHealthColor = (status: string) => {
     switch (status) {
       case 'healthy':
@@ -213,7 +158,7 @@ export const AIInsightsPage: React.FC = () => {
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <RefreshCw className="w-12 h-12 text-blue-600 dark:text-blue-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Carregando Insights de IA...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading AI Insights...</p>
         </div>
       </div>
     );
@@ -223,33 +168,19 @@ export const AIInsightsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Cabeçalho */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg">
             <Brain className="w-8 h-8 text-purple-600 dark:text-purple-400" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Insights de IA</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Inteligência de processo em tempo real com detecção de anomalias
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">AI Insights</h1>
+            <p className="text-gray-600 dark:text-gray-400">Real-time process intelligence and anomaly detection</p>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowChat(!showChat)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-              showChat
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Chat com IA</span>
-          </button>
-
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
@@ -259,7 +190,7 @@ export const AIInsightsPage: React.FC = () => {
             }`}
           >
             <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
-            <span>{autoRefresh ? 'Atualização Automática' : 'Auto-atualização OFF'}</span>
+            <span className="text-sm">{autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}</span>
           </button>
 
           <button
@@ -267,119 +198,62 @@ export const AIInsightsPage: React.FC = () => {
             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Atualizar</span>
+            <span>Refresh</span>
+          </button>
+
+          <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+            <Download className="w-4 h-4" />
+            <span>Export</span>
           </button>
         </div>
       </div>
 
-      {/* Chat com ChatGPT */}
-      {showChat && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <Sparkles className="w-5 h-5 mr-2 text-purple-500" />
-            Consultar ChatGPT sobre os Insights
-          </h2>
-
-          <div className="space-y-4">
-            {chatResponse && (
-              <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-                <p className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">
-                  Resposta da IA:
-                </p>
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                  {chatResponse}
-                </p>
-              </div>
-            )}
-
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
-                placeholder="Pergunte sobre os insights do sistema..."
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
-                disabled={chatLoading}
-              />
-              <button
-                onClick={sendChatMessage}
-                disabled={chatLoading || !chatMessage.trim()}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-              >
-                {chatLoading ? (
-                  <>
-                    <Loader className="w-4 h-4 animate-spin" />
-                    <span>Processando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>Enviar</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              <p>💡 Exemplos de perguntas:</p>
-              <ul className="list-disc list-inside mt-1 space-y-1">
-                <li>Quais são os problemas mais críticos no momento?</li>
-                <li>Analise a tendência de temperatura dos motores</li>
-                <li>O que pode estar causando o aumento de corrente em CORR01?</li>
-                <li>Sugira ações preventivas baseadas nos insights</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Card de Score de Saúde */}
+      {/* Health Score Card */}
       {healthScore && (
         <div className="bg-gradient-to-br from-purple-500 to-blue-600 dark:from-purple-700 dark:to-blue-800 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold mb-2 flex items-center">
                 <Activity className="w-5 h-5 mr-2" />
-                Score de Saúde do Sistema
+                System Health Score
               </h2>
               <div className="flex items-baseline space-x-2">
                 <span className="text-5xl font-bold">{healthScore.score.toFixed(0)}</span>
                 <span className="text-2xl">/100</span>
               </div>
               <p className="text-purple-100 dark:text-purple-200 mt-2 capitalize">
-                Status: {healthScore.status === 'healthy' ? 'Saudável' : healthScore.status === 'degraded' ? 'Degradado' : 'Crítico'}
+                Status: {healthScore.status}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-right">
               <div className="bg-white/10 rounded-lg p-4">
                 <div className="text-3xl font-bold">{healthScore.critical_insights}</div>
-                <div className="text-sm text-purple-100 dark:text-purple-200">Críticos</div>
+                <div className="text-sm text-purple-100 dark:text-purple-200">Critical</div>
               </div>
               <div className="bg-white/10 rounded-lg p-4">
                 <div className="text-3xl font-bold">{healthScore.warning_insights}</div>
-                <div className="text-sm text-purple-100 dark:text-purple-200">Avisos</div>
+                <div className="text-sm text-purple-100 dark:text-purple-200">Warnings</div>
               </div>
               <div className="bg-white/10 rounded-lg p-4">
                 <div className="text-3xl font-bold">{summary?.tags_monitored || 0}</div>
-                <div className="text-sm text-purple-100 dark:text-purple-200">Tags Monitoradas</div>
+                <div className="text-sm text-purple-100 dark:text-purple-200">Tags Monitored</div>
               </div>
               <div className="bg-white/10 rounded-lg p-4">
                 <div className="text-3xl font-bold">{summary?.anomalies_detected || 0}</div>
-                <div className="text-sm text-purple-100 dark:text-purple-200">Anomalias</div>
+                <div className="text-sm text-purple-100 dark:text-purple-200">Anomalies</div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Estatísticas Rápidas */}
+      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Modelos Ativos</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Active Models</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                 {summary?.models_active || 0}
               </p>
@@ -393,7 +267,7 @@ export const AIInsightsPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Anomalias Detectadas</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Anomalies Detected</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                 {summary?.anomalies_detected || 0}
               </p>
@@ -407,7 +281,7 @@ export const AIInsightsPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Tags Analisadas</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Tags Analyzed</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                 {summary?.tags_monitored || 0}
               </p>
@@ -421,11 +295,9 @@ export const AIInsightsPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Última Análise</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Last Analysis</p>
               <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                {summary?.last_analysis
-                  ? new Date(summary.last_analysis).toLocaleTimeString('pt-BR')
-                  : 'N/A'}
+                {summary?.last_analysis ? new Date(summary.last_analysis).toLocaleTimeString() : 'N/A'}
               </p>
             </div>
             <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg">
@@ -435,13 +307,13 @@ export const AIInsightsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Feed de Insights */}
+      {/* Insights Feed */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
               <Zap className="w-5 h-5 mr-2 text-yellow-500" />
-              Insights Recentes
+              Recent Insights
             </h2>
 
             <div className="flex items-center space-x-2">
@@ -453,7 +325,7 @@ export const AIInsightsPage: React.FC = () => {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                 }`}
               >
-                Todos
+                All
               </button>
               <button
                 onClick={() => setSelectedSeverity('critical')}
@@ -463,7 +335,7 @@ export const AIInsightsPage: React.FC = () => {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                 }`}
               >
-                Críticos
+                Critical
               </button>
               <button
                 onClick={() => setSelectedSeverity('warning')}
@@ -473,7 +345,7 @@ export const AIInsightsPage: React.FC = () => {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                 }`}
               >
-                Avisos
+                Warnings
               </button>
             </div>
           </div>
@@ -482,10 +354,7 @@ export const AIInsightsPage: React.FC = () => {
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
           {filteredInsights.length > 0 ? (
             filteredInsights.map((insight, idx) => (
-              <div
-                key={idx}
-                className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
+              <div key={idx} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
@@ -499,7 +368,7 @@ export const AIInsightsPage: React.FC = () => {
                     <p className="text-gray-700 dark:text-gray-300">{insight.message}</p>
                   </div>
                   <button className="ml-4 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm">
-                    Ver Detalhes
+                    View Details
                   </button>
                 </div>
               </div>
@@ -509,35 +378,31 @@ export const AIInsightsPage: React.FC = () => {
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
               <p className="text-gray-600 dark:text-gray-400">
                 {selectedSeverity === 'all'
-                  ? 'Nenhum insight disponível no momento'
-                  : `Nenhum insight ${selectedSeverity === 'critical' ? 'crítico' : 'de aviso'} no momento`}
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                O sistema está operando dentro dos parâmetros normais
+                  ? 'No insights available'
+                  : `No ${selectedSeverity} insights at this time`}
               </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Próximos Recursos - Fase 2 */}
+      {/* Coming Soon - Phase 2 */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
-          <Sparkles className="w-5 h-5 mr-2 text-purple-500" />
-          🚀 Em Breve - Fase 2
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          🚀 Coming Soon - Phase 2
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-700 dark:text-gray-300">
           <div>
-            <h4 className="font-semibold mb-1">Manutenção Preditiva</h4>
-            <p>Previsão de falhas de equipamento e estimativa de vida útil</p>
+            <h4 className="font-semibold mb-1">Predictive Maintenance</h4>
+            <p>Equipment failure prediction and RUL estimation</p>
           </div>
           <div>
-            <h4 className="font-semibold mb-1">Otimização de Processo</h4>
-            <p>Recomendações de setpoints otimizados por IA</p>
+            <h4 className="font-semibold mb-1">Process Optimization</h4>
+            <p>AI-powered setpoint recommendations</p>
           </div>
           <div>
-            <h4 className="font-semibold mb-1">Previsão de Demanda</h4>
-            <p>Predição de produção e demanda energética</p>
+            <h4 className="font-semibold mb-1">Demand Forecasting</h4>
+            <p>Production and energy demand predictions</p>
           </div>
         </div>
       </div>
@@ -545,7 +410,7 @@ export const AIInsightsPage: React.FC = () => {
   );
 };
 
-// Dados mock para demonstração
+// Mock data for demo
 function getMockSummary(): DashboardSummary {
   return {
     health_score: {
@@ -560,36 +425,36 @@ function getMockSummary(): DashboardSummary {
       {
         type: 'trend',
         severity: 'warning',
-        message: '📈 CORR01_CORRENTE está com tendência crescente (aumento de 12,5% ao longo do tempo)',
-        tag_name: 'CORR01_CORRENTE',
+        message: '📈 CONV1_MOTOR_CURRENT is trending upward (12.5% increase over time)',
+        tag_name: 'CONV1_MOTOR_CURRENT',
       },
       {
         type: 'outlier',
         severity: 'warning',
-        message: '⚠️ CORR01_TEMP_MOTOR tem 3 valores anômalos detectados (5,2% dos dados)',
-        tag_name: 'CORR01_TEMP_MOTOR',
+        message: '⚠️ CONV1_MOTOR_TEMP has 3 outlier(s) detected (5.2% of data)',
+        tag_name: 'CONV1_MOTOR_TEMP',
       },
       {
         type: 'baseline_comparison',
         severity: 'info',
-        message: '✅ SLD01_VAZAO está dentro da faixa normal de operação',
-        tag_name: 'SLD01_VAZAO',
+        message: '✅ SHIP_FLOW_RATE is within normal range',
+        tag_name: 'SHIP_FLOW_RATE',
       },
       {
         type: 'level_shift',
         severity: 'warning',
-        message: '🔄 ELV01_CORRENTE aumentou 15,3% - possível mudança de setpoint ou alteração no processo',
-        tag_name: 'ELV01_CORRENTE',
+        message: '🔄 ELEV1_MOTOR_CURRENT increased by 15.3% - possible setpoint change or process shift',
+        tag_name: 'ELEV1_MOTOR_CURRENT',
       },
       {
         type: 'trend',
         severity: 'info',
-        message: '➡️ BAL01_PESO está estável',
-        tag_name: 'BAL01_PESO',
+        message: '➡️ PRODUCT_MOISTURE is stable',
+        tag_name: 'PRODUCT_MOISTURE',
       },
     ],
     anomalies_detected: 2,
-    tags_monitored: 277,
+    tags_monitored: 45,
     models_active: 0,
     last_analysis: new Date().toISOString(),
   };

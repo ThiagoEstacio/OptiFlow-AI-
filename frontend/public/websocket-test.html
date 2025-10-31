@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste WebSocket - OptiFlow</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .connected {
+            background: #2d5016;
+            color: #90ee90;
+        }
+        .disconnected {
+            background: #5a1a1a;
+            color: #ff6b6b;
+        }
+        .messages {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #363636;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+        }
+        .tag-value {
+            display: inline-block;
+            margin: 5px 10px 5px 0;
+            padding: 5px 10px;
+            background: #424242;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 10px 0 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-connect {
+            background: #4CAF50;
+            color: white;
+        }
+        .btn-disconnect {
+            background: #f44336;
+            color: white;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        .timestamp {
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 Teste WebSocket - OptiFlow Real-Time</h1>
+    
+    <div id="status" class="status disconnected">
+        🔴 Desconectado
+    </div>
+    
+    <div>
+        <button class="btn-connect" onclick="connect()">Conectar</button>
+        <button class="btn-disconnect" onclick="disconnect()">Desconectar</button>
+        <button onclick="clearMessages()">Limpar</button>
+    </div>
+    
+    <h2>📊 Mensagens Recebidas:</h2>
+    <div id="messages" class="messages"></div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+        const maxMessages = 50;
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addMessage('⚠️ Já conectado!', 'warning');
+                return;
+            }
+
+            const wsUrl = 'ws://localhost:8000/api/v1/ws/tags/stream';
+            updateStatus('🟡 Conectando...', 'connecting');
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('✅ WebSocket conectado');
+                updateStatus('🟢 Conectado', 'connected');
+                addMessage('✅ Conexão estabelecida com sucesso!', 'success');
+                
+                // Enviar ping
+                ws.send(JSON.stringify({ type: 'ping' }));
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'pong') {
+                        console.log('🏓 Pong recebido');
+                        return;
+                    }
+                    
+                    messageCount++;
+                    
+                    let html = `
+                        <div class="message">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong>📦 Mensagem #${messageCount}</strong>
+                                <span class="timestamp">${data.timestamp || new Date().toISOString()}</span>
+                            </div>
+                    `;
+                    
+                    if (data.values) {
+                        const values = Object.entries(data.values);
+                        html += `<div style="margin-top: 10px;"><strong>Tags (${values.length}):</strong></div>`;
+                        
+                        values.slice(0, 10).forEach(([nodeId, value]) => {
+                            const quality = value.quality === 'Good' ? '✅' : '❌';
+                            html += `
+                                <div class="tag-value">
+                                    ${quality} <strong>${nodeId}</strong>: ${value.value}
+                                </div>
+                            `;
+                        });
+                        
+                        if (values.length > 10) {
+                            html += `<div style="margin-top: 10px; color: #888; font-size: 12px;">... e mais ${values.length - 10} tags</div>`;
+                        }
+                    }
+                    
+                    html += '</div>';
+                    
+                    const messagesDiv = document.getElementById('messages');
+                    messagesDiv.insertAdjacentHTML('afterbegin', html);
+                    
+                    // Limitar número de mensagens exibidas
+                    const messages = messagesDiv.querySelectorAll('.message');
+                    if (messages.length > maxMessages) {
+                        messages[messages.length - 1].remove();
+                    }
+                    
+                } catch (error) {
+                    console.error('Erro ao processar mensagem:', error);
+                    addMessage(`❌ Erro ao processar: ${error.message}`, 'error');
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ Erro WebSocket:', error);
+                addMessage('❌ Erro na conexão WebSocket', 'error');
+                updateStatus('🔴 Erro', 'disconnected');
+            };
+            
+            ws.onclose = (event) => {
+                console.log('🔌 WebSocket desconectado:', event.code, event.reason);
+                addMessage(`🔌 Desconectado (código: ${event.code})`, 'info');
+                updateStatus('🔴 Desconectado', 'disconnected');
+                ws = null;
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                addMessage('👋 Desconexão solicitada pelo usuário', 'info');
+            } else {
+                addMessage('⚠️ Não há conexão ativa', 'warning');
+            }
+        }
+        
+        function updateStatus(text, status) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = 'status ' + status;
+        }
+        
+        function addMessage(text, type) {
+            const messagesDiv = document.getElementById('messages');
+            const html = `
+                <div class="message" style="border-left-color: ${getColorForType(type)}">
+                    ${text}
+                </div>
+            `;
+            messagesDiv.insertAdjacentHTML('afterbegin', html);
+        }
+        
+        function getColorForType(type) {
+            const colors = {
+                success: '#4CAF50',
+                error: '#f44336',
+                warning: '#ff9800',
+                info: '#2196F3'
+            };
+            return colors[type] || '#4CAF50';
+        }
+        
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            messageCount = 0;
+            addMessage('🧹 Mensagens limpas', 'info');
+        }
+        
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            console.log('Página carregada. Conectando automaticamente em 1 segundo...');
+            setTimeout(connect, 1000);
+        });
+        
+        // Keep alive - enviar ping a cada 30 segundos
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+                console.log('🏓 Ping enviado');
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

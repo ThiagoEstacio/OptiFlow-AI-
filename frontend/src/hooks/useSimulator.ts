@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -81,6 +81,49 @@ export interface SimulatorStatus {
     timestamp: number;
     count: number;
   }>;
+  interlocks?: {
+    active_count: number;
+    active_interlocks: Array<{
+      id: string;
+      cause: string;
+      type: string;
+      effects: string[];
+      active: boolean;
+      can_reset: boolean;
+    }>;
+  };
+  maintenance?: {
+    avg_health_pct: number;
+    equipment: {
+      [key: string]: {
+        health_pct: number;
+        vibration_mm_s: number;
+        oil_temp_C: number;
+        hours_running: number;
+        alarm_count: number;
+        trip_count: number;
+      };
+    };
+  };
+  energy?: {
+    total_power_kW: number;
+    avg_power_factor: number;
+    total_kWh: number;
+    cost_peak_BRL: number;
+    cost_offpeak_BRL: number;
+    cost_total_BRL: number;
+    equipment: {
+      [key: string]: {
+        voltage_V: number;
+        current_A: number;
+        power_kW: number;
+        reactive_kvar: number;
+        apparent_kVA: number;
+        power_factor: number;
+        kwh: number;
+      };
+    };
+  };
 }
 
 export function useSimulator() {
@@ -189,6 +232,30 @@ export function useSimulator() {
       setLoading(false);
     }
   }, [refreshStatus]);
+
+  // Auto-update loop: step simulation and refresh status
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (status?.system?.running) {
+      intervalId = setInterval(async () => {
+        try {
+          // Step the simulation by 1 second
+          await axios.post(`${SIMULATOR_API}/step`, null, { params: { dt_s: 1.0 } });
+          // Refresh status
+          await refreshStatus();
+        } catch (err) {
+          console.error('Error in simulation loop:', err);
+        }
+      }, 1000); // Update every 1 second
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [status?.system?.running, refreshStatus]);
 
   return {
     status,

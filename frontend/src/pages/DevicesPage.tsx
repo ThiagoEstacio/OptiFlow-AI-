@@ -204,7 +204,7 @@ export const DevicesPage: React.FC = () => {
         size="lg"
       >
         <DeviceForm
-          siteId={sites[0]?.id}
+          siteId={sites[0]?.id || '4562d673-75c3-4238-9c69-69abc98eadc7'}
           onSubmit={handleCreate}
           onCancel={() => setIsCreateModalOpen(false)}
           isLoading={isSubmitting}

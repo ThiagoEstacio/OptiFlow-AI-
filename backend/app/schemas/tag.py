@@ -111,11 +111,27 @@ class TagResponse(TagBase):
     """Schema for Tag response"""
     id: UUID
     device_id: UUID
-    last_value: Optional[float] = None
+    last_value: Optional[str] = None  # Changed from float to str to support all data types
     last_quality: Optional[str] = None
     last_timestamp: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+    @validator('data_type', pre=True)
+    def convert_data_type(cls, v):
+        """Convert enum to string uppercase"""
+        if hasattr(v, 'value'):
+            return v.value.upper()
+        return v.upper() if isinstance(v, str) else v
+
+    @validator('category', pre=True)
+    def convert_category(cls, v):
+        """Convert enum to string uppercase"""
+        if v is None:
+            return None
+        if hasattr(v, 'value'):
+            return v.value.upper()
+        return v.upper() if isinstance(v, str) else v
 
     class Config:
         from_attributes = True

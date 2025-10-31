@@ -4,7 +4,7 @@ Time series data endpoints
 from fastapi import APIRouter, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from app.db.session import get_db
@@ -59,19 +59,45 @@ async def get_latest_value(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get the latest value for a tag (for demo purposes, returns simulated data)
+    Get the latest value for a tag from InfluxDB
     """
-    import random
+    import logging
+    logger = logging.getLogger(__name__)
     
-    # Generate realistic simulated data
-    # In production, this would query InfluxDB for the actual latest value
-    value = round(random.uniform(0, 100), 2)
-    
-    return {
-        "value": value,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "quality": "good"
-    }
+    try:
+        # Query last 10 seconds from InfluxDB
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(seconds=10)
+        
+        data = influxdb_service.query_tag_data(
+            tag_id=tag_id,
+            start_time=start_time,
+            end_time=end_time
+        )
+        
+        if data and len(data) > 0:
+            # Return most recent value
+            latest = data[-1]
+            logger.info(f"✅ Returning REAL latest value for tag {tag_id}: {latest.get('value')}")
+            return {
+                "value": latest.get("value"),
+                "timestamp": latest.get("timestamp"),
+                "quality": latest.get("quality", "good")
+            }
+        else:
+            logger.warning(f"⚠️ No InfluxDB data for tag {tag_id}, returning null")
+            return {
+                "value": None,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "quality": "no_data"
+            }
+    except Exception as e:
+        logger.error(f"❌ Error fetching latest value for tag {tag_id}: {e}")
+        return {
+            "value": None,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "quality": "error"
+        }
 
 
 @router.get("/tags/{tag_id}")
