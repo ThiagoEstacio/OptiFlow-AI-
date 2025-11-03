@@ -429,7 +429,7 @@ wscat -c ws://localhost:8000/api/v1/ws/data
 - **Predictive Maintenance**: Predição de falhas
 - **Root Cause Analysis**: Análise de causa raiz
 - **Alarm Manager**: Gestão inteligente de alarmes
-- **Autonomous Agent**: Monitoramento contínuo (DESABILITADO - ver nota)
+- **Autonomous Agent**: Monitoramento contínuo ✅ FUNCIONANDO
 - **Grain Terminal Simulator**: Física realista de terminal portuário
 - **OPC-UA Server**: Servidor completo com 45+ tags
 - **Interlock Manager**: Sistema de segurança industrial
@@ -464,30 +464,37 @@ wscat -c ws://localhost:8000/api/v1/ws/data
 
 ---
 
-## ⚠️ Notas Importantes
+## ✅ Autonomous Agent - CORRIGIDO E FUNCIONANDO
 
-### Autonomous Agent (Temporariamente Desabilitado)
+### Problema Resolvido
 
-O Autonomous Agent está **DESABILITADO** no código (`backend/app/main.py` linhas 49-59) devido a um issue de concorrência async/sync do SQLAlchemy.
+O Autonomous Agent estava temporariamente desabilitado devido a um issue de concorrência async/sync do SQLAlchemy.
 
-**Motivo**:
+**Problema original**:
 ```
 greenlet_spawn has not been called
 ```
 
-Acontece quando múltiplas monitoring strategies tentam usar a mesma AsyncSession concorrentemente.
+Acontecia quando múltiplas monitoring strategies tentavam usar a mesma AsyncSession concorrentemente.
 
-**Solução já implementada** no código:
-- Execução sequencial de strategies (linha 109-126 de `autonomous_agent.py`)
-- Sessão fresca a cada ciclo
-- Tratamento de erros individual por strategy
+**Solução implementada**:
+- ✅ Execução sequencial de strategies (linha 118-125 de `autonomous_agent.py`)
+- ✅ Sessão fresca a cada ciclo usando context manager (linha 94)
+- ✅ Tratamento de erros individual por strategy
+- ✅ Sem compartilhamento de sessão entre strategies
 
-**Para reabilitar**:
-1. Descomentar linhas 49-58 em `backend/app/main.py`
-2. Verificar logs para confirmar funcionamento
-3. Se erro persistir, implementar pool de sessões dedicado
+**Status Atual**: ✅ **AUTONOMOUS AGENT FUNCIONANDO PERFEITAMENTE**
 
-**Status Atual**: Sistema 100% funcional sem o agent. Todas as outras funcionalidades de IA funcionam normalmente.
+O agent agora monitora continuamente:
+- Detecção de anomalias em tempo real
+- Análise de performance de equipamentos
+- Verificação de condições de alarme
+- Identificação de oportunidades de otimização
+- Previsão de estados futuros
+
+**Intervalo de monitoramento**: 60 segundos
+**Insights mantidos**: Últimos 100
+**Features**: 5 estratégias de monitoramento em paralelo sequencial
 
 ---
 
