@@ -13,9 +13,12 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  PlusCircle,
 } from 'lucide-react';
 import { useAssets, AssetType } from '../../contexts/AssetContext';
 import { AssetNode } from './AssetNode';
+import { AssetModal } from './AssetModal';
+import { AssetAttributeEditor } from './AssetAttributeEditor';
 
 interface AssetTreePanelProps {
   onClose: () => void;
@@ -43,6 +46,11 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
   const [filterType, setFilterType] = useState<string>('all');
   const [showInactive, setShowInactive] = useState(initialShowInactive);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+
+  // Modal states
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<any>(null);
+  const [showAttributeEditor, setShowAttributeEditor] = useState(false);
 
   // Asset types for filter
   const assetTypes: Array<{ value: string; label: string }> = [
@@ -122,6 +130,22 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
     }
   };
 
+  const handleEditAsset = (asset: any) => {
+    setEditingAsset(asset);
+    setShowAssetModal(true);
+  };
+
+  const handleCreateAsset = () => {
+    setEditingAsset(null);
+    setShowAssetModal(true);
+  };
+
+  const handleCreateAttribute = () => {
+    if (selectedAsset) {
+      setShowAttributeEditor(true);
+    }
+  };
+
   const toggleShowInactive = () => {
     setShowInactive(!showInactive);
   };
@@ -139,6 +163,14 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCreateAsset}
+              className="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+              title="Criar novo asset"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
             <button
               onClick={handleRefresh}
               disabled={loading}
@@ -257,7 +289,7 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
                 asset={rootAsset}
                 level={0}
                 onSelectAsset={handleSelectAsset}
-                onEditAsset={onEditAsset}
+                onEditAsset={handleEditAsset}
                 onDeleteAsset={handleDeleteAsset}
                 selectedAssetId={selectedAsset?.id}
                 enableDrag={true}
@@ -279,11 +311,21 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
             </p>
           </div>
 
-          {selectedAssetAttributes.length > 0 && (
-            <div className="mt-2">
-              <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <div className="mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
                 Atributos:
               </p>
+              <button
+                onClick={handleCreateAttribute}
+                className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                title="Adicionar atributo"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {selectedAssetAttributes.length > 0 ? (
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {selectedAssetAttributes.map((attr) => (
                   <div
@@ -301,8 +343,12 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-2">
+                Nenhum atributo. Clique em + para adicionar.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -316,6 +362,23 @@ export const AssetTreePanel: React.FC<AssetTreePanelProps> = ({
           <li>Use os filtros para encontrar assets específicos</li>
         </ol>
       </div>
+
+      {/* Modals */}
+      <AssetModal
+        isOpen={showAssetModal}
+        onClose={() => {
+          setShowAssetModal(false);
+          setEditingAsset(null);
+        }}
+        asset={editingAsset}
+        defaultParentId={selectedAsset?.id}
+      />
+
+      <AssetAttributeEditor
+        isOpen={showAttributeEditor}
+        onClose={() => setShowAttributeEditor(false)}
+        assetId={selectedAsset?.id || ''}
+      />
     </div>
   );
 };
