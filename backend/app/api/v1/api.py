@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     chat,
     assets,
     monitoring,
+    operations,
 )
 
 api_router = APIRouter()
@@ -39,3 +40,4 @@ api_router.include_router(ai_insights.router, prefix="/ai", tags=["AI Insights"]
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat & AI Assistant"])
 api_router.include_router(assets.router, prefix="/assets", tags=["Asset Framework"])
 api_router.include_router(monitoring.router, prefix="/monitoring", tags=["System Monitoring"])
+api_router.include_router(operations.router, prefix="/operations", tags=["Port Operations"])
