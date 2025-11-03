@@ -84,19 +84,44 @@ services:
       timeout: 5s
       retries: 5
 
+  # Ollama - Local LLM for AI Assistant
+  ollama:
+    image: ollama/ollama:latest
+    container_name: optiflow-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - optiflow-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
   # Backend API
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gpu
     container_name: optiflow-backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./backend:/app
       - backend_mlflow:/app/mlruns
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "8000:8000"
     environment:
+      # GPU Support
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      
       # Application
       APP_NAME: "OptiFlow AI Platform"
       ENVIRONMENT: development
@@ -135,6 +160,23 @@ services:
 
       # Gateway
       GATEWAY_API_KEY: secure-gateway-api-key-change-in-production
+
+      # AI Agent - Ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+    
+    # Allow access to host machine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+    # GPU Support (RTX 4060)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
     networks:
       - optiflow-network
     depends_on:
@@ -260,8 +302,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: http://backend:8000
+      VITE_WS_URL: ws://backend:8000
     networks:
       - optiflow-network
     depends_on:
@@ -337,3 +379,4 @@ volumes:
   gateway_data:
   prometheus_data:
   grafana_data:
+  ollama_data:

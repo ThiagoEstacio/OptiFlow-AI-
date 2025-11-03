@@ -1,0 +1,16 @@
+# GPU Acceleration Requirements
+# Install ONLY if you have NVIDIA GPU with CUDA support
+
+# CuPy - NumPy compatible GPU arrays
+# For CUDA 12.x (RTX 40 series, RTX 30 series, etc)
+cupy-cuda12x==12.3.0
+
+# Alternative: For CUDA 11.x (older GPUs)
+# cupy-cuda11x==12.3.0
+
+# Installation instructions:
+# 1. Check CUDA version: nvidia-smi
+# 2. Install appropriate cupy version
+# 3. Restart backend container
+#
+# If GPU not available, the system will automatically fallback to CPU (NumPy)

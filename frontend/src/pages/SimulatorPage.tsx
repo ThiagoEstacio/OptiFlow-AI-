@@ -43,6 +43,8 @@ import TrendsPanel from '../components/simulator/TrendsPanel';
 import InterlockMonitor from '../components/simulator/InterlockMonitor';
 import MaintenanceDashboard from '../components/simulator/MaintenanceDashboard';
 import EnergyDashboard from '../components/simulator/EnergyDashboard';
+import ScadaSynoptic from '../components/ScadaSynoptic';
+import ScadaProcessView from '../components/ScadaProcessView';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -225,7 +227,8 @@ export default function SimulatorPage() {
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab icon={<Speed />} label="Overview" />
+          <Tab icon={<Speed />} label="Process View" />
+          <Tab icon={<Assessment />} label="Synoptic" />
           <Tab icon={<Settings />} label="Controles" />
           <Tab
             icon={
@@ -249,10 +252,23 @@ export default function SimulatorPage() {
         </Tabs>
 
         <TabPanel value={activeTab} index={0}>
-          <SystemOverview status={status} />
+          <ScadaProcessView
+            status={status}
+            onEquipmentClick={(id) => console.log('Equipment clicked:', id)}
+          />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
+          <ScadaSynoptic
+            status={status}
+            onCommand={(cmd, params) => {
+              if (cmd === 'start') startSystem();
+              else if (cmd === 'stop') stopSystem();
+            }}
+          />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={2}>
           <EquipmentControls
             status={status}
             onSetGate={setGateSetpoint}
@@ -262,14 +278,14 @@ export default function SimulatorPage() {
           />
         </TabPanel>
 
-        <TabPanel value={activeTab} index={2}>
+        <TabPanel value={activeTab} index={3}>
           <InterlockMonitor
             interlocks={status?.interlocks}
             loading={loading}
           />
         </TabPanel>
 
-        <TabPanel value={activeTab} index={3}>
+        <TabPanel value={activeTab} index={4}>
           <AlarmsPanel
             alarms={status?.alarms || []}
             trips={status?.trips || []}
@@ -282,10 +298,14 @@ export default function SimulatorPage() {
         </TabPanel>
 
         <TabPanel value={activeTab} index={5}>
-          <EnergyDashboard energy={status?.energy} />
+          <MaintenanceDashboard maintenance={status?.maintenance} />
         </TabPanel>
 
         <TabPanel value={activeTab} index={6}>
+          <EnergyDashboard energy={status?.energy} />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={7}>
           <TrendsPanel status={status} />
         </TabPanel>
       </Paper>

@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     users,
     devices,
     tags,
+    tag_labels,
     timeseries,
     alarms,
     analytics,
@@ -27,6 +28,7 @@ api_router.include_router(sites.router, prefix="/sites", tags=["Sites"])
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(devices.router, prefix="/devices", tags=["Devices"])
 api_router.include_router(tags.router, prefix="/tags", tags=["Tags"])
+api_router.include_router(tag_labels.router, prefix="/tag-labels", tags=["Tag Labels"])
 api_router.include_router(timeseries.router, prefix="/timeseries", tags=["Time Series"])
 api_router.include_router(alarms.router, prefix="/alarms", tags=["Alarms"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
