@@ -9,6 +9,7 @@ import { PrivateRoute } from './components/PrivateRoute';
 import { AppLayout } from './components/Layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { Dashboard } from './pages/Dashboard';
+import { ModernDashboard } from './pages/ModernDashboard';
 import { SitesPage } from './pages/SitesPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { TagsPage } from './pages/TagsPage';
@@ -52,7 +53,8 @@ function App() {
                 </PrivateRoute>
               }
             >
-              <Route index element={<Dashboard />} />
+              <Route index element={<ModernDashboard />} />
+              <Route path="classic-dashboard" element={<Dashboard />} />
               <Route path="sites" element={<SitesPage />} />
               <Route path="devices" element={<DevicesPage />} />
               <Route path="tags" element={<TagsPage />} />

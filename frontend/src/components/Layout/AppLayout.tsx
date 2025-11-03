@@ -1,30 +1,47 @@
 /**
- * App Layout with Sidebar and TopBar
+ * App Layout with Enhanced Sidebar and TopBar
  */
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { EnhancedSidebar } from './EnhancedSidebar';
 import { TopBar } from './TopBar';
 import { useAppSelector } from '../../store';
+import { Box } from '@mui/material';
 
 export const AppLayout: React.FC = () => {
   const sidebarOpen = useAppSelector((state) => state.ui.sidebarOpen);
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <Sidebar />
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.100' }}>
+      {/* Enhanced Sidebar */}
+      <EnhancedSidebar />
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          ml: sidebarOpen ? '280px' : '72px',
+          transition: 'margin-left 0.3s ease',
+        }}
+      >
         {/* Top Bar */}
         <TopBar />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            overflow: 'auto',
+            bgcolor: 'grey.100',
+            p: 3,
+          }}
+        >
           <Outlet />
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 };
