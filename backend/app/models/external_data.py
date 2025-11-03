@@ -11,7 +11,7 @@ Models for importing and tracking data from external sources:
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Date, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.models.base import Base
+from app.db.base import Base
 from typing import Dict, Any, Optional
 from datetime import datetime
 

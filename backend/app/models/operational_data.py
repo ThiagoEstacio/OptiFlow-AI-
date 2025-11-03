@@ -10,7 +10,7 @@ Models for tracking port terminal operations:
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Date, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.models.base import Base
+from app.db.base import Base
 from typing import Dict, Any
 
 
