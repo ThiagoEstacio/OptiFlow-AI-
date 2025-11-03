@@ -75,10 +75,7 @@ class AutonomousAgent:
     and generating insights without user intervention.
     """
     
-    def __init__(self, db_session: AsyncSession):
-        self.db = db_session
-        self.data_service = DataService(db_session)
-        self.toolkit = AgentToolkit(self.data_service)
+    def __init__(self):
         self.insights: List[AutonomousInsight] = []
         self.max_insights = 100  # Keep last 100 insights
         self.monitoring_interval = 60  # Monitor every 60 seconds
@@ -86,12 +83,49 @@ class AutonomousAgent:
         
     async def start(self):
         """Start autonomous monitoring"""
+        from app.db.session import AsyncSessionLocal
+        
         self.is_running = True
         logger.info("🤖 Autonomous Agent started - Continuous monitoring enabled")
         
         while self.is_running:
             try:
-                await self.monitor_cycle()
+                # Create fresh session for each cycle
+                async with AsyncSessionLocal() as db:
+                    data_service = DataService(db)
+                    toolkit = AgentToolkit(data_service)
+                    
+                    # Get all active tags
+                    result = await db.execute(
+                        select(Tag).where(Tag.is_active == True).limit(50)
+                    )
+                    tags = result.scalars().all()
+                    
+                    if not tags:
+                        logger.warning("No active tags found for monitoring")
+                        await asyncio.sleep(self.monitoring_interval)
+                        continue
+                    
+                    # Run monitoring strategies sequentially (can't share session concurrently)
+                    monitoring_methods = [
+                        ("detect_anomalies", self.detect_anomalies),
+                        ("analyze_performance", self.analyze_performance),
+                        ("check_alarm_conditions", self.check_alarm_conditions),
+                        ("identify_optimization_opportunities", self.identify_optimization_opportunities),
+                        ("predict_future_states", self.predict_future_states),
+                    ]
+                    
+                    for method_name, method in monitoring_methods:
+                        try:
+                            results = await method(tags, toolkit)
+                            if results:
+                                for insight in results:
+                                    self.add_insight(insight)
+                        except Exception as e:
+                            logger.error(f"{method_name} failed: {e}")
+                    
+                    logger.info(f"✅ Monitoring cycle complete. Total insights: {len(self.insights)}")
+                    
                 await asyncio.sleep(self.monitoring_interval)
             except Exception as e:
                 logger.error(f"Error in monitoring cycle: {e}")
@@ -102,42 +136,7 @@ class AutonomousAgent:
         self.is_running = False
         logger.info("🛑 Autonomous Agent stopped")
     
-    async def monitor_cycle(self):
-        """Execute one monitoring cycle"""
-        logger.info("🔍 Executing monitoring cycle...")
-        
-        # Get all active tags
-        result = await self.db.execute(
-            select(Tag).where(Tag.is_active == True).limit(50)
-        )
-        tags = result.scalars().all()
-        
-        if not tags:
-            logger.warning("No active tags found for monitoring")
-            return
-        
-        # Run multiple monitoring strategies in parallel
-        tasks = [
-            self.detect_anomalies(tags),
-            self.analyze_performance(tags),
-            self.check_alarm_conditions(tags),
-            self.identify_optimization_opportunities(tags),
-            self.predict_future_states(tags),
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Process results and generate insights
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Monitoring task failed: {result}")
-            elif result:
-                for insight in result:
-                    self.add_insight(insight)
-        
-        logger.info(f"✅ Monitoring cycle complete. Total insights: {len(self.insights)}")
-    
-    async def detect_anomalies(self, tags: List[Tag]) -> List[AutonomousInsight]:
+    async def detect_anomalies(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
         """Detect anomalies in tag data"""
         insights = []
         
@@ -147,7 +146,7 @@ class AutonomousAgent:
         for tag in critical_tags:
             try:
                 # Use toolkit to detect anomalies
-                result = await self.toolkit.execute_tool(
+                result = await toolkit.execute_tool(
                     "detect_anomalies",
                     {
                         "tag_id": str(tag.id),
@@ -187,7 +186,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def analyze_performance(self, tags: List[Tag]) -> List[AutonomousInsight]:
+    async def analyze_performance(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
         """Analyze equipment performance"""
         insights = []
         
@@ -197,7 +196,7 @@ class AutonomousAgent:
         for tag in speed_tags[:5]:
             try:
                 # Get statistics
-                result = await self.toolkit.execute_tool(
+                result = await toolkit.execute_tool(
                     "calculate_statistics",
                     {
                         "tag_id": str(tag.id),
@@ -258,7 +257,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def check_alarm_conditions(self, tags: List[Tag]) -> List[AutonomousInsight]:
+    async def check_alarm_conditions(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
         """Check for alarm conditions and patterns"""
         insights = []
         
@@ -268,7 +267,7 @@ class AutonomousAgent:
         if alarm_tags:
             try:
                 # Analyze alarm patterns
-                result = await self.toolkit.execute_tool(
+                result = await toolkit.execute_tool(
                     "analyze_alarm_patterns",
                     {
                         "alarm_tags": [str(tag.id) for tag in alarm_tags[:10]],
@@ -303,7 +302,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def identify_optimization_opportunities(self, tags: List[Tag]) -> List[AutonomousInsight]:
+    async def identify_optimization_opportunities(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
         """Identify opportunities for process optimization"""
         insights = []
         
@@ -321,7 +320,7 @@ class AutonomousAgent:
             if len(group_tags) >= 2:
                 try:
                     # Compare tags in the group
-                    result = await self.toolkit.execute_tool(
+                    result = await toolkit.execute_tool(
                         "compare_tags",
                         {
                             "tag_ids": [str(tag.id) for tag in group_tags[:5]],
@@ -353,7 +352,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def predict_future_states(self, tags: List[Tag]) -> List[AutonomousInsight]:
+    async def predict_future_states(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
         """Predict future states and generate predictive insights"""
         insights = []
         
@@ -363,7 +362,7 @@ class AutonomousAgent:
         for tag in level_tags[:3]:
             try:
                 # Get historical data
-                result = await self.toolkit.execute_tool(
+                result = await toolkit.execute_tool(
                     "get_historical_data",
                     {
                         "tag_id": str(tag.id),
@@ -502,10 +501,10 @@ class AutonomousAgent:
 _autonomous_agent: Optional[AutonomousAgent] = None
 
 
-async def init_autonomous_agent(db: AsyncSession):
+async def init_autonomous_agent():
     """Initialize autonomous agent"""
     global _autonomous_agent
-    _autonomous_agent = AutonomousAgent(db)
+    _autonomous_agent = AutonomousAgent()
     # Start monitoring in background
     asyncio.create_task(_autonomous_agent.start())
     logger.info("✅ Autonomous Agent initialized and started")

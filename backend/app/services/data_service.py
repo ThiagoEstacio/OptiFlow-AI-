@@ -9,8 +9,9 @@ Provides services to query:
 
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 import asyncio
 import logging
 
@@ -20,8 +21,10 @@ logger = logging.getLogger(__name__)
 class DataService:
     """Service for accessing real-time and historical data"""
     
-    def __init__(self, db: Session):
+    def __init__(self, db):
+        """Initialize with either sync or async session"""
         self.db = db
+        self.is_async = isinstance(db, AsyncSession)
         
     async def get_realtime_value(self, tag_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -47,29 +50,41 @@ class DataService:
                     t.current_value,
                     t.updated_at
                 FROM tags t
-                WHERE t.name = :tag_id OR t.tag_address = :tag_id
+                WHERE t.name = :tag_id OR t.tag_address = :tag_id OR CAST(t.id AS TEXT) = :tag_id
                 LIMIT 1
             """)
             
-            result = self.db.execute(query, {"tag_id": tag_id}).fetchone()
+            if self.is_async:
+                result = await self.db.execute(query, {"tag_id": tag_id})
+                row = result.fetchone()
+            else:
+                result = self.db.execute(query, {"tag_id": tag_id})
+                row = result.fetchone()
             
-            if not result:
+            if not row:
                 return None
                 
             return {
-                "tag_id": result[1],  # name
-                "tag_address": result[2],
-                "data_type": result[3],
-                "description": result[4],
-                "unit": result[5],
-                "min_value": float(result[6]) if result[6] is not None else 0,
-                "max_value": float(result[7]) if result[7] is not None else 100,
-                "value": result[8],  # current_value
-                "timestamp": result[9].isoformat() if result[9] else datetime.now().isoformat(),
+                "tag_id": row[1],  # name
+                "tag_address": row[2],
+                "data_type": row[3],
+                "description": row[4],
+                "unit": row[5],
+                "min_value": float(row[6]) if row[6] is not None else 0,
+                "max_value": float(row[7]) if row[7] is not None else 100,
+                "value": row[8],  # current_value
+                "timestamp": row[9].isoformat() if row[9] else datetime.now().isoformat(),
                 "quality": "good"
             }
             
         except Exception as e:
+            logger.error(f"Error getting realtime value for {tag_id}: {e}")
+            # Rollback failed transaction
+            if self.is_async:
+                await self.db.rollback()
+            else:
+                self.db.rollback()
+            return None
             logger.error(f"Error getting realtime value for {tag_id}: {str(e)}")
             return None
     
