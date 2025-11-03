@@ -10,7 +10,6 @@ Provides services to query:
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 from sqlalchemy import text, select
 import asyncio
 import logging
@@ -21,10 +20,9 @@ logger = logging.getLogger(__name__)
 class DataService:
     """Service for accessing real-time and historical data"""
     
-    def __init__(self, db):
-        """Initialize with either sync or async session"""
+    def __init__(self, db: AsyncSession):
+        """Initialize with async session"""
         self.db = db
-        self.is_async = isinstance(db, AsyncSession)
         
     async def get_realtime_value(self, tag_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -54,12 +52,8 @@ class DataService:
                 LIMIT 1
             """)
             
-            if self.is_async:
-                result = await self.db.execute(query, {"tag_id": tag_id})
-                row = result.fetchone()
-            else:
-                result = self.db.execute(query, {"tag_id": tag_id})
-                row = result.fetchone()
+            result = await self.db.execute(query, {"tag_id": tag_id})
+            row = result.fetchone()
             
             if not row:
                 return None
@@ -79,13 +73,7 @@ class DataService:
             
         except Exception as e:
             logger.error(f"Error getting realtime value for {tag_id}: {e}")
-            # Rollback failed transaction
-            if self.is_async:
-                await self.db.rollback()
-            else:
-                self.db.rollback()
-            return None
-            logger.error(f"Error getting realtime value for {tag_id}: {str(e)}")
+            await self.db.rollback()
             return None
     
     async def get_multiple_realtime_values(self, tag_ids: List[str]) -> List[Dict[str, Any]]:
