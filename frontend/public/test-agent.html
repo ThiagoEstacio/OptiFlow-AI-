@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test AI Agent</title>
+</head>
+<body>
+    <h1>Test AI Dashboard Agent</h1>
+    <button onclick="testAgent()">Test Agent API</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAgent() {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = 'Loading...';
+            
+            try {
+                console.log('Sending request...');
+                const response = await fetch('/api/v1/agent/dashboard/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: "Crie um gauge de temperatura",
+                        available_tags: [{id: "temp_01", name: "Temp", description: "Temperature"}],
+                        current_widgets: []
+                    })
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                resultEl.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+                resultEl.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

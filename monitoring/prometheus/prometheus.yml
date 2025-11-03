@@ -1,26 +1,97 @@
+# SmartPort Prometheus Configuration
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    cluster: 'smartport-production'
+    environment: 'production'
 
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "/etc/prometheus/alerts/*.yml"
+
+# Scrape configurations
 scrape_configs:
+  # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
 
-  - job_name: 'optiflow-backend'
+  # Backend API
+  - job_name: 'backend'
+    metrics_path: '/metrics'
     static_configs:
       - targets: ['backend:8000']
-    metrics_path: '/metrics'
+        labels:
+          service: 'backend'
+          component: 'api'
+    scrape_interval: 10s
 
+  # PostgreSQL
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgres'
+          component: 'database'
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          component: 'cache'
+
+  # InfluxDB
   - job_name: 'influxdb'
     static_configs:
       - targets: ['influxdb:8086']
+        labels:
+          service: 'influxdb'
+          component: 'timeseries'
     metrics_path: '/metrics'
 
-  - job_name: 'redis'
+  # Gateway
+  - job_name: 'gateway'
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ['gateway:8080']
+        labels:
+          service: 'gateway'
+          component: 'data-collection'
+    scrape_interval: 10s
 
-  - job_name: 'postgres'
+  # Node Exporter (host metrics)
+  - job_name: 'node'
     static_configs:
-      - targets: ['postgres:5432']
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'host'
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+          component: 'containers'
+    scrape_interval: 10s
+
+  # Nginx
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels:
+          service: 'nginx'
+          component: 'reverse-proxy'

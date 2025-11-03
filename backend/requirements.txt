@@ -3,6 +3,13 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-socketio==5.10.0
+httpx==0.25.2
+
+# System monitoring
+psutil==5.9.6
+docker==6.1.3
+urllib3==1.26.18
+requests-unixsocket==0.3.0
 
 # Database - PostgreSQL
 sqlalchemy[asyncio]==2.0.23
@@ -29,7 +36,9 @@ email-validator==2.1.0
 # Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 cryptography==41.0.7
+slowapi==0.1.9
 
 # Industrial Protocols (for backend device management)
 asyncua==1.0.6
@@ -40,6 +49,10 @@ python-snap7==1.3
 # Data processing
 pandas==2.1.3
 numpy==1.25.2
+
+# GPU Acceleration (optional - fallback to CPU if not available)
+# CuPy for RTX 4060 (CUDA 12.x) - Install if GPU available
+cupy-cuda12x==12.3.0
 
 # Machine Learning
 scikit-learn==1.3.2
@@ -53,6 +66,9 @@ shap==0.43.0
 httpx==0.25.2
 aiohttp==3.9.1
 
+# AI / LLM
+openai==1.6.1
+
 # Utilities
 python-dateutil==2.8.2
 pytz==2023.3
@@ -64,6 +80,7 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 pytest-mock==3.12.0
 faker==20.1.0
+aiosqlite==0.19.0
 
 # Development
 black==23.12.0

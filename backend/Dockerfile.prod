@@ -1,0 +1,84 @@
+# Production-optimized Multi-stage Docker Build for SmartPort Backend
+# Optimizations: smaller image, security hardening, non-root user
+
+# ================================
+# Stage 1: Builder
+# ================================
+FROM python:3.11-slim as builder
+
+# Set working directory
+WORKDIR /build
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only requirements first (for layer caching)
+COPY requirements.txt .
+
+# Install Python dependencies to /install directory
+RUN pip install --no-cache-dir --prefix=/install --no-warn-script-location -r requirements.txt
+
+# ================================
+# Stage 2: Production Runtime
+# ================================
+FROM python:3.11-slim
+
+# Set labels for metadata
+LABEL maintainer="SmartPort Team"
+LABEL version="1.0.0"
+LABEL description="SmartPort Backend API - Production"
+
+# Set working directory
+WORKDIR /app
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd -r smartport && useradd -r -g smartport smartport
+
+# Copy Python dependencies from builder
+COPY --from=builder /install /usr/local
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data && \
+    chown -R smartport:smartport /app
+
+# Copy application code
+COPY --chown=smartport:smartport . .
+
+# Set Python path and optimize Python
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Switch to non-root user
+USER smartport
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Production command with 4 workers (adjust based on CPU cores)
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "4", \
+     "--no-access-log", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*"]

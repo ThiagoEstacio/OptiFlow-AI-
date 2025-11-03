@@ -1,38 +1,74 @@
-import React from 'react'
+/**
+ * Main App Component with Routing
+ */
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Provider } from 'react-redux';
+import { store } from './store';
+import { PrivateRoute } from './components/PrivateRoute';
+import { AppLayout } from './components/Layout/AppLayout';
+import { LoginPage } from './pages/LoginPage';
+import { Dashboard } from './pages/Dashboard';
+import { SitesPage } from './pages/SitesPage';
+import { DevicesPage } from './pages/DevicesPage';
+import { TagsPage } from './pages/TagsPage';
+import { AlarmsPage } from './pages/AlarmsPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { TagDetailsPage } from './pages/TagDetailsPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { DashboardBuilderPage } from './pages/DashboardBuilderPage';
+import { AIInsightsPage } from './pages/AIInsightsPage';
+import { ChatPage } from './pages/ChatPage';
+import SimulatorPage from './pages/SimulatorPage';
+import AdminPage from './pages/AdminPage';
+import { ExecutiveDashboard } from './components/ExecutiveDashboard';
+import { Toaster } from './components/Toast/Toaster';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-blue-600 mb-4">
-          OptiFlow AI Platform
-        </h1>
-        <p className="text-xl text-gray-700 mb-8">
-          Industrial IoT Platform with AI-powered optimization
-        </p>
-        <div className="bg-white p-8 rounded-lg shadow-md">
-          <h2 className="text-2xl font-semibold mb-4">Coming Soon</h2>
-          <p className="text-gray-600">
-            Frontend application is being built...
-          </p>
-          <div className="mt-6 space-y-2 text-left">
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold">✓</span> Backend API Ready
-            </p>
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold">✓</span> Database Models Created
-            </p>
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold">✓</span> Time Series Integration
-            </p>
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold">⧗</span> Frontend Components (In Progress)
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+    <Provider store={store}>
+      <ThemeProvider>
+        <Toaster />
+        <BrowserRouter>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<LoginPage />} />
+
+            {/* Private Routes */}
+            <Route
+              path="/"
+              element={
+                <PrivateRoute>
+                  <AppLayout />
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="sites" element={<SitesPage />} />
+              <Route path="devices" element={<DevicesPage />} />
+              <Route path="tags" element={<TagsPage />} />
+              <Route path="tags/:id" element={<TagDetailsPage />} />
+              <Route path="alarms" element={<AlarmsPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="dashboard-builder" element={<DashboardBuilderPage />} />
+              <Route path="ai-insights" element={<AIInsightsPage />} />
+              <Route path="chat" element={<ChatPage />} />
+              <Route path="simulator" element={<SimulatorPage />} />
+              <Route path="simulador" element={<SimulatorPage />} />
+              <Route path="admin" element={<AdminPage />} />
+              <Route path="executive" element={<ExecutiveDashboard />} />
+              <Route path="executivo" element={<ExecutiveDashboard />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
+
+            {/* Redirect unknown routes */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
+    </Provider>
+  );
 }
 
-export default App
+export default App;
