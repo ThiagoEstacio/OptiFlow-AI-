@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session_maker
 from app.models.external_data import GBMLogisticsData
-from app.services.influxdb_service import influxdb_service
+from app.services.influxdb import influxdb_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

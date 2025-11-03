@@ -303,6 +303,291 @@ class InfluxDBService:
             logger.error(f"Error getting statistics: {e}")
             return {}
 
+    # ==================== GBM LOGISTICS METHODS ====================
+
+    def write_gbm_operation(
+        self,
+        site_id: int,
+        operation_data: Dict[str, Any],
+        operation_date: datetime
+    ) -> bool:
+        """
+        Write a single GBM operation to InfluxDB.
+
+        Args:
+            site_id: Site ID
+            operation_data: Operation data dict
+            operation_date: Operation timestamp
+
+        Returns:
+            Success status
+        """
+        try:
+            point = Point("gbm_operations") \
+                .tag("site_id", str(site_id)) \
+                .tag("operation_type", operation_data.get("operation_type", "unknown")) \
+                .tag("product_type", operation_data.get("product_type", "unknown")) \
+                .tag("vehicle_type", operation_data.get("vehicle_type", "unknown")) \
+                .tag("status", operation_data.get("status", "completed")) \
+                .time(operation_date)
+
+            # Add all numeric fields
+            if operation_data.get("net_weight_kg"):
+                point.field("net_weight_kg", float(operation_data["net_weight_kg"]))
+            if operation_data.get("loading_time_minutes"):
+                point.field("loading_time_minutes", float(operation_data["loading_time_minutes"]))
+            if operation_data.get("waiting_time_minutes"):
+                point.field("waiting_time_minutes", float(operation_data["waiting_time_minutes"]))
+            if operation_data.get("total_value"):
+                point.field("total_value", float(operation_data["total_value"]))
+
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            return True
+
+        except Exception as e:
+            logger.error(f"Error writing GBM operation to InfluxDB: {e}")
+            return False
+
+    def write_gbm_operations_batch(
+        self,
+        site_id: int,
+        operations: List[Dict[str, Any]]
+    ) -> Dict[str, int]:
+        """
+        Write multiple GBM operations in batch.
+
+        Args:
+            site_id: Site ID
+            operations: List of operation dicts
+
+        Returns:
+            Stats dict with success/failure counts
+        """
+        success = 0
+        failed = 0
+        points = []
+
+        for op in operations:
+            try:
+                operation_date = op.get("operation_date")
+                if isinstance(operation_date, str):
+                    operation_date = datetime.fromisoformat(operation_date)
+
+                point = Point("gbm_operations") \
+                    .tag("site_id", str(site_id)) \
+                    .tag("operation_type", op.get("operation_type", "unknown")) \
+                    .tag("product_type", op.get("product_type", "unknown")) \
+                    .tag("vehicle_type", op.get("vehicle_type", "unknown")) \
+                    .tag("status", op.get("status", "completed")) \
+                    .time(operation_date)
+
+                # Add fields
+                if op.get("net_weight_kg"):
+                    point.field("net_weight_kg", float(op["net_weight_kg"]))
+                if op.get("loading_time_minutes"):
+                    point.field("loading_time_minutes", float(op["loading_time_minutes"]))
+                if op.get("waiting_time_minutes"):
+                    point.field("waiting_time_minutes", float(op["waiting_time_minutes"]))
+                if op.get("total_value"):
+                    point.field("total_value", float(op["total_value"]))
+
+                points.append(point)
+                success += 1
+
+            except Exception as e:
+                logger.error(f"Error creating GBM point: {e}")
+                failed += 1
+
+        # Batch write
+        if points:
+            try:
+                self.write_api.write(bucket=self.bucket, org=self.org, record=points)
+            except Exception as e:
+                logger.error(f"Error batch writing GBM to InfluxDB: {e}")
+                failed += len(points)
+                success = 0
+
+        return {"success": success, "failed": failed}
+
+    def query_monthly_aggregates(
+        self,
+        site_id: int,
+        start_date,
+        end_date
+    ) -> List[Dict[str, Any]]:
+        """
+        Query comprehensive monthly aggregates from InfluxDB for GBM operations.
+        """
+        try:
+            # Convert date to string for Flux query
+            start_str = f"{start_date}T00:00:00Z"
+            end_str = f"{end_date}T23:59:59Z"
+
+            # Query for counts, sums, and averages
+            query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: {start_str}, stop: {end_str})
+              |> filter(fn: (r) => r["_measurement"] == "gbm_operations")
+              |> filter(fn: (r) => r["site_id"] == "{site_id}")
+              |> aggregateWindow(every: 1mo, fn: mean, createEmpty: false)
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+            monthly_data = {}
+
+            for table in tables:
+                for record in table.records:
+                    month_key = record.get_time().strftime("%Y-%m")
+                    if month_key not in monthly_data:
+                        monthly_data[month_key] = {
+                            "month": record.get_time(),
+                            "operations": 0,
+                            "total_weight": 0,
+                            "total_revenue": 0,
+                            "avg_loading_time": 0,
+                            "avg_waiting_time": 0
+                        }
+
+                    field = record.get_field()
+                    value = record.get_value()
+                    if field == "net_weight_kg":
+                        monthly_data[month_key]["total_weight"] = float(value) if value else 0
+                    elif field == "loading_time_minutes":
+                        monthly_data[month_key]["avg_loading_time"] = float(value) if value else 0
+                    elif field == "waiting_time_minutes":
+                        monthly_data[month_key]["avg_waiting_time"] = float(value) if value else 0
+                    elif field == "total_value":
+                        monthly_data[month_key]["total_revenue"] = float(value) if value else 0
+
+            return sorted(monthly_data.values(), key=lambda x: x["month"])
+
+        except Exception as e:
+            logger.error(f"Error querying monthly aggregates: {e}")
+            return []
+
+    def query_daily_stats(
+        self,
+        site_id: int,
+        start_date,
+        end_date,
+        metric: str = "net_weight_kg"
+    ) -> List[Dict[str, Any]]:
+        """Query daily statistics for a specific GBM metric."""
+        try:
+            start_str = f"{start_date}T00:00:00Z"
+            end_str = f"{end_date}T23:59:59Z"
+
+            query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: {start_str}, stop: {end_str})
+              |> filter(fn: (r) => r["_measurement"] == "gbm_operations")
+              |> filter(fn: (r) => r["site_id"] == "{site_id}")
+              |> filter(fn: (r) => r["_field"] == "{metric}")
+              |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+            daily_data = []
+
+            for table in tables:
+                for record in table.records:
+                    daily_data.append({
+                        "date": record.get_time().date().isoformat(),
+                        "operations": 1,
+                        "value": float(record.get_value()) if record.get_value() else 0
+                    })
+
+            return sorted(daily_data, key=lambda x: x["date"])
+
+        except Exception as e:
+            logger.error(f"Error querying daily stats: {e}")
+            return []
+
+    def query_aggregated_metrics(
+        self,
+        site_id: int,
+        start_date,
+        end_date
+    ) -> Dict[str, Any]:
+        """Query aggregated metrics for a period (GBM operations)."""
+        try:
+            start_str = f"{start_date}T00:00:00Z"
+            end_str = f"{end_date}T23:59:59Z"
+
+            query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: {start_str}, stop: {end_str})
+              |> filter(fn: (r) => r["_measurement"] == "gbm_operations")
+              |> filter(fn: (r) => r["site_id"] == "{site_id}")
+              |> mean()
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+            metrics = {}
+
+            for table in tables:
+                for record in table.records:
+                    field = record.get_field()
+                    value = float(record.get_value()) if record.get_value() else 0
+                    metrics[field] = value
+
+            return {
+                "operations": int(metrics.get("net_weight_kg", 0)),
+                "tonnage": metrics.get("net_weight_kg", 0) / 1000,
+                "revenue": metrics.get("total_value", 0),
+                "avg_loading_time": metrics.get("loading_time_minutes", 0),
+                "avg_waiting_time": metrics.get("waiting_time_minutes", 0)
+            }
+
+        except Exception as e:
+            logger.error(f"Error querying aggregated metrics: {e}")
+            return {
+                "operations": 0,
+                "tonnage": 0,
+                "revenue": 0,
+                "avg_loading_time": 0,
+                "avg_waiting_time": 0
+            }
+
+    def query_seasonal_data(
+        self,
+        site_id: int,
+        start_date,
+        end_date
+    ) -> List[Dict[str, Any]]:
+        """Query data grouped by year and month for seasonal analysis."""
+        try:
+            start_str = f"{start_date}T00:00:00Z"
+            end_str = f"{end_date}T23:59:59Z"
+
+            query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: {start_str}, stop: {end_str})
+              |> filter(fn: (r) => r["_measurement"] == "gbm_operations")
+              |> filter(fn: (r) => r["site_id"] == "{site_id}")
+              |> filter(fn: (r) => r["_field"] == "net_weight_kg")
+              |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+            seasonal_data = []
+
+            for table in tables:
+                for record in table.records:
+                    time = record.get_time()
+                    seasonal_data.append({
+                        "year": time.year,
+                        "month": time.month,
+                        "operations": 1,
+                        "total_weight": float(record.get_value()) if record.get_value() else 0
+                    })
+
+            return sorted(seasonal_data, key=lambda x: (x["year"], x["month"]))
+
+        except Exception as e:
+            logger.error(f"Error querying seasonal data: {e}")
+            return []
+
     def close(self):
         """Close InfluxDB client"""
         self.client.close()

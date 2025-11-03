@@ -22,7 +22,7 @@ import io
 from app.models.external_data import DataSource, DataImport, GBMLogisticsData
 from app.models.operational_data import TruckEntry, ShipLoading
 from app.core.logging import get_logger
-from app.services.influxdb_service import influxdb_service
+from app.services.influxdb import influxdb_service
 
 logger = get_logger(__name__)
 
