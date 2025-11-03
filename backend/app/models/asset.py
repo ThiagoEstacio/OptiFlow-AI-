@@ -88,6 +88,14 @@ class Asset(Base):
         order_by="AssetAttribute.name"
     )
 
+    # Health alerts for this asset
+    health_alerts = relationship(
+        "AssetHealthAlert",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+        order_by="AssetHealthAlert.triggered_at.desc()"
+    )
+
     # Template relationship
     template = relationship("AssetTemplate", back_populates="instances")
 

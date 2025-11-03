@@ -22,6 +22,7 @@ from app.models.asset import Asset
 from app.services.data_service import DataService
 from app.services.agent_tools import AgentToolkit
 from app.services.asset_health import AssetHealthCalculator
+from app.services.asset_health_alert_manager import AssetHealthAlertManager
 from app.services.influxdb import influxdb_service
 
 logger = logging.getLogger(__name__)
@@ -459,8 +460,9 @@ class AutonomousAgent:
                 if not assets:
                     return insights
 
-                # Initialize health calculator
+                # Initialize health calculator and alert manager
                 health_calculator = AssetHealthCalculator(db)
+                alert_manager = AssetHealthAlertManager(db)
 
                 # Check health for assets with attributes
                 for asset in assets:
@@ -559,6 +561,12 @@ class AutonomousAgent:
                                 f"Score: {health_score:.1f} ({status}), "
                                 f"Issues: {len(issues)}, Warnings: {len(warnings)}"
                             )
+
+                            # Create automated alert
+                            try:
+                                await alert_manager.check_and_create_alerts(str(asset.id))
+                            except Exception as alert_error:
+                                logger.error(f"Error creating alert for asset {asset.id}: {alert_error}")
 
                     except Exception as e:
                         logger.error(f"Error checking health for asset {asset.id}: {e}")
