@@ -18,8 +18,10 @@ from sqlalchemy import select
 import json
 
 from app.models.tag import Tag
+from app.models.asset import Asset
 from app.services.data_service import DataService
 from app.services.agent_tools import AgentToolkit
+from app.services.asset_health import AssetHealthCalculator
 from app.services.influxdb import influxdb_service
 
 logger = logging.getLogger(__name__)
@@ -111,6 +113,7 @@ class AutonomousAgent:
                         ("detect_anomalies", self.detect_anomalies),
                         ("analyze_performance", self.analyze_performance),
                         ("check_alarm_conditions", self.check_alarm_conditions),
+                        ("monitor_asset_health", self.monitor_asset_health),
                         ("identify_optimization_opportunities", self.identify_optimization_opportunities),
                         ("predict_future_states", self.predict_future_states),
                     ]
@@ -437,7 +440,135 @@ class AutonomousAgent:
                 logger.error(f"Error predicting for tag {tag.id}: {e}")
         
         return insights
-    
+
+    async def monitor_asset_health(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+        """Monitor asset health scores and generate insights for problematic assets"""
+        insights = []
+
+        try:
+            # Get database session from toolkit
+            from app.db.session import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                # Get all active assets with attributes
+                result = await db.execute(
+                    select(Asset).where(Asset.is_active == True)
+                )
+                assets = result.scalars().all()
+
+                if not assets:
+                    return insights
+
+                # Initialize health calculator
+                health_calculator = AssetHealthCalculator(db)
+
+                # Check health for assets with attributes
+                for asset in assets:
+                    try:
+                        # Get attributes count from the asset
+                        from app.models.asset_attribute import AssetAttribute
+                        attr_result = await db.execute(
+                            select(AssetAttribute).where(AssetAttribute.asset_id == asset.id)
+                        )
+                        attributes = attr_result.scalars().all()
+
+                        if not attributes:
+                            continue  # Skip assets without attributes
+
+                        # Calculate health score
+                        health_data = await health_calculator.calculate_asset_health(str(asset.id))
+
+                        health_score = health_data.get("health_score", 100)
+                        status = health_data.get("status", "unknown")
+                        issues = health_data.get("issues", [])
+                        warnings = health_data.get("warnings", [])
+
+                        # Generate insights based on health status
+                        severity_mapping = {
+                            "critical": "critical",
+                            "poor": "high",
+                            "fair": "medium",
+                            "good": "low",
+                            "excellent": "info"
+                        }
+
+                        # Only create insights for problematic assets (critical, poor, fair)
+                        if status in ["critical", "poor", "fair"]:
+                            # Build description
+                            problems = []
+                            if issues:
+                                problems.append(f"{len(issues)} problemas críticos")
+                            if warnings:
+                                problems.append(f"{len(warnings)} avisos")
+
+                            problems_str = " e ".join(problems) if problems else "Parâmetros fora dos limites recomendados"
+
+                            # Build recommendations
+                            recommendations = []
+                            if issues:
+                                recommendations.append("🔴 Ação imediata necessária para problemas críticos")
+                                for issue in issues[:3]:  # Top 3 issues
+                                    attr_name = issue.get("attribute", {}).get("name", "Unknown")
+                                    recommendations.append(f"  • Verificar: {attr_name}")
+
+                            if warnings:
+                                recommendations.append("⚠️ Monitorar avisos atentamente")
+                                for warning in warnings[:2]:  # Top 2 warnings
+                                    attr_name = warning.get("attribute", {}).get("name", "Unknown")
+                                    recommendations.append(f"  • Atenção em: {attr_name}")
+
+                            if not recommendations:
+                                recommendations = [
+                                    "Revisar configuração de thresholds dos atributos",
+                                    "Verificar condições operacionais do asset",
+                                    "Considerar manutenção preventiva"
+                                ]
+
+                            # Create insight
+                            insight = AutonomousInsight(
+                                insight_id=f"asset_health_{asset.id}_{datetime.now().timestamp()}",
+                                title=f"⚠️ Asset com saúde {status.upper()}: {asset.name}",
+                                description=f"Score de saúde: {health_score:.1f}/100. {problems_str}. Tipo: {asset.asset_type.value}.",
+                                category="alert",
+                                severity=severity_mapping.get(status, "medium"),
+                                tags=[],  # No specific tags, this is asset-level
+                                metrics={
+                                    "asset_id": str(asset.id),
+                                    "asset_name": asset.name,
+                                    "asset_type": asset.asset_type.value,
+                                    "health_score": health_score,
+                                    "status": status,
+                                    "issues_count": len(issues),
+                                    "warnings_count": len(warnings),
+                                    "attributes_count": len(attributes)
+                                },
+                                recommendations=recommendations,
+                                timestamp=datetime.now(),
+                                data={
+                                    "asset_id": str(asset.id),
+                                    "full_path": asset.full_path,
+                                    "issues": issues[:5],  # First 5 issues
+                                    "warnings": warnings[:5],  # First 5 warnings
+                                    "health_details": health_data
+                                }
+                            )
+                            insights.append(insight)
+
+                            logger.info(
+                                f"🏥 Asset Health Alert: {asset.name} - "
+                                f"Score: {health_score:.1f} ({status}), "
+                                f"Issues: {len(issues)}, Warnings: {len(warnings)}"
+                            )
+
+                    except Exception as e:
+                        logger.error(f"Error checking health for asset {asset.id}: {e}")
+                        continue
+
+        except Exception as e:
+            logger.error(f"Error in monitor_asset_health: {e}")
+
+        return insights
+
     def _calculate_anomaly_severity(self, anomaly_count: int) -> str:
         """Calculate severity based on anomaly count"""
         if anomaly_count >= 10:
