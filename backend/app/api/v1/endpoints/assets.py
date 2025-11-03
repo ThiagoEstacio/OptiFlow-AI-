@@ -18,6 +18,7 @@ from app.schemas.asset import (
     AssetTemplateCreate, AssetTemplateUpdate, AssetTemplateResponse,
     AssetInstantiateRequest
 )
+from app.services.asset_calculator import AssetAttributeCalculator, FormulaEvaluationError
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -636,3 +637,165 @@ async def instantiate_asset_from_template(
     await db.refresh(asset)
 
     return asset
+
+
+
+# ============================================================================
+# Calculated Attributes Endpoints
+# ============================================================================
+
+@router.post("/attributes/{attribute_id}/calculate")
+async def calculate_attribute_value(
+    attribute_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate the current value of a calculated attribute
+
+    Returns the evaluated result based on the formula
+    """
+    # Get attribute
+    stmt = select(AssetAttribute).where(AssetAttribute.id == attribute_id)
+    result = await db.execute(stmt)
+    attribute = result.scalar_one_or_none()
+
+    if not attribute:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attribute not found"
+        )
+
+    if attribute.attribute_type != "calculated":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attribute is not a calculated type"
+        )
+
+    if not attribute.formula:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attribute has no formula"
+        )
+
+    # Evaluate formula
+    calculator = AssetAttributeCalculator(db)
+
+    try:
+        value = await calculator.evaluate_attribute(
+            asset_id=str(attribute.asset_id),
+            attribute_name=attribute.name
+        )
+
+        return {
+            "attribute_id": str(attribute.id),
+            "attribute_name": attribute.name,
+            "formula": attribute.formula,
+            "calculated_value": value,
+            "unit": attribute.unit,
+            "success": True
+        }
+
+    except FormulaEvaluationError as e:
+        return {
+            "attribute_id": str(attribute.id),
+            "attribute_name": attribute.name,
+            "formula": attribute.formula,
+            "calculated_value": None,
+            "error": str(e),
+            "success": False
+        }
+
+
+@router.get("/{asset_id}/calculate-all")
+async def calculate_all_attributes(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Calculate all calculated attributes for an asset
+
+    Returns a dictionary of attribute names to their calculated values
+    """
+    # Verify asset exists
+    asset_stmt = select(Asset).where(Asset.id == asset_id)
+    asset_result = await db.execute(asset_stmt)
+    asset = asset_result.scalar_one_or_none()
+
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+
+    # Calculate all
+    calculator = AssetAttributeCalculator(db)
+
+    try:
+        results = await calculator.evaluate_all_calculated_attributes(str(asset_id))
+
+        # Get attribute details for response
+        attributes = []
+        for attr_name, value in results.items():
+            stmt = select(AssetAttribute).where(
+                AssetAttribute.asset_id == asset_id,
+                AssetAttribute.name == attr_name
+            )
+            result = await db.execute(stmt)
+            attr = result.scalar_one_or_none()
+
+            if attr:
+                attributes.append({
+                    "id": str(attr.id),
+                    "name": attr.name,
+                    "formula": attr.formula,
+                    "calculated_value": value,
+                    "unit": attr.unit,
+                    "success": value is not None
+                })
+
+        return {
+            "asset_id": str(asset_id),
+            "asset_name": asset.name,
+            "calculated_attributes": attributes,
+            "total_count": len(attributes),
+            "success_count": sum(1 for a in attributes if a["success"])
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error calculating attributes: {str(e)}"
+        )
+
+
+@router.post("/evaluate-formula")
+async def evaluate_formula_test(
+    formula: str,
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Test endpoint to evaluate a formula
+
+    Useful for testing formulas before creating attributes
+    """
+    calculator = AssetAttributeCalculator(db)
+
+    try:
+        value = await calculator.evaluate_formula(formula, str(asset_id))
+
+        return {
+            "formula": formula,
+            "asset_id": str(asset_id),
+            "result": value,
+            "success": True
+        }
+
+    except FormulaEvaluationError as e:
+        return {
+            "formula": formula,
+            "asset_id": str(asset_id),
+            "result": None,
+            "error": str(e),
+            "success": False
+        }
