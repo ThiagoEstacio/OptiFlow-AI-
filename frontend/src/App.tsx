@@ -23,6 +23,7 @@ import SimulatorPage from './pages/SimulatorPage';
 import AdminPage from './pages/AdminPage';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { AssetHealthDashboard } from './pages/AssetHealthDashboard';
+import { HealthTrendsPage } from './pages/HealthTrendsPage';
 import { Toaster } from './components/Toast/Toaster';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AssetProvider } from './contexts/AssetContext';
@@ -56,6 +57,7 @@ function App() {
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="dashboard-builder" element={<DashboardBuilderPage />} />
               <Route path="asset-health" element={<AssetHealthDashboard />} />
+              <Route path="health-trends" element={<HealthTrendsPage />} />
               <Route path="ai-insights" element={<AIInsightsPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="simulator" element={<SimulatorPage />} />

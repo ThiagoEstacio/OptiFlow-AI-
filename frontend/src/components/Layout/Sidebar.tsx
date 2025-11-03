@@ -14,6 +14,7 @@ export const Sidebar: React.FC = () => {
     { path: '/', label: 'Dashboard', icon: '📊' },
     { path: '/dashboard-builder', label: 'Builder', icon: '🎨' },
     { path: '/asset-health', label: 'Saúde de Assets', icon: '💚' },
+    { path: '/health-trends', label: 'Tendências', icon: '📈' },
     { path: '/ai-insights', label: 'Insights de IA', icon: '🤖' },
     { path: '/chat', label: 'Assistente IA', icon: '💬' },
     { path: '/simulator', label: 'Simulador', icon: '⚙️' },
