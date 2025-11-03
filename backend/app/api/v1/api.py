@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     monitoring,
     operations,
     ai_engineering,
+    advanced_features,
 )
 
 api_router = APIRouter()
@@ -43,3 +44,4 @@ api_router.include_router(assets.router, prefix="/assets", tags=["Asset Framewor
 api_router.include_router(monitoring.router, prefix="/monitoring", tags=["System Monitoring"])
 api_router.include_router(operations.router, prefix="/operations", tags=["Port Operations"])
 api_router.include_router(ai_engineering.router, prefix="/ai-engineering", tags=["AI Engineering Tools"])
+api_router.include_router(advanced_features.router, prefix="/advanced", tags=["Advanced Features"])
