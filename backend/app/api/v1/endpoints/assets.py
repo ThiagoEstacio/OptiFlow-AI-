@@ -915,3 +915,175 @@ async def get_all_assets_health_overview(
         "status_distribution": status_counts,
         "assets": health_reports,
     }
+
+
+# ======================
+# Health Trends & Analytics Endpoints
+# ======================
+
+@router.get("/{asset_id}/health/trend")
+async def get_asset_health_trend(
+    asset_id: UUID,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get health trend data for an asset
+
+    Returns time-series health score data for trend visualization
+    """
+    from app.services.asset_health_analytics import AssetHealthAnalytics
+    from datetime import datetime
+
+    analytics = AssetHealthAnalytics(db)
+
+    # Parse datetime strings
+    start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')) if start_time else None
+    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00')) if end_time else None
+
+    trend_data = await analytics.get_health_trend(
+        asset_id=str(asset_id),
+        start_time=start_dt,
+        end_time=end_dt,
+        limit=limit
+    )
+
+    return {
+        "asset_id": str(asset_id),
+        "data_points": len(trend_data),
+        "trend": trend_data
+    }
+
+
+@router.get("/{asset_id}/health/statistics")
+async def get_health_statistics(
+    asset_id: UUID,
+    days: int = 7,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get statistical summary of health trend
+
+    Returns mean, min, max, stddev, overall trend, etc.
+    """
+    from app.services.asset_health_analytics import AssetHealthAnalytics
+
+    analytics = AssetHealthAnalytics(db)
+    stats = await analytics.get_trend_statistics(
+        asset_id=str(asset_id),
+        days=days
+    )
+
+    return {
+        "asset_id": str(asset_id),
+        "statistics": stats
+    }
+
+
+@router.get("/{asset_id}/health/compare")
+async def compare_health_periods(
+    asset_id: UUID,
+    period1_days: int = 7,
+    period2_days: int = 7,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Compare two time periods for health metrics
+
+    Useful for assessing if asset health is improving or degrading
+    """
+    from app.services.asset_health_analytics import AssetHealthAnalytics
+
+    analytics = AssetHealthAnalytics(db)
+    comparison = await analytics.compare_periods(
+        asset_id=str(asset_id),
+        period1_days=period1_days,
+        period2_days=period2_days
+    )
+
+    return {
+        "asset_id": str(asset_id),
+        "comparison": comparison
+    }
+
+
+@router.get("/{asset_id}/health/anomalies")
+async def detect_health_anomalies(
+    asset_id: UUID,
+    days: int = 30,
+    sensitivity: float = 2.0,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Detect anomalies in health score history
+
+    Uses statistical methods to identify unusual health patterns
+    """
+    from app.services.asset_health_analytics import AssetHealthAnalytics
+
+    analytics = AssetHealthAnalytics(db)
+    anomalies = await analytics.detect_anomalies(
+        asset_id=str(asset_id),
+        days=days,
+        sensitivity=sensitivity
+    )
+
+    return {
+        "asset_id": str(asset_id),
+        "anomalies_detected": len(anomalies),
+        "anomalies": anomalies
+    }
+
+
+@router.get("/{asset_id}/health/predict")
+async def predict_maintenance(
+    asset_id: UUID,
+    days_history: int = 30,
+    forecast_days: int = 7,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Predict if asset will need maintenance
+
+    Uses historical health trends to forecast future health
+    """
+    from app.services.asset_health_analytics import AssetHealthAnalytics
+
+    analytics = AssetHealthAnalytics(db)
+    prediction = await analytics.predict_maintenance_need(
+        asset_id=str(asset_id),
+        days_history=days_history,
+        forecast_days=forecast_days
+    )
+
+    return {
+        "asset_id": str(asset_id),
+        "prediction": prediction
+    }
+
+
+@router.get("/{asset_id}/health/attribute-trends")
+async def get_attribute_trends(
+    asset_id: UUID,
+    days: int = 7,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get trend data for individual attributes
+
+    Returns attribute-level trend analysis
+    """
+    from app.services.asset_health_analytics import AssetHealthAnalytics
+
+    analytics = AssetHealthAnalytics(db)
+    trends = await analytics.get_attribute_trends(
+        asset_id=str(asset_id),
+        days=days
+    )
+
+    return {
+        "asset_id": str(asset_id),
+        "attribute_trends": trends
+    }

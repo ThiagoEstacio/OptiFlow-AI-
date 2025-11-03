@@ -23,6 +23,7 @@ from app.services.data_service import DataService
 from app.services.agent_tools import AgentToolkit
 from app.services.asset_health import AssetHealthCalculator
 from app.services.asset_health_alert_manager import AssetHealthAlertManager
+from app.services.asset_health_analytics import AssetHealthAnalytics
 from app.services.influxdb import influxdb_service
 
 logger = logging.getLogger(__name__)
@@ -460,9 +461,10 @@ class AutonomousAgent:
                 if not assets:
                     return insights
 
-                # Initialize health calculator and alert manager
+                # Initialize health calculator, alert manager, and analytics
                 health_calculator = AssetHealthCalculator(db)
                 alert_manager = AssetHealthAlertManager(db)
+                analytics = AssetHealthAnalytics(db)
 
                 # Check health for assets with attributes
                 for asset in assets:
@@ -567,6 +569,12 @@ class AutonomousAgent:
                                 await alert_manager.check_and_create_alerts(str(asset.id))
                             except Exception as alert_error:
                                 logger.error(f"Error creating alert for asset {asset.id}: {alert_error}")
+
+                        # Record health snapshot for trend analysis (for all assets, not just problematic ones)
+                        try:
+                            await analytics.record_health_snapshot(str(asset.id))
+                        except Exception as snapshot_error:
+                            logger.error(f"Error recording health snapshot for asset {asset.id}: {snapshot_error}")
 
                     except Exception as e:
                         logger.error(f"Error checking health for asset {asset.id}: {e}")
