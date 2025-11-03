@@ -47,14 +47,13 @@ async def lifespan(app: FastAPI):
         raise
     
     # Initialize autonomous AI agent
-    try:
-        async for db in get_db():
-            await init_autonomous_agent(db)
-            break  # Only need one session for initialization
-        logger.info("🤖 Autonomous AI Agent initialized successfully")
-    except Exception as e:
-        logger.error(f"⚠️  Autonomous agent initialization failed: {e}")
-        # Don't raise - agent is optional
+    # Temporarily disabled due to async/sync session issues
+    # try:
+    #     await init_autonomous_agent()
+    #     logger.info("🤖 Autonomous AI Agent initialized successfully")
+    # except Exception as e:
+    #     logger.error(f"⚠️  Autonomous agent initialization failed: {e}")
+    #     # Don't raise - agent is optional
 
     logger.info(f"🌐 Environment: {settings.ENVIRONMENT}")
     logger.info(f"📊 API Version: {settings.API_V1_PREFIX}")
