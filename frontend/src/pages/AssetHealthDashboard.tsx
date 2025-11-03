@@ -99,7 +99,11 @@ const STATUS_CONFIG = {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-export const AssetHealthDashboard: React.FC = () => {
+interface AssetHealthDashboardProps {
+  onAssetSelect?: (assetId: string) => void;
+}
+
+export const AssetHealthDashboard: React.FC<AssetHealthDashboardProps> = ({ onAssetSelect }) => {
   const { assets, fetchAssets, selectAsset } = useAssets();
 
   // State
@@ -261,7 +265,9 @@ export const AssetHealthDashboard: React.FC = () => {
   // Handle asset selection
   const handleSelectAsset = (assetId: string) => {
     selectAsset(assetId);
-    // Could also navigate to asset details page
+    if (onAssetSelect) {
+      onAssetSelect(assetId);
+    }
   };
 
   // Export to CSV

@@ -24,6 +24,8 @@ import AdminPage from './pages/AdminPage';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { AssetHealthDashboard } from './pages/AssetHealthDashboard';
 import { HealthTrendsPage } from './pages/HealthTrendsPage';
+import { AnalyticsHub } from './pages/AnalyticsHub';
+import { AssetHealthHub } from './pages/AssetHealthHub';
 import { Toaster } from './components/Toast/Toaster';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AssetProvider } from './contexts/AssetContext';
@@ -54,11 +56,20 @@ function App() {
               <Route path="tags" element={<TagsPage />} />
               <Route path="tags/:id" element={<TagDetailsPage />} />
               <Route path="alarms" element={<AlarmsPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
+
+              {/* Consolidated Analytics Hub */}
+              <Route path="analytics-hub" element={<AnalyticsHub />} />
+              {/* Legacy redirects */}
+              <Route path="analytics" element={<Navigate to="/analytics-hub" replace />} />
+              <Route path="ai-insights" element={<Navigate to="/analytics-hub" replace />} />
+
+              {/* Consolidated Asset Health Hub */}
+              <Route path="asset-health-hub" element={<AssetHealthHub />} />
+              {/* Legacy redirects */}
+              <Route path="asset-health" element={<Navigate to="/asset-health-hub" replace />} />
+              <Route path="health-trends" element={<Navigate to="/asset-health-hub" replace />} />
+
               <Route path="dashboard-builder" element={<DashboardBuilderPage />} />
-              <Route path="asset-health" element={<AssetHealthDashboard />} />
-              <Route path="health-trends" element={<HealthTrendsPage />} />
-              <Route path="ai-insights" element={<AIInsightsPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="simulator" element={<SimulatorPage />} />
               <Route path="simulador" element={<SimulatorPage />} />
