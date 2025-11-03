@@ -7,6 +7,8 @@ Generate actionable insights from imported GBM Logística data:
 - Cost optimization opportunities
 - Predictive trends
 - Quality monitoring
+
+NOTE: Uses InfluxDB for fast KPI aggregations, PostgreSQL for detailed analysis
 """
 
 from typing import Dict, Any, List, Optional
@@ -18,6 +20,7 @@ import numpy as np
 
 from app.models.external_data import GBMLogisticsData
 from app.models.operational_data import DailyOperations
+from app.services.influxdb_service import influxdb_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,8 +46,32 @@ class GBMInsightsService:
         Get comprehensive operational overview from GBM data.
 
         Returns KPIs, trends, and insights.
+        Uses InfluxDB for fast KPI aggregations, PostgreSQL for detailed analysis.
         """
-        # Query GBM data
+        # Fast KPI query from InfluxDB (10-100x faster than PostgreSQL)
+        influx_metrics = influxdb_service.query_aggregated_metrics(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if influx_metrics["operations"] == 0:
+            return {
+                "status": "no_data",
+                "message": "No GBM data found for the period"
+            }
+
+        # Calculate fast KPIs from InfluxDB
+        kpis = {
+            "total_operations": influx_metrics["operations"],
+            "total_tonnage": influx_metrics["tonnage"],
+            "avg_tonnage_per_operation": influx_metrics["tonnage"] / influx_metrics["operations"] if influx_metrics["operations"] > 0 else 0,
+            "avg_loading_time_minutes": influx_metrics["avg_loading_time"],
+            "avg_waiting_time_minutes": influx_metrics["avg_waiting_time"],
+            "avg_total_time_minutes": influx_metrics["avg_loading_time"] + influx_metrics["avg_waiting_time"] if influx_metrics["avg_loading_time"] and influx_metrics["avg_waiting_time"] else None,
+        }
+
+        # Query PostgreSQL only for detailed analysis (needs complex filtering and joins)
         result = await self.db.execute(
             select(GBMLogisticsData).where(
                 and_(
@@ -56,36 +83,31 @@ class GBMInsightsService:
             )
         )
         records = result.scalars().all()
+        df = pd.DataFrame([r.to_dict() for r in records]) if records else pd.DataFrame()
 
-        if not records:
-            return {
-                "status": "no_data",
-                "message": "No validated GBM data found for the period"
-            }
-
-        # Convert to DataFrame for analysis
-        df = pd.DataFrame([r.to_dict() for r in records])
-
-        # Calculate KPIs
-        kpis = self._calculate_kpis(df)
+        # Add status and quality metrics to KPIs from PostgreSQL (these need detailed records)
+        if not df.empty:
+            kpis["operations_completed"] = len(df[df["status"] == "completed"])
+            kpis["operations_pending"] = len(df[df["status"] == "pending"])
+            kpis["quality_approved_rate"] = float((df["quality_approved"] == True).sum() / len(df) * 100) if "quality_approved" in df.columns else None
 
         # Performance by operation type
-        performance_by_type = self._analyze_by_operation_type(df)
+        performance_by_type = self._analyze_by_operation_type(df) if not df.empty else []
 
         # Product analysis
-        product_analysis = self._analyze_by_product(df)
+        product_analysis = self._analyze_by_product(df) if not df.empty else []
 
-        # Time-based trends
-        daily_trends = self._analyze_daily_trends(df)
+        # Time-based trends from InfluxDB (FAST!)
+        daily_trends = self._get_daily_trends_from_influx(site_id, start_date, end_date)
 
         # Quality metrics
-        quality_metrics = self._analyze_quality_metrics(df)
+        quality_metrics = self._analyze_quality_metrics(df) if not df.empty else {"status": "no_quality_data"}
 
         # Financial summary
-        financial_summary = self._analyze_financial_metrics(df)
+        financial_summary = self._analyze_financial_metrics(df) if not df.empty else {"status": "no_financial_data"}
 
-        # Identify insights
-        insights = await self._generate_insights(df, site_id)
+        # Identify insights (needs full records for complex analysis)
+        insights = await self._generate_insights(df, site_id) if not df.empty else []
 
         return {
             "status": "success",
@@ -101,7 +123,7 @@ class GBMInsightsService:
             "quality_metrics": quality_metrics,
             "financial_summary": financial_summary,
             "insights": insights,
-            "records_analyzed": len(records)
+            "records_analyzed": len(records) if records else 0
         }
 
     def _calculate_kpis(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -160,7 +182,7 @@ class GBMInsightsService:
         return sorted(analysis, key=lambda x: x["total_tonnage"], reverse=True)
 
     def _analyze_daily_trends(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Analyze daily operational trends."""
+        """Analyze daily operational trends (DEPRECATED - use _get_daily_trends_from_influx for performance)."""
         df["operation_date"] = pd.to_datetime(df["operation_date"])
         df["date"] = df["operation_date"].dt.date
 
@@ -184,6 +206,68 @@ class GBMInsightsService:
             })
 
         return trends
+
+    def _get_daily_trends_from_influx(
+        self,
+        site_id: int,
+        start_date: date,
+        end_date: date
+    ) -> List[Dict[str, Any]]:
+        """Get daily trends from InfluxDB (FAST!)."""
+        # Query daily data for tonnage
+        tonnage_data = influxdb_service.query_daily_stats(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date,
+            metric="net_weight_kg"
+        )
+
+        # Query daily data for loading times
+        loading_time_data = influxdb_service.query_daily_stats(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date,
+            metric="loading_time_minutes"
+        )
+
+        # Query daily data for waiting times
+        waiting_time_data = influxdb_service.query_daily_stats(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date,
+            metric="waiting_time_minutes"
+        )
+
+        # Merge data by date
+        trends_dict = {}
+
+        # Add tonnage data
+        for row in tonnage_data:
+            date_key = row["date"]
+            trends_dict[date_key] = {
+                "date": date_key,
+                "operations": row["operations"],
+                "total_tonnage": float(row["value"] / 1000),  # Convert kg to tons
+                "avg_tonnage": float(row["value"] / 1000 / row["operations"]) if row["operations"] > 0 else 0,
+                "avg_loading_time": None,
+                "avg_waiting_time": None,
+                "total_value": None
+            }
+
+        # Add loading time data
+        for row in loading_time_data:
+            date_key = row["date"]
+            if date_key in trends_dict:
+                trends_dict[date_key]["avg_loading_time"] = float(row["value"])
+
+        # Add waiting time data
+        for row in waiting_time_data:
+            date_key = row["date"]
+            if date_key in trends_dict:
+                trends_dict[date_key]["avg_waiting_time"] = float(row["value"])
+
+        # Convert to sorted list
+        return sorted(trends_dict.values(), key=lambda x: x["date"])
 
     def _analyze_quality_metrics(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Analyze quality metrics."""

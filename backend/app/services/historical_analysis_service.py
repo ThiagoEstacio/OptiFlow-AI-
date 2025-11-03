@@ -7,6 +7,8 @@ Provides historical trend analysis and month-over-month comparisons:
 - Year-over-year comparisons
 - Trend detection
 - Seasonal analysis
+
+NOTE: Uses InfluxDB for fast time-series queries with automatic compression
 """
 
 from typing import Dict, Any, List, Optional
@@ -19,6 +21,7 @@ import numpy as np
 
 from app.models.external_data import GBMLogisticsData
 from app.models.operational_data import DailyOperations, TruckEntry, ShipLoading
+from app.services.influxdb_service import influxdb_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -54,56 +57,40 @@ class HistoricalAnalysisService:
         end_date = datetime.utcnow().date()
         start_date = end_date - relativedelta(months=months)
 
-        # Get GBM data grouped by month
-        result = await self.db.execute(
-            select(
-                func.date_trunc('month', GBMLogisticsData.operation_date).label('month'),
-                func.count(GBMLogisticsData.id).label('operations'),
-                func.sum(GBMLogisticsData.net_weight_kg).label('total_weight'),
-                func.avg(GBMLogisticsData.loading_time_minutes).label('avg_loading_time'),
-                func.avg(GBMLogisticsData.waiting_time_minutes).label('avg_waiting_time'),
-                func.sum(GBMLogisticsData.total_value).label('total_revenue')
-            ).where(
-                and_(
-                    GBMLogisticsData.site_id == site_id,
-                    GBMLogisticsData.operation_date >= start_date,
-                    GBMLogisticsData.operation_date <= end_date
-                )
-            ).group_by(
-                func.date_trunc('month', GBMLogisticsData.operation_date)
-            ).order_by(
-                func.date_trunc('month', GBMLogisticsData.operation_date)
-            )
+        # Query InfluxDB for monthly aggregates (FAST!)
+        influx_results = influxdb_service.query_monthly_aggregates(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date
         )
 
         monthly_data = []
-        rows = result.all()
 
-        for i, row in enumerate(rows):
+        for i, row in enumerate(influx_results):
             month_data = {
-                "month": row.month.strftime("%Y-%m") if row.month else None,
-                "month_name": row.month.strftime("%B %Y") if row.month else None,
-                "operations": int(row.operations) if row.operations else 0,
-                "total_tonnage": float(row.total_weight / 1000) if row.total_weight else 0,
-                "avg_loading_time": float(row.avg_loading_time) if row.avg_loading_time else 0,
-                "avg_waiting_time": float(row.avg_waiting_time) if row.avg_waiting_time else 0,
-                "total_revenue": float(row.total_revenue) if row.total_revenue else 0,
+                "month": row["month"].strftime("%Y-%m"),
+                "month_name": row["month"].strftime("%B %Y"),
+                "operations": int(row["operations"]),
+                "total_tonnage": float(row["total_weight"] / 1000),  # Convert kg to tons
+                "avg_loading_time": float(row["avg_loading_time"]),
+                "avg_waiting_time": float(row["avg_waiting_time"]),
+                "total_revenue": float(row["total_revenue"]),
             }
 
             # Calculate MoM change if not first month
             if i > 0:
-                prev_row = rows[i - 1]
+                prev_row = influx_results[i - 1]
                 month_data["mom_operations"] = self._calculate_change_percent(
-                    row.operations, prev_row.operations
+                    row["operations"], prev_row["operations"]
                 )
                 month_data["mom_tonnage"] = self._calculate_change_percent(
-                    row.total_weight, prev_row.total_weight
+                    row["total_weight"], prev_row["total_weight"]
                 )
                 month_data["mom_loading_time"] = self._calculate_change_percent(
-                    row.avg_loading_time, prev_row.avg_loading_time
+                    row["avg_loading_time"], prev_row["avg_loading_time"]
                 )
                 month_data["mom_revenue"] = self._calculate_change_percent(
-                    row.total_revenue, prev_row.total_revenue
+                    row["total_revenue"], prev_row["total_revenue"]
                 )
             else:
                 month_data["mom_operations"] = 0
@@ -160,31 +147,35 @@ class HistoricalAnalysisService:
         end_date = datetime.utcnow().date()
         start_date = end_date - timedelta(days=period_days)
 
-        # Get daily data
-        result = await self.db.execute(
-            select(
-                func.date(GBMLogisticsData.operation_date).label('date'),
-                func.count(GBMLogisticsData.id).label('operations'),
-                func.sum(GBMLogisticsData.net_weight_kg).label('total_weight'),
-                func.avg(GBMLogisticsData.loading_time_minutes).label('avg_loading_time')
-            ).where(
-                and_(
-                    GBMLogisticsData.site_id == site_id,
-                    GBMLogisticsData.operation_date >= start_date,
-                    GBMLogisticsData.operation_date <= end_date
-                )
-            ).group_by(
-                func.date(GBMLogisticsData.operation_date)
-            ).order_by(
-                func.date(GBMLogisticsData.operation_date)
-            )
+        # Map metric name to InfluxDB field
+        field_map = {
+            "tonnage": "net_weight_kg",
+            "operations": "net_weight_kg",  # Will use count
+            "loading_time": "loading_time_minutes"
+        }
+        influx_field = field_map.get(metric, "net_weight_kg")
+
+        # Query InfluxDB for daily stats (FAST!)
+        influx_results = influxdb_service.query_daily_stats(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date,
+            metric=influx_field
         )
 
         daily_data = []
-        for row in result.all():
+        for row in influx_results:
+            value = row["value"]
+
+            # Convert based on metric type
+            if metric == "tonnage":
+                value = value / 1000  # Convert kg to tons
+            elif metric == "operations":
+                value = row["operations"]  # Use count instead of value
+
             daily_data.append({
-                "date": row.date.isoformat() if row.date else None,
-                "value": self._get_metric_value(row, metric)
+                "date": row["date"],
+                "value": float(value)
             })
 
         if len(daily_data) < 7:
@@ -334,31 +325,17 @@ class HistoricalAnalysisService:
         end_date = datetime.utcnow().date()
         start_date = end_date - relativedelta(years=years)
 
-        result = await self.db.execute(
-            select(
-                extract('month', GBMLogisticsData.operation_date).label('month'),
-                extract('year', GBMLogisticsData.operation_date).label('year'),
-                func.count(GBMLogisticsData.id).label('operations'),
-                func.sum(GBMLogisticsData.net_weight_kg).label('total_weight')
-            ).where(
-                and_(
-                    GBMLogisticsData.site_id == site_id,
-                    GBMLogisticsData.operation_date >= start_date,
-                    GBMLogisticsData.operation_date <= end_date
-                )
-            ).group_by(
-                extract('month', GBMLogisticsData.operation_date),
-                extract('year', GBMLogisticsData.operation_date)
-            ).order_by(
-                extract('year', GBMLogisticsData.operation_date),
-                extract('month', GBMLogisticsData.operation_date)
-            )
+        # Query InfluxDB for seasonal data (FAST!)
+        influx_results = influxdb_service.query_seasonal_data(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date
         )
 
         # Group by month across years
         monthly_patterns = {}
-        for row in result.all():
-            month = int(row.month)
+        for row in influx_results:
+            month = int(row["month"])
             if month not in monthly_patterns:
                 monthly_patterns[month] = {
                     "month": month,
@@ -368,8 +345,8 @@ class HistoricalAnalysisService:
                     "tonnage": []
                 }
 
-            monthly_patterns[month]["operations"].append(int(row.operations) if row.operations else 0)
-            monthly_patterns[month]["tonnage"].append(float(row.total_weight / 1000) if row.total_weight else 0)
+            monthly_patterns[month]["operations"].append(int(row["operations"]))
+            monthly_patterns[month]["tonnage"].append(float(row["total_weight"] / 1000))  # Convert kg to tons
 
         # Calculate averages and patterns
         seasonal_data = []
@@ -401,28 +378,19 @@ class HistoricalAnalysisService:
         start_date: date,
         end_date: date
     ) -> Dict[str, float]:
-        """Get aggregated metrics for a period."""
-        result = await self.db.execute(
-            select(
-                func.count(GBMLogisticsData.id).label('operations'),
-                func.sum(GBMLogisticsData.net_weight_kg).label('total_weight'),
-                func.avg(GBMLogisticsData.loading_time_minutes).label('avg_loading_time'),
-                func.sum(GBMLogisticsData.total_value).label('total_revenue')
-            ).where(
-                and_(
-                    GBMLogisticsData.site_id == site_id,
-                    GBMLogisticsData.operation_date >= start_date,
-                    GBMLogisticsData.operation_date <= end_date
-                )
-            )
+        """Get aggregated metrics for a period from InfluxDB."""
+        # Query InfluxDB for aggregated metrics (FAST!)
+        metrics = influxdb_service.query_aggregated_metrics(
+            site_id=site_id,
+            start_date=start_date,
+            end_date=end_date
         )
 
-        row = result.first()
         return {
-            "operations": int(row.operations) if row and row.operations else 0,
-            "tonnage": float(row.total_weight / 1000) if row and row.total_weight else 0,
-            "avg_loading_time": float(row.avg_loading_time) if row and row.avg_loading_time else 0,
-            "revenue": float(row.total_revenue) if row and row.total_revenue else 0
+            "operations": int(metrics["operations"]),
+            "tonnage": float(metrics["tonnage"]),
+            "avg_loading_time": float(metrics["avg_loading_time"]),
+            "revenue": float(metrics["revenue"])
         }
 
     def _calculate_change_percent(self, current: float, previous: float) -> float:
@@ -430,16 +398,6 @@ class HistoricalAnalysisService:
         if previous == 0 or previous is None or current is None:
             return 0.0
         return round(((current - previous) / previous) * 100, 2)
-
-    def _get_metric_value(self, row: Any, metric: str) -> float:
-        """Extract metric value from row."""
-        if metric == "tonnage":
-            return float(row.total_weight / 1000) if row.total_weight else 0
-        elif metric == "operations":
-            return float(row.operations) if row.operations else 0
-        elif metric == "loading_time":
-            return float(row.avg_loading_time) if row.avg_loading_time else 0
-        return 0.0
 
     def _calculate_trend(self, values: np.ndarray) -> Dict[str, Any]:
         """Calculate trend direction and strength using linear regression."""

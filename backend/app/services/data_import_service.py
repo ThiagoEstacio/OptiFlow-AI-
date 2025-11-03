@@ -22,6 +22,7 @@ import io
 from app.models.external_data import DataSource, DataImport, GBMLogisticsData
 from app.models.operational_data import TruckEntry, ShipLoading
 from app.core.logging import get_logger
+from app.services.influxdb_service import influxdb_service
 
 logger = get_logger(__name__)
 
@@ -393,8 +394,33 @@ class DataImportService:
                 })
                 logger.error(f"Failed to import row {idx}: {str(e)}")
 
-        # Final commit
+        # Final commit to PostgreSQL
         await self.db.commit()
+
+        # Write to InfluxDB in batch (for time-series performance)
+        try:
+            influx_operations = []
+            for idx, row in df.iterrows():
+                if idx >= duplicate:  # Only write non-duplicate records
+                    influx_operations.append({
+                        "operation_date": pd.to_datetime(row["operation_date"]),
+                        "operation_type": str(row.get("operation_type", "receiving")),
+                        "product_type": str(row.get("product_type", "")),
+                        "vehicle_type": str(row.get("vehicle_type", "")),
+                        "status": str(row.get("status", "completed")),
+                        "net_weight_kg": float(row["net_weight_kg"]) if pd.notna(row["net_weight_kg"]) else None,
+                        "loading_time_minutes": float(row["loading_time_minutes"]) if "loading_time_minutes" in row and pd.notna(row["loading_time_minutes"]) else None,
+                        "waiting_time_minutes": float(row["waiting_time_minutes"]) if "waiting_time_minutes" in row and pd.notna(row["waiting_time_minutes"]) else None,
+                        "total_value": float(row["total_value"]) if "total_value" in row and pd.notna(row["total_value"]) else None,
+                    })
+
+            if influx_operations:
+                influx_result = influxdb_service.write_gbm_operations_batch(site_id, influx_operations)
+                logger.info(f"InfluxDB write: {influx_result['success']} success, {influx_result['failed']} failed")
+
+        except Exception as e:
+            logger.error(f"Error writing to InfluxDB: {str(e)}")
+            # Don't fail the import if InfluxDB write fails
 
         return {
             "total": len(df),
