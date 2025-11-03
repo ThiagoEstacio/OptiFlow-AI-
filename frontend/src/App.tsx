@@ -22,6 +22,8 @@ import { ChatPage } from './pages/ChatPage';
 import SimulatorPage from './pages/SimulatorPage';
 import AdminPage from './pages/AdminPage';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
+import GBMDataImport from './pages/GBMDataImport';
+import GBMInsights from './pages/GBMInsights';
 import { AssetHealthDashboard } from './pages/AssetHealthDashboard';
 import { HealthTrendsPage } from './pages/HealthTrendsPage';
 import { AnalyticsHub } from './pages/AnalyticsHub';
@@ -76,6 +78,8 @@ function App() {
               <Route path="admin" element={<AdminPage />} />
               <Route path="executive/:siteId" element={<ExecutiveDashboard />} />
               <Route path="executivo/:siteId" element={<ExecutiveDashboard />} />
+              <Route path="gbm-import/:siteId" element={<GBMDataImport />} />
+              <Route path="gbm-insights/:siteId" element={<GBMInsights />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 

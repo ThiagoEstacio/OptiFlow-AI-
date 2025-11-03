@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     ai_engineering,
     advanced_features,
     executive,
+    gbm_data,
 )
 
 api_router = APIRouter()
@@ -47,3 +48,4 @@ api_router.include_router(operations.router, prefix="/operations", tags=["Port O
 api_router.include_router(ai_engineering.router, prefix="/ai-engineering", tags=["AI Engineering Tools"])
 api_router.include_router(advanced_features.router, prefix="/advanced", tags=["Advanced Features"])
 api_router.include_router(executive.router, prefix="/executive", tags=["Executive Dashboard & ROI"])
+api_router.include_router(gbm_data.router, prefix="/gbm", tags=["GBM Logistics Data Import & Insights"])
