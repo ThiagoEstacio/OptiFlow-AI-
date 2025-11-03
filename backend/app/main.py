@@ -47,9 +47,9 @@ async def lifespan(app: FastAPI):
         raise
     
     # Initialize autonomous AI agent
-    # The agent has been fixed to use isolated sessions for each monitoring cycle
-    # and executes strategies sequentially to avoid async/sync conflicts
-    # Bug fix: Added missing 'await' in data_service.py search_tags() method
+    # Fixed: Eliminated nested database sessions that caused connection pool exhaustion
+    # All monitoring methods now share a single session passed from start() method
+    # This prevents deadlocks, timeouts, and ensures stable autonomous operation
     try:
         await init_autonomous_agent()
         logger.info("🤖 Autonomous AI Agent initialized and started successfully")

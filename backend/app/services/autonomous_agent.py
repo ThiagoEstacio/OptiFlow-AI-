@@ -110,7 +110,7 @@ class AutonomousAgent:
                         await asyncio.sleep(self.monitoring_interval)
                         continue
                     
-                    # Run monitoring strategies sequentially (can't share session concurrently)
+                    # Run monitoring strategies sequentially (all using same session to avoid nested sessions)
                     monitoring_methods = [
                         ("detect_anomalies", self.detect_anomalies),
                         ("analyze_performance", self.analyze_performance),
@@ -119,10 +119,10 @@ class AutonomousAgent:
                         ("identify_optimization_opportunities", self.identify_optimization_opportunities),
                         ("predict_future_states", self.predict_future_states),
                     ]
-                    
+
                     for method_name, method in monitoring_methods:
                         try:
-                            results = await method(tags, toolkit)
+                            results = await method(tags, toolkit, db)  # Pass db session to avoid nested sessions
                             if results:
                                 for insight in results:
                                     self.add_insight(insight)
@@ -141,7 +141,7 @@ class AutonomousAgent:
         self.is_running = False
         logger.info("🛑 Autonomous Agent stopped")
     
-    async def detect_anomalies(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+    async def detect_anomalies(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
         """Detect anomalies in tag data"""
         insights = []
         
@@ -191,7 +191,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def analyze_performance(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+    async def analyze_performance(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
         """Analyze equipment performance"""
         insights = []
         
@@ -262,7 +262,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def check_alarm_conditions(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+    async def check_alarm_conditions(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
         """Check for alarm conditions and patterns"""
         insights = []
         
@@ -307,7 +307,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def identify_optimization_opportunities(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+    async def identify_optimization_opportunities(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
         """Identify opportunities for process optimization"""
         insights = []
         
@@ -357,7 +357,7 @@ class AutonomousAgent:
         
         return insights
     
-    async def predict_future_states(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+    async def predict_future_states(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
         """Predict future states and generate predictive insights"""
         insights = []
         
@@ -443,142 +443,138 @@ class AutonomousAgent:
         
         return insights
 
-    async def monitor_asset_health(self, tags: List[Tag], toolkit: AgentToolkit) -> List[AutonomousInsight]:
+    async def monitor_asset_health(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
         """Monitor asset health scores and generate insights for problematic assets"""
         insights = []
 
         try:
-            # Get database session from toolkit
-            from app.db.session import AsyncSessionLocal
+            # Get all active assets with attributes (using session passed as parameter)
+            result = await db.execute(
+                select(Asset).where(Asset.is_active == True)
+            )
+            assets = result.scalars().all()
 
-            async with AsyncSessionLocal() as db:
-                # Get all active assets with attributes
-                result = await db.execute(
-                    select(Asset).where(Asset.is_active == True)
-                )
-                assets = result.scalars().all()
+            if not assets:
+                return insights
 
-                if not assets:
-                    return insights
+            # Initialize health calculator, alert manager, and analytics
+            health_calculator = AssetHealthCalculator(db)
+            alert_manager = AssetHealthAlertManager(db)
+            analytics = AssetHealthAnalytics(db)
 
-                # Initialize health calculator, alert manager, and analytics
-                health_calculator = AssetHealthCalculator(db)
-                alert_manager = AssetHealthAlertManager(db)
-                analytics = AssetHealthAnalytics(db)
+            # Check health for assets with attributes
+            for asset in assets:
+                try:
+                    # Get attributes count from the asset
+                    from app.models.asset_attribute import AssetAttribute
+                    attr_result = await db.execute(
+                        select(AssetAttribute).where(AssetAttribute.asset_id == asset.id)
+                    )
+                    attributes = attr_result.scalars().all()
 
-                # Check health for assets with attributes
-                for asset in assets:
-                    try:
-                        # Get attributes count from the asset
-                        from app.models.asset_attribute import AssetAttribute
-                        attr_result = await db.execute(
-                            select(AssetAttribute).where(AssetAttribute.asset_id == asset.id)
+                    if not attributes:
+                        continue  # Skip assets without attributes
+
+                    # Calculate health score
+                    health_data = await health_calculator.calculate_asset_health(str(asset.id))
+
+                    health_score = health_data.get("health_score", 100)
+                    status = health_data.get("status", "unknown")
+                    issues = health_data.get("issues", [])
+                    warnings = health_data.get("warnings", [])
+
+                    # Generate insights based on health status
+                    severity_mapping = {
+                        "critical": "critical",
+                        "poor": "high",
+                        "fair": "medium",
+                        "good": "low",
+                        "excellent": "info"
+                    }
+
+                    # Only create insights for problematic assets (critical, poor, fair)
+                    if status in ["critical", "poor", "fair"]:
+                        # Build description
+                        problems = []
+                        if issues:
+                            problems.append(f"{len(issues)} problemas críticos")
+                        if warnings:
+                            problems.append(f"{len(warnings)} avisos")
+
+                        problems_str = " e ".join(problems) if problems else "Parâmetros fora dos limites recomendados"
+
+                        # Build recommendations
+                        recommendations = []
+                        if issues:
+                            recommendations.append("🔴 Ação imediata necessária para problemas críticos")
+                            for issue in issues[:3]:  # Top 3 issues
+                                attr_name = issue.get("attribute", {}).get("name", "Unknown")
+                                recommendations.append(f"  • Verificar: {attr_name}")
+
+                        if warnings:
+                            recommendations.append("⚠️ Monitorar avisos atentamente")
+                            for warning in warnings[:2]:  # Top 2 warnings
+                                attr_name = warning.get("attribute", {}).get("name", "Unknown")
+                                recommendations.append(f"  • Atenção em: {attr_name}")
+
+                        if not recommendations:
+                            recommendations = [
+                                "Revisar configuração de thresholds dos atributos",
+                                "Verificar condições operacionais do asset",
+                                "Considerar manutenção preventiva"
+                            ]
+
+                        # Create insight
+                        insight = AutonomousInsight(
+                            insight_id=f"asset_health_{asset.id}_{datetime.now().timestamp()}",
+                            title=f"⚠️ Asset com saúde {status.upper()}: {asset.name}",
+                            description=f"Score de saúde: {health_score:.1f}/100. {problems_str}. Tipo: {asset.asset_type.value}.",
+                            category="alert",
+                            severity=severity_mapping.get(status, "medium"),
+                            tags=[],  # No specific tags, this is asset-level
+                            metrics={
+                                "asset_id": str(asset.id),
+                                "asset_name": asset.name,
+                                "asset_type": asset.asset_type.value,
+                                "health_score": health_score,
+                                "status": status,
+                                "issues_count": len(issues),
+                                "warnings_count": len(warnings),
+                                "attributes_count": len(attributes)
+                            },
+                            recommendations=recommendations,
+                            timestamp=datetime.now(),
+                            data={
+                                "asset_id": str(asset.id),
+                                "full_path": asset.full_path,
+                                "issues": issues[:5],  # First 5 issues
+                                "warnings": warnings[:5],  # First 5 warnings
+                                "health_details": health_data
+                            }
                         )
-                        attributes = attr_result.scalars().all()
+                        insights.append(insight)
 
-                        if not attributes:
-                            continue  # Skip assets without attributes
+                        logger.info(
+                            f"🏥 Asset Health Alert: {asset.name} - "
+                            f"Score: {health_score:.1f} ({status}), "
+                            f"Issues: {len(issues)}, Warnings: {len(warnings)}"
+                        )
 
-                        # Calculate health score
-                        health_data = await health_calculator.calculate_asset_health(str(asset.id))
-
-                        health_score = health_data.get("health_score", 100)
-                        status = health_data.get("status", "unknown")
-                        issues = health_data.get("issues", [])
-                        warnings = health_data.get("warnings", [])
-
-                        # Generate insights based on health status
-                        severity_mapping = {
-                            "critical": "critical",
-                            "poor": "high",
-                            "fair": "medium",
-                            "good": "low",
-                            "excellent": "info"
-                        }
-
-                        # Only create insights for problematic assets (critical, poor, fair)
-                        if status in ["critical", "poor", "fair"]:
-                            # Build description
-                            problems = []
-                            if issues:
-                                problems.append(f"{len(issues)} problemas críticos")
-                            if warnings:
-                                problems.append(f"{len(warnings)} avisos")
-
-                            problems_str = " e ".join(problems) if problems else "Parâmetros fora dos limites recomendados"
-
-                            # Build recommendations
-                            recommendations = []
-                            if issues:
-                                recommendations.append("🔴 Ação imediata necessária para problemas críticos")
-                                for issue in issues[:3]:  # Top 3 issues
-                                    attr_name = issue.get("attribute", {}).get("name", "Unknown")
-                                    recommendations.append(f"  • Verificar: {attr_name}")
-
-                            if warnings:
-                                recommendations.append("⚠️ Monitorar avisos atentamente")
-                                for warning in warnings[:2]:  # Top 2 warnings
-                                    attr_name = warning.get("attribute", {}).get("name", "Unknown")
-                                    recommendations.append(f"  • Atenção em: {attr_name}")
-
-                            if not recommendations:
-                                recommendations = [
-                                    "Revisar configuração de thresholds dos atributos",
-                                    "Verificar condições operacionais do asset",
-                                    "Considerar manutenção preventiva"
-                                ]
-
-                            # Create insight
-                            insight = AutonomousInsight(
-                                insight_id=f"asset_health_{asset.id}_{datetime.now().timestamp()}",
-                                title=f"⚠️ Asset com saúde {status.upper()}: {asset.name}",
-                                description=f"Score de saúde: {health_score:.1f}/100. {problems_str}. Tipo: {asset.asset_type.value}.",
-                                category="alert",
-                                severity=severity_mapping.get(status, "medium"),
-                                tags=[],  # No specific tags, this is asset-level
-                                metrics={
-                                    "asset_id": str(asset.id),
-                                    "asset_name": asset.name,
-                                    "asset_type": asset.asset_type.value,
-                                    "health_score": health_score,
-                                    "status": status,
-                                    "issues_count": len(issues),
-                                    "warnings_count": len(warnings),
-                                    "attributes_count": len(attributes)
-                                },
-                                recommendations=recommendations,
-                                timestamp=datetime.now(),
-                                data={
-                                    "asset_id": str(asset.id),
-                                    "full_path": asset.full_path,
-                                    "issues": issues[:5],  # First 5 issues
-                                    "warnings": warnings[:5],  # First 5 warnings
-                                    "health_details": health_data
-                                }
-                            )
-                            insights.append(insight)
-
-                            logger.info(
-                                f"🏥 Asset Health Alert: {asset.name} - "
-                                f"Score: {health_score:.1f} ({status}), "
-                                f"Issues: {len(issues)}, Warnings: {len(warnings)}"
-                            )
-
-                            # Create automated alert
-                            try:
-                                await alert_manager.check_and_create_alerts(str(asset.id))
-                            except Exception as alert_error:
-                                logger.error(f"Error creating alert for asset {asset.id}: {alert_error}")
-
-                        # Record health snapshot for trend analysis (for all assets, not just problematic ones)
+                        # Create automated alert
                         try:
-                            await analytics.record_health_snapshot(str(asset.id))
-                        except Exception as snapshot_error:
-                            logger.error(f"Error recording health snapshot for asset {asset.id}: {snapshot_error}")
+                            await alert_manager.check_and_create_alerts(str(asset.id))
+                        except Exception as alert_error:
+                            logger.error(f"Error creating alert for asset {asset.id}: {alert_error}")
 
-                    except Exception as e:
-                        logger.error(f"Error checking health for asset {asset.id}: {e}")
-                        continue
+                    # Record health snapshot for trend analysis (for all assets, not just problematic ones)
+                    try:
+                        await analytics.record_health_snapshot(str(asset.id))
+                    except Exception as snapshot_error:
+                        logger.error(f"Error recording health snapshot for asset {asset.id}: {snapshot_error}")
+
+                except Exception as e:
+                    logger.error(f"Error checking health for asset {asset.id}: {e}")
+                    continue
 
         except Exception as e:
             logger.error(f"Error in monitor_asset_health: {e}")
