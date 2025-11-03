@@ -11,6 +11,7 @@ from sqlalchemy import select
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 import sys
+import numpy as np
 sys.path.insert(0, 'backend')
 
 from app.services.grain_terminal_simulator import GrainTerminalSimulator
@@ -296,7 +297,37 @@ async def get_system_status():
                     }
                     for equip_id, elec in sim.energy_manager.electrical_states.items()
                 }
-            }
+            },
+            "dem_physics": {
+                "enabled": sim.dem_enabled,
+                "gpu_available": sim.dem_engine.use_gpu if sim.dem_enabled else False,
+                "gpu_info": sim.dem_engine.gpu_info if sim.dem_enabled and sim.dem_engine.gpu_info else None,
+                "particle_count": len(sim.dem_engine.particles),
+                "particle_scale": sim.dem_particle_scale,
+                "warehouse_particles": len([p for p in sim.dem_engine.particles 
+                                           if sim.dem_engine.boxes['warehouse'].contains(p.position)]),
+                "corr01_particles": len([p for p in sim.dem_engine.particles 
+                                        if 'belt_corr01' in sim.dem_engine.boxes 
+                                        and sim.dem_engine.boxes['belt_corr01'].contains(p.position)]),
+                "corr02_particles": len([p for p in sim.dem_engine.particles 
+                                        if 'belt_corr02' in sim.dem_engine.boxes 
+                                        and sim.dem_engine.boxes['belt_corr02'].contains(p.position)]),
+                "elevator_particles": len([p for p in sim.dem_engine.particles 
+                                          if 'elevator' in sim.dem_engine.boxes 
+                                          and sim.dem_engine.boxes['elevator'].contains(p.position)]),
+                "corr03_particles": len([p for p in sim.dem_engine.particles 
+                                        if 'belt_corr03' in sim.dem_engine.boxes 
+                                        and sim.dem_engine.boxes['belt_corr03'].contains(p.position)]),
+                "shiploader_particles": len([p for p in sim.dem_engine.particles 
+                                            if 'shiploader' in sim.dem_engine.boxes 
+                                            and sim.dem_engine.boxes['shiploader'].contains(p.position)]),
+                "warehouse_fill_pct": sim.dem_engine.get_fill_level('warehouse') if sim.dem_enabled else 0.0,
+                "total_kinetic_energy_J": sum(0.5 * p.mass * np.dot(p.velocity, p.velocity) 
+                                             for p in sim.dem_engine.particles) if sim.dem_enabled else 0.0
+            },
+            
+            # Operational Events (para demonstração comercial)
+            "operational_events": sim.events_manager.get_dashboard_data() if hasattr(sim, 'events_manager') else {}
         }
 
         return status

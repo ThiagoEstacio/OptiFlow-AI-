@@ -60,17 +60,47 @@ async def get_latest_value(
 ):
     """
     Get the latest value for a tag from InfluxDB
+    
+    Args:
+        tag_id: Can be either UUID or tag name
     """
     import logging
+    from sqlalchemy import select
+    from app.models.tag import Tag
+    
     logger = logging.getLogger(__name__)
     
     try:
+        # Check if tag_id is a UUID or a name
+        actual_tag_id = tag_id
+        
+        # If not a valid UUID format, try to find by name
+        try:
+            UUID(tag_id)
+        except ValueError:
+            # It's a name, lookup the UUID
+            result = await db.execute(
+                select(Tag).where(Tag.name == tag_id)
+            )
+            tag = result.scalars().first()  # Get first match if duplicates exist
+            
+            if tag:
+                actual_tag_id = str(tag.id)
+                logger.debug(f"Resolved tag name '{tag_id}' to UUID '{actual_tag_id}'")
+            else:
+                logger.warning(f"Tag not found with name: {tag_id}")
+                return {
+                    "value": None,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "quality": "tag_not_found"
+                }
+        
         # Query last 10 seconds from InfluxDB
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(seconds=10)
         
         data = influxdb_service.query_tag_data(
-            tag_id=tag_id,
+            tag_id=actual_tag_id,
             start_time=start_time,
             end_time=end_time
         )
@@ -78,14 +108,14 @@ async def get_latest_value(
         if data and len(data) > 0:
             # Return most recent value
             latest = data[-1]
-            logger.info(f"✅ Returning REAL latest value for tag {tag_id}: {latest.get('value')}")
+            logger.info(f"✅ Returning REAL latest value for tag {tag_id} (UUID: {actual_tag_id}): {latest.get('value')}")
             return {
                 "value": latest.get("value"),
                 "timestamp": latest.get("timestamp"),
                 "quality": latest.get("quality", "good")
             }
         else:
-            logger.warning(f"⚠️ No InfluxDB data for tag {tag_id}, returning null")
+            logger.warning(f"⚠️ No InfluxDB data for tag {tag_id} (UUID: {actual_tag_id}), returning null")
             return {
                 "value": None,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -93,6 +123,8 @@ async def get_latest_value(
             }
     except Exception as e:
         logger.error(f"❌ Error fetching latest value for tag {tag_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             "value": None,
             "timestamp": datetime.utcnow().isoformat() + "Z",

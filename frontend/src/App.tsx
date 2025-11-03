@@ -20,6 +20,8 @@ import { DashboardBuilderPage } from './pages/DashboardBuilderPage';
 import { AIInsightsPage } from './pages/AIInsightsPage';
 import { ChatPage } from './pages/ChatPage';
 import SimulatorPage from './pages/SimulatorPage';
+import AdminPage from './pages/AdminPage';
+import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { Toaster } from './components/Toast/Toaster';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -54,6 +56,9 @@ function App() {
               <Route path="chat" element={<ChatPage />} />
               <Route path="simulator" element={<SimulatorPage />} />
               <Route path="simulador" element={<SimulatorPage />} />
+              <Route path="admin" element={<AdminPage />} />
+              <Route path="executive" element={<ExecutiveDashboard />} />
+              <Route path="executivo" element={<ExecutiveDashboard />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 

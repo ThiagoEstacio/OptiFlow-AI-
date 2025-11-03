@@ -72,7 +72,11 @@ export const useLiveTagData = (
     // Try WebSocket first
     const connectWebSocket = () => {
       try {
-        const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+        // Use localhost for browser WebSocket connections (not backend service name)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.hostname;
+        const port = '8000'; // Backend port
+        const wsUrl = `${protocol}//${host}:${port}`;
         const ws = new WebSocket(`${wsUrl}/api/v1/analytics/ws/stream?token=dummy`);
 
         ws.onopen = () => {

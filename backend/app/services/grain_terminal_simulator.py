@@ -9,6 +9,7 @@ Integrated with InfluxDB for real-time data persistence
 
 import math
 import time
+import numpy as np
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -19,6 +20,12 @@ from datetime import datetime
 from app.services.interlock_manager import InterlockManager
 from app.services.alarm_manager import AlarmManager
 from app.services.maintenance_energy import MaintenanceManager, EnergyManager
+
+# Import DEM Physics Engine
+from app.services.dem_physics import DEMEngine
+
+# Import Operational Events Manager
+from app.services.operational_events import OperationalEventsManager
 
 # Import InfluxDB service
 try:
@@ -337,6 +344,129 @@ class GrainTerminalSimulator:
         self.energy_manager.register_equipment('BAL01', 50.0)
         self.energy_manager.register_equipment('SLD01', 320.0)
         logger.info("✅ EnergyManager initialized")
+        
+        # ========================================================================
+        # DEM Physics Engine
+        # ========================================================================
+        
+        self.dem_engine = DEMEngine(gravity=9.81)
+        self.dem_enabled = True  # Flag para habilitar/desabilitar DEM
+        self.dem_particle_scale = 100  # Fator de escala (1 partícula DEM = 100 kg reais) - ALTA RESOLUÇÃO
+        
+        # Define volumes de contenção DEM (coordenadas em metros)
+        # Armazém (50x50x30m - grande silo)
+        self.dem_engine.add_box(
+            'warehouse',
+            min_bounds=[0, 0, 0],
+            max_bounds=[50, 50, 30],
+            friction=0.5,
+            restitution=0.2
+        )
+        
+        # Chutes das comportas (um para cada gate ativa)
+        for i in range(Config.PI_INITIAL_GATES):
+            self.dem_engine.add_box(
+                f'gate_chute_{i+1}',
+                min_bounds=[10 + i*2, 20, -2],
+                max_bounds=[11 + i*2, 21, 0],
+                friction=0.4,
+                restitution=0.25
+            )
+        
+        # CORR01 (correia receptora - 30m de comprimento)
+        self.dem_engine.add_box(
+            'belt_corr01',
+            min_bounds=[10, 15, -2.5],
+            max_bounds=[40, 16.5, -2],
+            friction=0.35,
+            restitution=0.3
+        )
+        
+        # CORR02 (correia intermediária - 25m)
+        self.dem_engine.add_box(
+            'belt_corr02',
+            min_bounds=[38, 16, -2.5],
+            max_bounds=[38.5, 41, -2],
+            friction=0.35,
+            restitution=0.3
+        )
+        
+        # ELV01 (elevador - 40m altura)
+        self.dem_engine.add_box(
+            'elevator',
+            min_bounds=[38, 40, -2],
+            max_bounds=[40, 42, 38],
+            friction=0.3,
+            restitution=0.35
+        )
+        
+        # CORR03 (correia de embarque - 50m)
+        self.dem_engine.add_box(
+            'belt_corr03',
+            min_bounds=[40, 40, 36],
+            max_bounds=[90, 41.6, 36.5],
+            friction=0.35,
+            restitution=0.3
+        )
+        
+        # Balança (região de pesagem)
+        self.dem_engine.add_box(
+            'balance',
+            min_bounds=[65, 39, 36],
+            max_bounds=[68, 43, 37],
+            friction=0.4,
+            restitution=0.2
+        )
+        
+        # Shiploader (carregador de navio - grande volume)
+        self.dem_engine.add_box(
+            'shiploader',
+            min_bounds=[88, 38, 35],
+            max_bounds=[92, 44, 38],
+            friction=0.3,
+            restitution=0.25
+        )
+        
+        # Inicializa partículas no armazém (simulando grãos já armazenados)
+        if self.dem_enabled and self.warehouse_inventory_t > 0:
+            # Calcula número de partículas baseado no inventário (alta resolução para demo)
+            particle_count = min(8000, int(self.warehouse_inventory_t / self.dem_particle_scale))
+            spawned = self.dem_engine.spawn_particles(
+                count=particle_count,
+                box_name='warehouse',
+                material='soja',
+                velocity=[0, 0, 0]
+            )
+            logger.info(f"✅ DEM Engine initialized with {spawned} particles in warehouse")
+        else:
+            logger.info("✅ DEM Engine initialized (empty)")
+        
+        # ========================================================================
+        # Operational Events Manager (para demonstração comercial realística)
+        # ========================================================================
+        
+        self.events_manager = OperationalEventsManager()
+        logger.info("✅ Operational Events Manager initialized")
+        logger.info(f"   - Navios na fila: {len(self.events_manager.ships_queue)}")
+        logger.info(f"   - Clima atual: {self.events_manager.current_weather.value}")
+        logger.info(f"   - Produto atual: {self.events_manager.current_product.value}")
+
+    # ------------------------------------------------------------------------
+    # HELPER METHODS: Realistic Sensor Modeling
+    # ------------------------------------------------------------------------
+    
+    def _add_sensor_noise(self, value: float, sensor_type: str = 'default') -> float:
+        """
+        Adiciona ruído realístico a leituras de sensores (para demo comercial)
+        Simula imperfeições de sensores reais
+        """
+        return self.events_manager.add_sensor_noise(value, sensor_type)
+    
+    def _add_sensor_drift(self, value: float, sensor_type: str = 'default') -> float:
+        """
+        Adiciona drift temporal (descalibração ao longo do tempo)
+        """
+        return self.events_manager.add_sensor_drift(value, self.time_s, drift_rate=0.00005)
 
     # ------------------------------------------------------------------------
     # PUBLIC API
@@ -516,7 +646,18 @@ class GrainTerminalSimulator:
 
         self.time_s += dt_s
 
-        # 1. PI Controller
+        # 0. Operational Events (novos eventos operacionais realísticos)
+        event_modifiers = self.events_manager.step(dt_s)
+        
+        # Aplicar modificadores climáticos
+        weather_flow_factor = event_modifiers.get('weather_flow_factor', 1.0)
+        weather_speed_factor = event_modifiers.get('weather_speed_factor', 1.0)
+
+        # 1. DEM Physics (executa múltiplos sub-steps para estabilidade)
+        if self.dem_enabled:
+            self._step_dem(dt_s, weather_flow_factor)
+
+        # 2. PI Controller
         self._step_pi_controller(dt_s)
 
         # 2. Gates
@@ -557,29 +698,197 @@ class GrainTerminalSimulator:
         # 13. Warehouse
         self._step_warehouse(dt_s)
         
-        # 14. Update legacy values from new managers
+        # 14. Ship Loading Management (NEW - gerencia carregamento de navios)
+        self._step_ship_loading(dt_s)
+        
+        # 15. Update legacy values from new managers
         self._sync_legacy_values()
 
-        # 6. Balance
-        self._step_balance(dt_s)
+    # ------------------------------------------------------------------------
+    # PRIVATE: SHIP LOADING MANAGEMENT
+    # ------------------------------------------------------------------------
+    
+    def _step_ship_loading(self, dt_s: float):
+        """
+        Gerencia carregamento automático de navios
+        """
+        # Se há um navio carregando, atualiza quantidade
+        current_ship = self.events_manager.get_loading_ship()
+        
+        if current_ship:
+            # Quantidade carregada é baseada no throughput real do shiploader
+            loaded_this_step_kg = self.shiploader.flow_pv_tph * 1000 * (dt_s / 3600)
+            self.events_manager.update_ship_loading(loaded_this_step_kg / 1000)  # converter para toneladas
+        else:
+            # Se não há navio carregando, tenta iniciar próximo da fila
+            waiting_ships = [s for s in self.events_manager.ships_queue if s.status == "waiting"]
+            if waiting_ships:
+                # Pega navio com maior prioridade
+                next_ship = sorted(waiting_ships, key=lambda s: s.priority, reverse=True)[0]
+                self.events_manager.start_loading_ship(next_ship)
+                logger.info(f"🚢 Iniciando carregamento do navio {next_ship.name}")
 
-        # 7. Belt CORR03
-        self._step_belt('CORR03', dt_s)
+    # ------------------------------------------------------------------------
+    # PRIVATE: DEM PHYSICS (NEW)
+    # ------------------------------------------------------------------------
 
-        # 8. Shiploader
-        self._step_shiploader(dt_s)
-
-        # 9. Energy
-        self._step_energy(dt_s)
-
-        # 10. Alarms
-        self._step_alarms()
-
-        # 11. Maintenance
-        self._step_maintenance(dt_s)
-
-        # 12. Warehouse
-        self._step_warehouse(dt_s)
+    def _step_dem(self, dt_s: float, weather_flow_factor: float = 1.0):
+        """
+        Executa simulação DEM (Discrete Element Method) para modelagem granular realista
+        
+        Args:
+            dt_s: Tempo de simulação (segundos)
+            weather_flow_factor: Fator de redução de fluxo por clima (0.7-1.0)
+        """
+        # Número de sub-steps para estabilidade (DEM requer passos menores)
+        sub_steps = max(1, int(dt_s / self.dem_engine.time_step))
+        
+        for _ in range(sub_steps):
+            # 1. Spawn novas partículas nas comportas abertas (afetado por clima)
+            self._dem_spawn_from_gates(weather_flow_factor)
+            
+            # 2. Aplica velocidade das correias às partículas
+            self._dem_apply_belt_motion()
+            
+            # 3. Step do motor de física
+            dem_stats = self.dem_engine.step()
+            
+            # 4. Atualiza taxas de fluxo baseadas no DEM
+            self._dem_update_flow_rates()
+            
+            # 5. Coleta partículas que chegaram ao destino
+            self._dem_collect_particles()
+        
+        # Log stats periodicamente
+        if int(self.time_s * 10) % 100 == 0:  # a cada 10s
+            logger.debug(f"DEM: {dem_stats['particle_count']} particles, "
+                        f"{dem_stats['collision_count']} collisions, "
+                        f"KE={dem_stats['total_kinetic_energy']:.1f}J")
+    
+    def _dem_spawn_from_gates(self, weather_flow_factor: float = 1.0):
+        """
+        Spawna partículas nas comportas abertas baseado no fluxo
+        
+        Args:
+            weather_flow_factor: Fator de redução por clima (0.7-1.0)
+        """
+        for gate in self.gates:
+            if gate.open_pct > 5 and gate.flow_tph > 1:
+                # Calcula quantas partículas spawnar baseado no fluxo (afetado por clima)
+                # flow_tph é toneladas por hora, queremos kg por segundo
+                kg_per_second = (gate.flow_tph * 1000) / 3600
+                kg_per_second *= weather_flow_factor  # Reduz em chuva/vento
+                
+                # Cada partícula DEM representa N kg de material real
+                particles_per_second = kg_per_second / self.dem_particle_scale
+                
+                # Probabilidade de spawn neste sub-step
+                spawn_probability = particles_per_second * self.dem_engine.time_step
+                
+                if np.random.random() < spawn_probability:
+                    # Spawn 1-3 partículas
+                    count = np.random.randint(1, 4)
+                    
+                    # Velocidade inicial baseada na abertura da comporta
+                    # Maior abertura = maior velocidade de saída
+                    exit_velocity_z = -1.0 * (gate.open_pct / 100.0) * 2.0  # até -2 m/s
+                    exit_velocity_z *= weather_flow_factor  # Reduz velocidade em chuva
+                    
+                    # Material baseado no produto atual do events_manager
+                    material = self.events_manager.current_product.value
+                    
+                    self.dem_engine.spawn_particles(
+                        count=count,
+                        box_name=f'gate_chute_{gate.id}',
+                        material=material,
+                        velocity=[0.0, 0.0, exit_velocity_z]
+                    )
+    
+    def _dem_apply_belt_motion(self):
+        """Aplica movimento das correias às partículas em contato"""
+        belts_boxes = {
+            'CORR01': 'belt_corr01',
+            'CORR02': 'belt_corr02',
+            'CORR03': 'belt_corr03'
+        }
+        
+        for belt_id, box_name in belts_boxes.items():
+            belt = self.belts[belt_id]
+            if not belt.running:
+                continue
+            
+            box = self.dem_engine.boxes.get(box_name)
+            if not box:
+                continue
+            
+            # Direção do movimento da correia
+            if belt_id == 'CORR01':
+                direction = np.array([1, 0, 0])  # movimento em +X
+            elif belt_id == 'CORR02':
+                direction = np.array([0, 1, 0])  # movimento em +Y
+            else:  # CORR03
+                direction = np.array([1, 0, 0])  # movimento em +X
+            
+            # Aplica velocidade às partículas próximas da superfície da correia
+            for particle in self.dem_engine.particles:
+                if box.contains(particle.position):
+                    # Distância do fundo da correia
+                    dist_from_bottom = particle.position[2] - box.min_bounds[2]
+                    
+                    # Partículas próximas do fundo (< 5cm) são arrastadas
+                    if dist_from_bottom < 0.05 + particle.radius:
+                        # Aplica velocidade da correia com atrito
+                        target_velocity = direction * belt.speed_mps
+                        
+                        # Interpolação suave (fator de acoplamento)
+                        coupling = 0.3  # 30% de acoplamento por step
+                        particle.velocity += (target_velocity - particle.velocity) * coupling
+    
+    def _dem_update_flow_rates(self):
+        """Atualiza taxas de fluxo dos equipamentos baseado no DEM"""
+        # CORR01 - taxa de fluxo baseada em partículas na correia
+        corr01_flow_kg_s = self.dem_engine.get_flow_rate('belt_corr01', 'x')
+        self.belts['CORR01'].flow_tph = (corr01_flow_kg_s * 3.6 * self.dem_particle_scale)
+        
+        # CORR02
+        corr02_flow_kg_s = self.dem_engine.get_flow_rate('belt_corr02', 'y')
+        self.belts['CORR02'].flow_tph = (corr02_flow_kg_s * 3.6 * self.dem_particle_scale)
+        
+        # Elevador
+        elv_flow_kg_s = self.dem_engine.get_flow_rate('elevator', 'z')
+        self.elevator.flow_tph = (elv_flow_kg_s * 3.6 * self.dem_particle_scale)
+        
+        # CORR03
+        corr03_flow_kg_s = self.dem_engine.get_flow_rate('belt_corr03', 'x')
+        self.belts['CORR03'].flow_tph = (corr03_flow_kg_s * 3.6 * self.dem_particle_scale)
+        
+        # Balança - massa instantânea
+        balance_mass_kg = self.dem_engine.get_mass_in_box('balance') * self.dem_particle_scale
+        self.balance.weight_kg = balance_mass_kg
+        
+        # Shiploader
+        shiploader_flow_kg_s = self.dem_engine.get_flow_rate('shiploader', 'z')
+        self.shiploader.flow_pv_tph = (shiploader_flow_kg_s * 3.6 * self.dem_particle_scale)
+    
+    def _dem_collect_particles(self):
+        """Remove partículas que chegaram ao destino final"""
+        # Partículas que saíram do shiploader vão para o navio
+        shiploader_box = self.dem_engine.boxes['shiploader']
+        particles_to_remove = []
+        
+        for i, particle in enumerate(self.dem_engine.particles):
+            # Se partícula está no shiploader e caindo (velocidade -Z)
+            if shiploader_box.contains(particle.position):
+                if particle.velocity[2] < -0.5:  # caindo rápido
+                    # Atingiu o fundo do shiploader
+                    if particle.position[2] <= shiploader_box.min_bounds[2] + particle.radius:
+                        particles_to_remove.append(i)
+        
+        # Remove partículas (reverso para não afetar índices)
+        for i in reversed(particles_to_remove):
+            mass_kg = self.dem_engine.particles[i].mass * self.dem_particle_scale
+            self.total_mass_t += mass_kg / 1000
+            del self.dem_engine.particles[i]
 
     # ------------------------------------------------------------------------
     # PRIVATE: CONTROL

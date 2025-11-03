@@ -14,7 +14,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap } from 'lucide-react';
+import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap, Sparkles } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { fetchTags } from '../store/slices/tagsSlice';
 import { TagsPanel } from '../components/DashboardBuilder/TagsPanel';
@@ -25,6 +25,7 @@ import { PropertyPanel } from '../components/DashboardBuilder/PropertyPanel';
 import { GridBackground } from '../components/DashboardBuilder/GridBackground';
 import { TemplateSelector } from '../components/DashboardBuilder/TemplateSelector';
 import { DashboardManager } from '../components/DashboardBuilder/DashboardManager';
+import { AIAssistantPanel } from '../components/DashboardBuilder/AIAssistantPanel';
 import { SimulationControlPanel } from '../components/SimulationControlPanel';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useGridSnapping } from '../hooks/useGridSnapping';
@@ -91,6 +92,7 @@ export const DashboardBuilderPage: React.FC = () => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showDashboardManager, setShowDashboardManager] = useState(false);
   const [showSimulationPanel, setShowSimulationPanel] = useState(false);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [tagEditModal, setTagEditModal] = useState<{ isOpen: boolean; tag: PortTag | null }>({
     isOpen: false,
     tag: null,
@@ -410,6 +412,16 @@ export const DashboardBuilderPage: React.FC = () => {
                 <Grid3X3 className="w-4 h-4" />
               </button>
 
+              {/* AI Assistant Toggle */}
+              <button
+                onClick={() => setShowAIAssistant(!showAIAssistant)}
+                className="flex items-center space-x-1 px-3 py-2 text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 rounded transition-colors shadow-lg"
+                title="AI Assistant"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>AI Assistant</span>
+              </button>
+
               {/* Snap Toggle */}
               <button
                 onClick={gridSnapping.toggleSnapping}
@@ -570,6 +582,18 @@ export const DashboardBuilderPage: React.FC = () => {
               <SimulationControlPanel onClose={() => setShowSimulationPanel(false)} />
             </div>
           </div>
+        )}
+
+        {/* AI Assistant Panel */}
+        {showAIAssistant && (
+          <AIAssistantPanel
+            availableTags={displayTags}
+            currentWidgets={widgets}
+            onAddWidgets={(newWidgets) => {
+              setWidgets(prev => [...prev, ...newWidgets]);
+            }}
+            onClose={() => setShowAIAssistant(false)}
+          />
         )}
       </div>
     </DndProvider>

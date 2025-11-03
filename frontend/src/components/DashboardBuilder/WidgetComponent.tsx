@@ -42,9 +42,6 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
   const nodeRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Debug log
-  console.log('WidgetComponent rendering:', widget.id, widget.type, widget.position);
-
   // Drop target for tags
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'TAG',
@@ -119,12 +116,6 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
       case 'timeseries':
         // Check if we have multiple tags
         const hasMultipleTags = widget.config.tagIds && widget.config.tagIds.length > 1;
-        
-        console.log('Timeseries widget config:', {
-          tagId: widget.config.tagId,
-          tagIds: widget.config.tagIds,
-          hasMultipleTags
-        });
         
         if (hasMultipleTags) {
           // Generate data for multiple series

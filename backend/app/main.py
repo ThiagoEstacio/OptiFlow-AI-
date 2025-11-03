@@ -14,8 +14,11 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.api.routes.simulator import router as simulator_router
+from app.api.routes.admin import router as admin_router
+from app.api.routes.ai_agent import router as ai_agent_router
 from app.api.v1.endpoints.websocket import router as websocket_router
-from app.db.session import init_db
+from app.db.session import init_db, get_db
+from app.services.autonomous_agent import init_autonomous_agent
 
 # Configure logging
 logging.basicConfig(
@@ -42,6 +45,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
         raise
+    
+    # Initialize autonomous AI agent
+    try:
+        async for db in get_db():
+            await init_autonomous_agent(db)
+            break  # Only need one session for initialization
+        logger.info("🤖 Autonomous AI Agent initialized successfully")
+    except Exception as e:
+        logger.error(f"⚠️  Autonomous agent initialization failed: {e}")
+        # Don't raise - agent is optional
 
     logger.info(f"🌐 Environment: {settings.ENVIRONMENT}")
     logger.info(f"📊 API Version: {settings.API_V1_PREFIX}")
@@ -99,6 +112,12 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 # Include Simulator router (no authentication required for demo)
 app.include_router(simulator_router, prefix="/api/v1")
+
+# Include Admin router (requires authentication)
+app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
+
+# Include AI Agent router for dashboard builder
+app.include_router(ai_agent_router, prefix="/api/v1/agent", tags=["ai-agent"])
 
 # Include WebSocket router for real-time streaming
 app.include_router(websocket_router, prefix="/api/v1")
