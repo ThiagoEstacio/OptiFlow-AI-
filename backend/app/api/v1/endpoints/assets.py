@@ -799,3 +799,119 @@ async def evaluate_formula_test(
             "error": str(e),
             "success": False
         }
+
+
+
+# ============================================================================
+# Asset Health Endpoints
+# ============================================================================
+
+@router.get("/{asset_id}/health")
+async def get_asset_health(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get health score for an asset
+
+    Returns health score (0-100) based on attribute values and thresholds
+    """
+    from app.services.asset_health import AssetHealthCalculator
+
+    calculator = AssetHealthCalculator(db)
+
+    try:
+        health = await calculator.calculate_asset_health(str(asset_id))
+        return health
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error calculating health: {str(e)}"
+        )
+
+
+@router.get("/{asset_id}/health/hierarchy")
+async def get_hierarchy_health(
+    asset_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get health score for an asset and all its descendants
+
+    Returns hierarchical health report with rollup scores
+    """
+    from app.services.asset_health import AssetHealthCalculator
+
+    calculator = AssetHealthCalculator(db)
+
+    try:
+        health = await calculator.calculate_hierarchy_health(str(asset_id))
+        return health
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error calculating hierarchy health: {str(e)}"
+        )
+
+
+@router.get("/health/overview")
+async def get_all_assets_health_overview(
+    skip: int = 0,
+    limit: int = 100,
+    status_filter: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get health overview for all assets
+
+    Query parameters:
+    - status_filter: Filter by status (excellent, good, fair, poor, critical)
+    """
+    from app.services.asset_health import AssetHealthCalculator
+
+    # Get all assets
+    stmt = select(Asset).offset(skip).limit(limit)
+    result = await db.execute(stmt)
+    assets = result.scalars().all()
+
+    calculator = AssetHealthCalculator(db)
+
+    # Calculate health for each
+    health_reports = []
+
+    for asset in assets:
+        try:
+            health = await calculator.calculate_asset_health(str(asset.id))
+
+            # Apply status filter
+            if status_filter and health.get("status") != status_filter:
+                continue
+
+            health_reports.append(health)
+
+        except Exception as e:
+            print(f"Error calculating health for asset {asset.id}: {e}")
+            continue
+
+    # Calculate statistics
+    if health_reports:
+        scores = [h["health_score"] for h in health_reports if h.get("health_score") is not None]
+        avg_score = sum(scores) / len(scores) if scores else 0
+
+        status_counts = {}
+        for h in health_reports:
+            status = h.get("status", "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+    else:
+        avg_score = 0
+        status_counts = {}
+
+    return {
+        "total_assets": len(health_reports),
+        "average_health_score": round(avg_score, 2),
+        "status_distribution": status_counts,
+        "assets": health_reports,
+    }
