@@ -14,10 +14,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap, Sparkles } from 'lucide-react';
+import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap, Sparkles, FolderTree } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { fetchTags } from '../store/slices/tagsSlice';
 import { TagsPanel } from '../components/DashboardBuilder/TagsPanel';
+import { AssetTreePanel } from '../components/DashboardBuilder/AssetTreePanel';
 import { TagEditModal } from '../components/DashboardBuilder/TagEditModal';
 import { WidgetCanvas } from '../components/DashboardBuilder/WidgetCanvas';
 import { WidgetToolbar } from '../components/DashboardBuilder/WidgetToolbar';
@@ -84,6 +85,7 @@ export const DashboardBuilderPage: React.FC = () => {
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
   const [showTagsPanel, setShowTagsPanel] = useState(true);
+  const [panelMode, setPanelMode] = useState<'tags' | 'assets'>('tags'); // Toggle between flat tags and asset tree
   const [showPropertyPanel, setShowPropertyPanel] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [dashboardName, setDashboardName] = useState('My Dashboard');
@@ -440,8 +442,24 @@ export const DashboardBuilderPage: React.FC = () => {
                 onClick={() => setShowTagsPanel(!showTagsPanel)}
                 className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
               >
-                {showTagsPanel ? '◀ Hide Tags' : '▶ Show Tags'}
+                {showTagsPanel ? '◀ Hide Panel' : '▶ Show Panel'}
               </button>
+
+              {/* Panel Mode Toggle (Tags vs Assets) */}
+              {showTagsPanel && (
+                <button
+                  onClick={() => setPanelMode(prev => prev === 'tags' ? 'assets' : 'tags')}
+                  className={`flex items-center space-x-1 px-3 py-2 text-sm rounded transition-colors ${
+                    panelMode === 'assets'
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                  title={panelMode === 'tags' ? 'Switch to Asset Framework' : 'Switch to Flat Tags'}
+                >
+                  <FolderTree className="w-4 h-4" />
+                  <span>{panelMode === 'tags' ? 'Tags' : 'Assets'}</span>
+                </button>
+              )}
 
               {/* Properties Panel Toggle */}
               <button
@@ -488,13 +506,24 @@ export const DashboardBuilderPage: React.FC = () => {
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Tags Panel */}
-          {showTagsPanel && (
+          {/* Tags/Assets Panel */}
+          {showTagsPanel && panelMode === 'tags' && (
             <TagsPanel
               tags={displayTags as any}
               loading={loading}
               onClose={() => setShowTagsPanel(false)}
               onEditTag={handleEditTag}
+            />
+          )}
+
+          {showTagsPanel && panelMode === 'assets' && (
+            <AssetTreePanel
+              onClose={() => setShowTagsPanel(false)}
+              onEditAsset={(asset) => {
+                // Handle asset editing (future enhancement)
+                showToast.info('Asset editing coming soon!');
+              }}
+              showInactive={false}
             />
           )}
 

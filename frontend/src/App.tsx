@@ -24,13 +24,15 @@ import AdminPage from './pages/AdminPage';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { Toaster } from './components/Toast/Toaster';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { AssetProvider } from './contexts/AssetContext';
 
 function App() {
   return (
     <Provider store={store}>
       <ThemeProvider>
-        <Toaster />
-        <BrowserRouter>
+        <AssetProvider>
+          <Toaster />
+          <BrowserRouter>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -66,6 +68,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+        </AssetProvider>
       </ThemeProvider>
     </Provider>
   );

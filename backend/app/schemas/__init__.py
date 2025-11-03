@@ -59,6 +59,23 @@ from .analytics import (
     SavedQueryUpdate,
     SavedQueryResponse,
 )
+from .asset import (
+    AssetBase,
+    AssetCreate,
+    AssetUpdate,
+    AssetResponse,
+    AssetTreeNode,
+    AssetAttributeBase,
+    AssetAttributeCreate,
+    AssetAttributeUpdate,
+    AssetAttributeResponse,
+    AssetTemplateBase,
+    AssetTemplateCreate,
+    AssetTemplateUpdate,
+    AssetTemplateResponse,
+    AssetInstantiateRequest,
+    AttributeDefinition,
+)
 
 __all__ = [
     # User
@@ -112,4 +129,20 @@ __all__ = [
     "SavedQueryCreate",
     "SavedQueryUpdate",
     "SavedQueryResponse",
+    # Asset
+    "AssetBase",
+    "AssetCreate",
+    "AssetUpdate",
+    "AssetResponse",
+    "AssetTreeNode",
+    "AssetAttributeBase",
+    "AssetAttributeCreate",
+    "AssetAttributeUpdate",
+    "AssetAttributeResponse",
+    "AssetTemplateBase",
+    "AssetTemplateCreate",
+    "AssetTemplateUpdate",
+    "AssetTemplateResponse",
+    "AssetInstantiateRequest",
+    "AttributeDefinition",
 ]

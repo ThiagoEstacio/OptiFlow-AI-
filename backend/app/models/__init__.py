@@ -6,6 +6,7 @@ from app.models.tag import Tag
 from app.models.tag_label import TagLabel
 from app.models.alarm import AlarmDefinition, AlarmEvent
 from app.models.ml_model import MLModel, Prediction
+from app.models.asset import Asset, AssetAttribute, AssetTemplate, AssetType
 
 __all__ = [
     "Organization",
@@ -18,4 +19,8 @@ __all__ = [
     "AlarmEvent",
     "MLModel",
     "Prediction",
+    "Asset",
+    "AssetAttribute",
+    "AssetTemplate",
+    "AssetType",
 ]
