@@ -149,23 +149,27 @@ class InfluxDBService:
             if end_time is None:
                 end_time = datetime.utcnow()
 
+            # Format timestamps in RFC3339 format (required by InfluxDB)
+            start_str = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+            end_str = end_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
             # Build Flux query
-            query = f'''
-                from(bucket: "{self.bucket}")
-                |> range(start: {start_time.isoformat()}Z, stop: {end_time.isoformat()}Z)
-                |> filter(fn: (r) => r["_measurement"] == "tag_data")
-                |> filter(fn: (r) => r["tag_id"] == "{tag_id}")
-                |> filter(fn: (r) => r["_field"] == "value")
-            '''
+            query = f'''from(bucket: "{self.bucket}")
+  |> range(start: {start_str}, stop: {end_str})
+  |> filter(fn: (r) => r["_measurement"] == "tag_data")
+  |> filter(fn: (r) => r["tag_id"] == "{tag_id}")
+  |> filter(fn: (r) => r["_field"] == "value")'''
 
             # Add aggregation if specified
             if aggregation and interval:
                 agg_func = aggregation.lower()
                 query += f'''
-                |> aggregateWindow(every: {interval}, fn: {agg_func}, createEmpty: false)
-                '''
+  |> aggregateWindow(every: {interval}, fn: {agg_func}, createEmpty: false)'''
 
-            query += '|> yield(name: "result")'
+            query += '''
+  |> yield(name: "result")'''
+
+            logger.debug(f"InfluxDB query for tag {tag_id}: {query}")
 
             # Execute query
             tables = self.query_api.query(query, org=self.org)
@@ -175,14 +179,18 @@ class InfluxDBService:
             for table in tables:
                 for record in table.records:
                     results.append({
-                        "timestamp": record.get_time().isoformat(),
+                        "timestamp": record.get_time().isoformat() + "Z",
                         "value": record.get_value(),
+                        "quality": record.values.get("quality", "good")
                     })
 
+            logger.info(f"InfluxDB query returned {len(results)} points for tag {tag_id}")
             return results
 
         except Exception as e:
-            logger.error(f"Error querying InfluxDB: {e}")
+            logger.error(f"Error querying InfluxDB for tag {tag_id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     def query_multiple_tags(

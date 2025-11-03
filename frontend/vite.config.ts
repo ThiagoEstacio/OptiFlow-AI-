@@ -18,15 +18,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 3000,
     host: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        target: process.env.VITE_API_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
       '/ws': {
-        target: process.env.VITE_WS_URL || 'ws://localhost:8000',
+        target: process.env.VITE_WS_URL || 'ws://127.0.0.1:8000',
         ws: true,
       },
     },
