@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     advanced_features,
     executive,
     gbm_data,
+    historical_analysis,
 )
 
 api_router = APIRouter()
@@ -49,3 +50,4 @@ api_router.include_router(ai_engineering.router, prefix="/ai-engineering", tags=
 api_router.include_router(advanced_features.router, prefix="/advanced", tags=["Advanced Features"])
 api_router.include_router(executive.router, prefix="/executive", tags=["Executive Dashboard & ROI"])
 api_router.include_router(gbm_data.router, prefix="/gbm", tags=["GBM Logistics Data Import & Insights"])
+api_router.include_router(historical_analysis.router, prefix="/historical", tags=["Historical Analysis & Trends"])

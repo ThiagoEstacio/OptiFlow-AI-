@@ -25,6 +25,7 @@ import AdminPage from './pages/AdminPage';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import GBMDataImport from './pages/GBMDataImport';
 import GBMInsights from './pages/GBMInsights';
+import HistoricalTrends from './pages/HistoricalTrends';
 import { AssetHealthDashboard } from './pages/AssetHealthDashboard';
 import { HealthTrendsPage } from './pages/HealthTrendsPage';
 import { AnalyticsHub } from './pages/AnalyticsHub';
@@ -82,6 +83,7 @@ function App() {
               <Route path="executivo/:siteId" element={<ExecutiveDashboard />} />
               <Route path="gbm-import/:siteId" element={<GBMDataImport />} />
               <Route path="gbm-insights/:siteId" element={<GBMInsights />} />
+              <Route path="historical-trends/:siteId" element={<HistoricalTrends />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 

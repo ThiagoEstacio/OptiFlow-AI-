@@ -18,6 +18,7 @@ import {
   CloudUpload as ImportIcon,
   Insights as InsightsIcon,
   TrendingUp as ExecutiveIcon,
+  ShowChart as TrendsIcon,
   Menu as MenuIcon,
   ChevronLeft as CollapseIcon,
 } from '@mui/icons-material';
@@ -61,6 +62,7 @@ export const EnhancedSidebar: React.FC = () => {
       items: [
         { path: `/gbm-import/${defaultSiteId}`, label: 'Importar Dados', icon: <ImportIcon />, requiresSite: true },
         { path: `/gbm-insights/${defaultSiteId}`, label: 'Insights GBM', icon: <InsightsIcon />, requiresSite: true },
+        { path: `/historical-trends/${defaultSiteId}`, label: 'Tendências Históricas', icon: <TrendsIcon />, requiresSite: true },
         { path: `/executive/${defaultSiteId}`, label: 'Dashboard Executivo', icon: <ExecutiveIcon />, requiresSite: true },
       ],
     },
