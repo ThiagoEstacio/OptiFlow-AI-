@@ -18,6 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { AssetTreeNode, AssetType } from '../../contexts/AssetContext';
+import { HealthBadge } from './HealthBadge';
 
 interface AssetNodeProps {
   asset: AssetTreeNode;
@@ -151,6 +152,11 @@ export const AssetNode: React.FC<AssetNodeProps> = ({
 
             {/* Badges */}
             <div className="flex items-center gap-1">
+              {/* Health Badge */}
+              {asset.attributes_count && asset.attributes_count > 0 && (
+                <HealthBadge assetId={asset.id} showScore={true} showTooltip={true} size="sm" />
+              )}
+
               {hasChildren && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300">
                   {asset.children.length}
