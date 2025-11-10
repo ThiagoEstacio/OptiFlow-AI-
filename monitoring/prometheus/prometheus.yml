@@ -1,10 +1,14 @@
-# SmartPort Prometheus Configuration
+# OptiFlow AI - Prometheus Configuration
+# ==========================================
+# Configuração completa para coleta de métricas
+# Backend, Gateway, System e Infrastructure
 
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 15s        # Coleta métricas a cada 15s
+  evaluation_interval: 15s    # Avalia regras a cada 15s
+  scrape_timeout: 10s         # Timeout para scraping
   external_labels:
-    cluster: 'smartport-production'
+    cluster: 'optiflow-production'
     environment: 'production'
 
 # Alertmanager configuration
@@ -20,24 +24,46 @@ rule_files:
 
 # Scrape configurations
 scrape_configs:
-  # Prometheus itself
+  # ======================================================================
+  # PROMETHEUS ITSELF
+  # ======================================================================
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
         labels:
           service: 'prometheus'
+          component: 'monitoring'
 
-  # Backend API
-  - job_name: 'backend'
+  # ======================================================================
+  # BACKEND API (FastAPI)
+  # ======================================================================
+  - job_name: 'optiflow-backend'
     metrics_path: '/metrics'
     static_configs:
       - targets: ['backend:8000']
         labels:
           service: 'backend'
           component: 'api'
-    scrape_interval: 10s
+          app: 'optiflow'
+    scrape_interval: 10s        # Mais frequente para API
+    scrape_timeout: 5s
+    
+  # ======================================================================
+  # GATEWAY (IoT Device Manager)
+  # ======================================================================
+  - job_name: 'optiflow-gateway'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['gateway:8001']
+        labels:
+          service: 'gateway'
+          component: 'device-manager'
+          app: 'optiflow'
+    scrape_interval: 10s        # Frequente para monitorar devices
 
-  # PostgreSQL
+  # ======================================================================
+  # POSTGRESQL DATABASE
+  # ======================================================================
   - job_name: 'postgres'
     static_configs:
       - targets: ['postgres-exporter:9187']
@@ -45,7 +71,9 @@ scrape_configs:
           service: 'postgres'
           component: 'database'
 
-  # Redis
+  # ======================================================================
+  # REDIS CACHE
+  # ======================================================================
   - job_name: 'redis'
     static_configs:
       - targets: ['redis-exporter:9121']
@@ -53,25 +81,141 @@ scrape_configs:
           service: 'redis'
           component: 'cache'
 
-  # InfluxDB
+  # ======================================================================
+  # INFLUXDB TIME-SERIES DATABASE
+  # ======================================================================
   - job_name: 'influxdb'
+    metrics_path: '/metrics'
     static_configs:
       - targets: ['influxdb:8086']
         labels:
           service: 'influxdb'
           component: 'timeseries'
-    metrics_path: '/metrics'
 
-  # Gateway
-  - job_name: 'gateway'
+  # ======================================================================
+  # NODE EXPORTER (Host/System Metrics)
+  # ======================================================================
+  - job_name: 'node-exporter'
     static_configs:
-      - targets: ['gateway:8080']
+      - targets: ['node-exporter:9100']
         labels:
-          service: 'gateway'
-          component: 'data-collection'
-    scrape_interval: 10s
+          service: 'node-exporter'
+          component: 'system'
+  
+  # ======================================================================
+  # CADVISOR (Container Metrics)
+  # ======================================================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+          component: 'containers'
+    scrape_interval: 30s        # Menos frequente para containers
 
-  # Node Exporter (host metrics)
+# ============================================================================
+# RECORDING RULES
+# ============================================================================
+# Regras para pré-calcular métricas agregadas
+
+# OptiFlow API Aggregations
+- name: optiflow_api_rules
+  interval: 30s
+  rules:
+    # Taxa de requests por segundo
+    - record: job:optiflow_http_requests:rate1m
+      expr: rate(optiflow_http_requests_total[1m])
+    
+    # Latência p95 por endpoint
+    - record: job:optiflow_http_request_duration:p95
+      expr: histogram_quantile(0.95, rate(optiflow_http_request_duration_seconds_bucket[5m]))
+    
+    # Taxa de erro (5xx)
+      - record: job:optiflow_http_errors:rate1m
+      expr: rate(optiflow_http_requests_total{status=~"5.."}[1m])
+    
+    # Taxa de sucesso
+    - record: job:optiflow_http_success_rate
+      expr: |
+        sum(rate(optiflow_http_requests_total{status=~"2.."}[5m]))
+        /
+        sum(rate(optiflow_http_requests_total[5m]))
+
+# Device/Tag Aggregations
+- name: optiflow_device_rules
+  interval: 30s
+  rules:
+    # Tags lidos por segundo
+    - record: job:optiflow_tags_read:rate1m
+      expr: rate(optiflow_tags_read_total[1m])
+    
+    # Taxa de erro de leitura de tags
+    - record: job:optiflow_tag_errors:rate1m
+      expr: rate(optiflow_tag_read_errors_total[1m])
+    
+    # Devices conectados por protocolo
+    - record: job:optiflow_devices_connected:total
+      expr: sum(optiflow_devices_connected) by (protocol)
+
+# Database Aggregations
+- name: optiflow_db_rules
+  interval: 30s
+  rules:
+    # Queries por segundo
+    - record: job:optiflow_db_queries:rate1m
+      expr: rate(optiflow_db_queries_total[1m])
+    
+    # Latência p95 de queries
+    - record: job:optiflow_db_query_duration:p95
+      expr: histogram_quantile(0.95, rate(optiflow_db_query_duration_seconds_bucket[5m]))
+    
+    # Taxa de erro de database
+    - record: job:optiflow_db_errors:rate1m
+      expr: rate(optiflow_db_errors_total[1m])
+
+# Kafka Aggregations
+- name: optiflow_kafka_rules
+  interval: 30s
+  rules:
+    # Mensagens por segundo
+    - record: job:optiflow_kafka_messages:rate1m
+      expr: rate(optiflow_kafka_messages_sent_total[1m])
+    
+    # Taxa de erro
+    - record: job:optiflow_kafka_errors:rate1m
+      expr: rate(optiflow_kafka_messages_failed_total[1m])
+
+# InfluxDB Aggregations
+- name: optiflow_influxdb_rules
+  interval: 30s
+  rules:
+    # Pontos escritos por segundo
+    - record: job:optiflow_influxdb_points:rate1m
+      expr: rate(optiflow_influxdb_points_written_total[1m])
+    
+    # Latência p95 de escrita
+    - record: job:optiflow_influxdb_write_duration:p95
+      expr: histogram_quantile(0.95, rate(optiflow_influxdb_write_duration_seconds_bucket[5m]))
+    
+    # Taxa de erro
+    - record: job:optiflow_influxdb_errors:rate1m
+      expr: rate(optiflow_influxdb_write_errors_total[1m])
+
+# System Aggregations
+- name: optiflow_system_rules
+  interval: 60s
+  rules:
+    # CPU usage médio
+    - record: job:optiflow_system_cpu:avg
+      expr: avg(optiflow_system_cpu_usage_percent)
+    
+    # Memória usage médio
+    - record: job:optiflow_system_memory:usage_ratio
+      expr: |
+        optiflow_system_memory_usage_bytes
+        /
+        (optiflow_system_memory_usage_bytes + optiflow_system_memory_available_bytes)
+
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']
