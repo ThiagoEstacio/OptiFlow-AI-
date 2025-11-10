@@ -32,6 +32,7 @@ from app.api.v1.endpoints import (
     ml_models,
     demo_data,
     quality,
+    opcua_discovery,
 )
 
 api_router = APIRouter()
@@ -65,3 +66,4 @@ api_router.include_router(ml_insights.router, prefix="/ml", tags=["ML Insights &
 api_router.include_router(ml_models.router, prefix="/ml", tags=["ML Models Management"])
 api_router.include_router(demo_data.router, prefix="/demo", tags=["Demo Data Endpoints"])
 api_router.include_router(quality.router, prefix="/quality", tags=["Quality Management & Tools"])
+api_router.include_router(opcua_discovery.router, prefix="/opcua-discovery", tags=["OPC-UA Auto-Discovery"])
