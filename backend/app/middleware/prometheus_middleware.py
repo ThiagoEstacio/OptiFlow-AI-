@@ -71,9 +71,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
                 self.metrics.track_request(method, endpoint, response.status_code)
                 self.metrics.track_request_duration(method, endpoint, duration)
                 
-                logger.info(
-                    f"✓ Metrics tracked: {method} {endpoint} - {response.status_code} "
-                    f"({duration:.3f}s)"
+                logger.debug(
+                    f"✓ {method} {endpoint} - {response.status_code} ({duration:.3f}s)"
                 )
                 
                 return response
