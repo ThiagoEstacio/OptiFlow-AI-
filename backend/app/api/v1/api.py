@@ -15,7 +15,6 @@ from app.api.v1.endpoints import (
     alarms,
     analytics,
     websocket_analytics,
-    websocket_tags,
     ai_insights,
     chat,
     assets,
@@ -27,12 +26,7 @@ from app.api.v1.endpoints import (
     gbm_data,
     historical_analysis,
     gateway_config,
-    extended_tags,
-    ml_insights,
-    ml_models,
-    demo_data,
-    quality,
-    opcua_discovery,
+    metrics,
 )
 
 api_router = APIRouter()
@@ -49,7 +43,6 @@ api_router.include_router(timeseries.router, prefix="/timeseries", tags=["Time S
 api_router.include_router(alarms.router, prefix="/alarms", tags=["Alarms"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(websocket_analytics.router, prefix="/analytics/ws", tags=["Analytics WebSocket"])
-api_router.include_router(websocket_tags.router, tags=["Kafka Tag Streaming"])
 api_router.include_router(ai_insights.router, prefix="/ai", tags=["AI Insights"])
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat & AI Assistant"])
 api_router.include_router(assets.router, prefix="/assets", tags=["Asset Framework"])
@@ -61,9 +54,4 @@ api_router.include_router(executive.router, prefix="/executive", tags=["Executiv
 api_router.include_router(gbm_data.router, prefix="/gbm", tags=["GBM Logistics Data Import & Insights"])
 api_router.include_router(historical_analysis.router, prefix="/historical", tags=["Historical Analysis & Trends"])
 api_router.include_router(gateway_config.router, prefix="/gateway-config", tags=["Gateway Configuration & OPC-UA Discovery"])
-api_router.include_router(extended_tags.router, prefix="/extended-tags", tags=["PI Asset Framework - Extended Tags & Formulas"])
-api_router.include_router(ml_insights.router, prefix="/ml", tags=["ML Insights & Predictions"])
-api_router.include_router(ml_models.router, prefix="/ml", tags=["ML Models Management"])
-api_router.include_router(demo_data.router, prefix="/demo", tags=["Demo Data Endpoints"])
-api_router.include_router(quality.router, prefix="/quality", tags=["Quality Management & Tools"])
-api_router.include_router(opcua_discovery.router, prefix="/opcua-discovery", tags=["OPC-UA Auto-Discovery"])
+api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics

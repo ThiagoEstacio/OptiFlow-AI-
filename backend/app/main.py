@@ -446,62 +446,6 @@ app.add_middleware(CircuitBreakerMiddleware)
 app.add_middleware(PrometheusMiddleware)
 logger.info("✅ Prometheus middleware added to FastAPI")
 
-# Legacy Prometheus metrics middleware (keep for backward compatibility)
-@app.middleware("http")
-async def legacy_prometheus_middleware(request: Request, call_next):
-    """Track HTTP request metrics"""
-    # Skip metrics endpoint itself to avoid recursion
-    if request.url.path == "/metrics":
-        return await call_next(request)
-
-    method = request.method
-    endpoint = request.url.path
-
-    # Track requests in progress
-    http_requests_in_progress.labels(method=method, endpoint=endpoint).inc()
-
-    # Track request duration
-    start_time = time.time()
-
-    try:
-        response = await call_next(request)
-        status = response.status_code
-
-        # Record metrics
-        http_requests_total.labels(
-            method=method,
-            endpoint=endpoint,
-            status=status
-        ).inc()
-
-        duration = time.time() - start_time
-        http_request_duration_seconds.labels(
-            method=method,
-            endpoint=endpoint
-        ).observe(duration)
-
-        return response
-
-    except Exception as e:
-        # Record error
-        http_requests_total.labels(
-            method=method,
-            endpoint=endpoint,
-            status=500
-        ).inc()
-
-        duration = time.time() - start_time
-        http_request_duration_seconds.labels(
-            method=method,
-            endpoint=endpoint
-        ).observe(duration)
-
-        raise
-
-    finally:
-        # Decrement in-progress counter
-        http_requests_in_progress.labels(method=method, endpoint=endpoint).dec()
-
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
