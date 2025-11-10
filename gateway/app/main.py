@@ -81,6 +81,14 @@ class Gateway:
             logger.info("=" * 60)
             logger.info("  ✅ Gateway initialized successfully")
             logger.info("=" * 60)
+            
+            # Create health check file
+            import os
+            health_file = "/app/data/gateway.health"
+            os.makedirs(os.path.dirname(health_file), exist_ok=True)
+            with open(health_file, 'w') as f:
+                f.write("healthy")
+            logger.info(f"Health check file created: {health_file}")
 
         except Exception as e:
             logger.error(f"Failed to initialize gateway: {str(e)}")
@@ -181,21 +189,14 @@ class Gateway:
         try:
             logger.info("Using fallback local discovery mode...")
 
-            # OPC-UA devices to discover (fallback hardcoded configuration)
+            # OPC-UA devices to discover (no hardcoded filters - discover ALL tags)
             opcua_servers = [
                 {
-                    "device_id": "optiflow-terminal-1",
+                    "device_id": "optiflow-terminal-main",
                     "endpoint": "opc.tcp://opcua-server:4840/optiflow/terminal",
                     "namespace_index": 2,
-                    "tag_filter": "CORR",
+                    "tag_filter": None,  # Discover ALL tags without filtering
                     "scan_rate": 1000
-                },
-                {
-                    "device_id": "optiflow-terminal-2",
-                    "endpoint": "opc.tcp://opcua-server:4840/optiflow/terminal",
-                    "namespace_index": 2,
-                    "tag_filter": "ARZ",
-                    "scan_rate": 2000
                 }
             ]
 

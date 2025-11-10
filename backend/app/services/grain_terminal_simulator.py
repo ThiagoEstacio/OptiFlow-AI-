@@ -855,29 +855,8 @@ class GrainTerminalSimulator:
             weather_flow_factor: Fator de redução de fluxo por clima (0.7-1.0)
         """
         # Número de sub-steps para estabilidade (DEM requer passos menores)
-        sub_steps = max(1, int(dt_s / self.dem_engine.time_step))
-        
-        for _ in range(sub_steps):
-            # 1. Spawn novas partículas nas comportas abertas (afetado por clima)
-            self._dem_spawn_from_gates(weather_flow_factor)
-            
-            # 2. Aplica velocidade das correias às partículas
-            self._dem_apply_belt_motion()
-            
-            # 3. Step do motor de física
-            dem_stats = self.dem_engine.step()
-            
-            # 4. Atualiza taxas de fluxo baseadas no DEM
-            self._dem_update_flow_rates()
-            
-            # 5. Coleta partículas que chegaram ao destino
-            self._dem_collect_particles()
-        
-        # Log stats periodicamente
-        if int(self.time_s * 10) % 100 == 0:  # a cada 10s
-            logger.debug(f"DEM: {dem_stats['particle_count']} particles, "
-                        f"{dem_stats['collision_count']} collisions, "
-                        f"KE={dem_stats['total_kinetic_energy']:.1f}J")
+        # DEM DESABILITADO - consumia 100% CPU
+        pass
     
     def _dem_spawn_from_gates(self, weather_flow_factor: float = 1.0):
         """

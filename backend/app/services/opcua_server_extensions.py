@@ -26,7 +26,7 @@ async def create_advanced_nodes(server_instance, teag, idx):
     
     # Contador de interlocks ativos
     nodes['INTERLOCKS_ACTIVE_COUNT'] = await interlocks_folder.add_variable(
-        idx, "ACTIVE.COUNT", 0
+        idx, "ACTIVE.COUNT", 0.0
     )
     
     # Lista simplificada de interlocks ativos (últimos 10)
@@ -48,19 +48,19 @@ async def create_advanced_nodes(server_instance, teag, idx):
     
     # Resumo por severidade
     nodes['ALARMS_TOTAL'] = await alarms_folder.add_variable(
-        idx, "TOTAL.COUNT", 0
+        idx, "TOTAL.COUNT", 0.0
     )
     nodes['ALARMS_CRITICAL'] = await alarms_folder.add_variable(
-        idx, "CRITICAL.COUNT", 0
+        idx, "CRITICAL.COUNT", 0.0
     )
     nodes['ALARMS_HIGH'] = await alarms_folder.add_variable(
-        idx, "HIGH.COUNT", 0
+        idx, "HIGH.COUNT", 0.0
     )
     nodes['ALARMS_MEDIUM'] = await alarms_folder.add_variable(
-        idx, "MEDIUM.COUNT", 0
+        idx, "MEDIUM.COUNT", 0.0
     )
     nodes['ALARMS_UNACK'] = await alarms_folder.add_variable(
-        idx, "UNACKNOWLEDGED.COUNT", 0
+        idx, "UNACKNOWLEDGED.COUNT", 0.0
     )
     
     # ====================================================================
@@ -73,10 +73,10 @@ async def create_advanced_nodes(server_instance, teag, idx):
         idx, "HEALTH_MEDIA.PV", 100.0
     )
     nodes['MAINT_NEEDS_ATTENTION'] = await maintenance_folder.add_variable(
-        idx, "ATENCAO.COUNT", 0
+        idx, "ATENCAO.COUNT", 0.0
     )
     nodes['MAINT_CRITICAL'] = await maintenance_folder.add_variable(
-        idx, "CRITICO.COUNT", 0
+        idx, "CRITICO.COUNT", 0.0
     )
     
     # Por equipamento (Belt samples)
@@ -287,20 +287,28 @@ async def update_advanced_nodes(server_instance):
         # ====================================================================
         # ALARMES
         # ====================================================================
-        alarm_summary = simulator.alarm_manager.get_alarm_summary()
-        await nodes['ALARMS_TOTAL'].write_value(alarm_summary['total'])
-        await nodes['ALARMS_CRITICAL'].write_value(alarm_summary['critical'])
-        await nodes['ALARMS_HIGH'].write_value(alarm_summary['high'])
-        await nodes['ALARMS_MEDIUM'].write_value(alarm_summary['medium'])
-        await nodes['ALARMS_UNACK'].write_value(alarm_summary['unacknowledged'])
-        
+        try:
+            alarm_summary = simulator.alarm_manager.get_alarm_summary()
+            await nodes['ALARMS_TOTAL'].write_value(alarm_summary['total'])
+            await nodes['ALARMS_CRITICAL'].write_value(alarm_summary['critical'])
+            await nodes['ALARMS_HIGH'].write_value(alarm_summary['high'])
+            await nodes['ALARMS_MEDIUM'].write_value(alarm_summary['medium'])
+            await nodes['ALARMS_UNACK'].write_value(alarm_summary['unacknowledged'])
+        except Exception as e:
+            logger.error(f"Failed writing ALARMS: {alarm_summary}")
+            raise
+
         # ====================================================================
         # MANUTENÇÃO
         # ====================================================================
-        maint_summary = simulator.maintenance_manager.get_maintenance_summary()
-        await nodes['MAINT_AVG_HEALTH'].write_value(maint_summary['avg_health_pct'])
-        await nodes['MAINT_NEEDS_ATTENTION'].write_value(maint_summary['needs_attention'])
-        await nodes['MAINT_CRITICAL'].write_value(maint_summary['critical'])
+        try:
+            maint_summary = simulator.maintenance_manager.get_maintenance_summary()
+            await nodes['MAINT_AVG_HEALTH'].write_value(maint_summary['avg_health_pct'])
+            await nodes['MAINT_NEEDS_ATTENTION'].write_value(maint_summary['needs_attention'])
+            await nodes['MAINT_CRITICAL'].write_value(maint_summary['critical'])
+        except Exception as e:
+            logger.error(f"Failed writing MAINTENANCE summary: {maint_summary}")
+            raise
         
         # Por equipamento
         for belt_id in ['CORR01', 'CORR02', 'CORR03']:
@@ -334,14 +342,18 @@ async def update_advanced_nodes(server_instance):
         # ====================================================================
         # ENERGIA
         # ====================================================================
-        energy_summary = simulator.energy_manager.get_electrical_summary()
-        await nodes['ENERGY_TOTAL_POWER'].write_value(energy_summary['total_power_kW'])
-        await nodes['ENERGY_AVG_PF'].write_value(energy_summary['average_pf'])
-        await nodes['ENERGY_TOTAL_KWH'].write_value(energy_summary['total_kWh'])
-        await nodes['ENERGY_KWH_PER_TON'].write_value(energy_summary['kWh_per_ton'])
-        await nodes['ENERGY_COST_TOTAL'].write_value(energy_summary['cost_total_BRL'])
-        await nodes['ENERGY_COST_PEAK'].write_value(energy_summary['cost_peak_BRL'])
-        await nodes['ENERGY_COST_OFFPEAK'].write_value(energy_summary['cost_offpeak_BRL'])
+        try:
+            energy_summary = simulator.energy_manager.get_electrical_summary()
+            await nodes['ENERGY_TOTAL_POWER'].write_value(energy_summary['total_power_kW'])
+            await nodes['ENERGY_AVG_PF'].write_value(energy_summary['average_pf'])
+            await nodes['ENERGY_TOTAL_KWH'].write_value(energy_summary['total_kWh'])
+            await nodes['ENERGY_KWH_PER_TON'].write_value(energy_summary['kWh_per_ton'])
+            await nodes['ENERGY_COST_TOTAL'].write_value(energy_summary['cost_total_BRL'])
+            await nodes['ENERGY_COST_PEAK'].write_value(energy_summary['cost_peak_BRL'])
+            await nodes['ENERGY_COST_OFFPEAK'].write_value(energy_summary['cost_offpeak_BRL'])
+        except Exception as e:
+            logger.error(f"Failed writing ENERGY summary: {energy_summary}")
+            raise
         
         # Por equipamento
         for belt_id in ['CORR01', 'CORR02', 'CORR03']:

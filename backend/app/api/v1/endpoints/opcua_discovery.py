@@ -19,8 +19,10 @@ from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
 
-from app.core.deps import get_current_active_user
-from app.core.logger import logger
+from app.core.deps import get_current_user
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -97,7 +99,7 @@ class TagQueryResponse(BaseModel):
 async def discover_opcua_tags(
     request: DiscoveryJobRequest,
     background_tasks: BackgroundTasks,
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_user)
 ):
     """
     Descobre tags de servidor OPC-UA
@@ -220,7 +222,7 @@ async def discover_opcua_tags(
 async def get_tags_by_equipment(
     equipment_type: str,
     equipment_id: Optional[str] = None,
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_user)
 ):
     """
     Busca tags por tipo de equipamento
@@ -280,7 +282,7 @@ async def get_tags_by_equipment(
 @router.get("/tags/by-route/{route}", response_model=TagQueryResponse, tags=["OPC-UA Discovery"])
 async def get_tags_by_route(
     route: str,
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_user)
 ):
     """
     Busca tags por rota do terminal
@@ -336,7 +338,7 @@ async def get_tags_by_route(
 
 @router.get("/statistics", tags=["OPC-UA Discovery"])
 async def get_discovery_statistics(
-    current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_user)
 ):
     """
     Retorna estatísticas de tags descobertos

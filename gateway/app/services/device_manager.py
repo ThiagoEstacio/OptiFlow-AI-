@@ -221,7 +221,7 @@ class DeviceManager:
 
                 # Send to backend
                 if data_points:
-                    if await self.backend.is_connected:
+                    if self.backend.is_connected:
                         success = await self.backend.send_timeseries_batch(data_points)
                         if success:
                             logger.debug(f"Sent {len(data_points)} points from {device_id}")
