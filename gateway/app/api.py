@@ -3,12 +3,13 @@ Gateway HTTP API - For configuration and tag browsing
 Similar to KEPServerEX admin interface
 """
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.core.logger import logger
 from app.services.opcua_browser import OPCUABrowser
+from app.services.gateway_metrics import get_gateway_metrics, init_gateway_metrics
 
 
 # Pydantic models
@@ -67,6 +68,64 @@ async def root():
 async def health():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/metrics")
+async def metrics():
+    """
+    Prometheus metrics endpoint
+    
+    Expõe métricas do gateway em formato Prometheus:
+    - Devices conectados por protocolo
+    - Tags lidos/s e qualidade
+    - Erros de leitura
+    - Buffer size e operações
+    - Comunicação com backend
+    - Performance de protocolos (OPC-UA, Modbus, MQTT)
+    """
+    try:
+        gateway_metrics = get_gateway_metrics()
+        metrics_data = gateway_metrics.export_metrics()
+        content_type = gateway_metrics.get_content_type()
+        
+        return Response(
+            content=metrics_data,
+            media_type=content_type
+        )
+    except Exception as e:
+        logger.error(f"Error exporting metrics: {e}", exc_info=True)
+        return Response(
+            content=f"# Error exporting metrics: {str(e)}\n",
+            media_type="text/plain",
+            status_code=500
+        )
+
+
+@app.get("/health/metrics")
+async def metrics_health():
+    """
+    Metrics health check
+    
+    Verifica se o sistema de métricas está funcionando
+    """
+    try:
+        gateway_metrics = get_gateway_metrics()
+        metrics_data = gateway_metrics.export_metrics()
+        
+        return {
+            "status": "healthy",
+            "metrics_service": "running",
+            "metrics_size_bytes": len(metrics_data),
+            "message": "Gateway metrics operational"
+        }
+    except Exception as e:
+        logger.error(f"Metrics health check failed: {e}", exc_info=True)
+        return {
+            "status": "unhealthy",
+            "metrics_service": "error",
+            "error": str(e),
+            "message": "Gateway metrics not operational"
+        }
 
 
 @app.post("/api/browse", response_model=DiscoverTagsResponse)
@@ -235,4 +294,13 @@ async def get_namespaces(endpoint: str):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Initialize gateway metrics on startup
+    init_gateway_metrics(
+        gateway_id="gateway-01",
+        version="1.0.0",
+        protocols=["opc_ua", "modbus", "mqtt"]
+    )
+    logger.info("✅ Gateway metrics initialized")
+    
     uvicorn.run(app, host="0.0.0.0", port=8080)
