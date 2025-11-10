@@ -6,12 +6,13 @@ import asyncio
 import signal
 from typing import Optional
 
-from .core.logger import logger
-from .core.config import settings
-from .services.backend_client import BackendClient
-from .services.buffer import DataBuffer
-from .services.device_manager import DeviceManager
-from .services.simulator_poller import SimulatorPoller
+from app.core.logger import logger
+from app.core.config import settings
+from app.services.backend_client import BackendClient
+from app.services.buffer import DataBuffer
+from app.services.device_manager import DeviceManager
+from app.services.simulator_poller import SimulatorPoller
+from app.services.config_loader import ConfigLoader
 
 
 class Gateway:
@@ -87,55 +88,142 @@ class Gateway:
 
     async def load_devices(self):
         """
-        Load device configurations from backend
+        Load device configurations from backend API
+        Similar to KEPServerEX functionality - dynamic configuration from database
         """
         try:
-            logger.info("Loading device configurations...")
+            logger.info("Loading device configurations from backend API...")
 
-            # TODO: Implement API endpoint to get gateway devices
-            # For now, we'll use a placeholder configuration
-            # In production, this would call:
-            # devices = await self.backend_client.get_gateway_devices(settings.GATEWAY_ID)
+            # Initialize configuration loader
+            config_loader = ConfigLoader(settings.BACKEND_URL)
 
-            # Example configuration (replace with backend API call)
-            example_devices = [
-                # {
-                #     "device_id": "plc-001",
-                #     "protocol": "opc_ua",
-                #     "config": {
-                #         "endpoint": "opc.tcp://192.168.1.100:4840",
-                #         "security_mode": "None"
-                #     },
-                #     "tags": [
-                #         {
-                #             "tag_id": "tag-001",
-                #             "tag_name": "Temperature",
-                #             "address": "ns=2;s=Temperature"
-                #         }
-                #     ],
-                #     "scan_rate": 1000
-                # }
-            ]
+            # Test backend connection
+            logger.info("Testing backend API connection...")
+            if not await config_loader.test_connection():
+                logger.error("❌ Cannot connect to backend API - falling back to local discovery mode")
+                await self._load_devices_fallback()
+                return
 
-            # Add devices
-            for device_config in example_devices:
-                device_id = device_config["device_id"]
-                protocol = device_config["protocol"]
-                config = device_config["config"]
-                tags = device_config.get("tags", [])
-                scan_rate = device_config.get("scan_rate", 1000)
+            # Load gateway configurations from backend
+            logger.info("Fetching gateway configurations from database...")
+            gateway_configs = await config_loader.load_gateway_configs(enabled_only=True)
 
-                # Add device
-                success = await self.device_manager.add_device(device_id, protocol, config)
+            if not gateway_configs:
+                logger.warning("⚠️  No gateway configurations found in database - falling back to local discovery mode")
+                await self._load_devices_fallback()
+                return
 
-                if success:
-                    # Start collection
-                    await self.device_manager.start_collection(device_id, tags, scan_rate)
+            logger.info(f"Found {len(gateway_configs)} gateway configuration(s) in database")
 
-            logger.info(f"Loaded {len(example_devices)} devices")
+            device_count = 0
+
+            # Process each gateway configuration
+            for gateway_config in gateway_configs:
+                try:
+                    logger.info("")
+                    logger.info(f"🔧 Loading gateway '{gateway_config['name']}' (ID: {gateway_config['id']})")
+                    logger.info(f"   Type: {gateway_config['gateway_type']}")
+                    logger.info(f"   Tags: {len(gateway_config.get('tags', []))}")
+
+                    # Convert to device manager format
+                    device_config = config_loader.convert_to_device_config(gateway_config)
+
+                    # Add device
+                    success = await self.device_manager.add_device(
+                        device_id=device_config["device_id"],
+                        protocol=device_config["protocol"],
+                        config=device_config["config"]
+                    )
+
+                    if success:
+                        # Start data collection with tags
+                        if device_config["tags"]:
+                            await self.device_manager.start_collection(
+                                device_id=device_config["device_id"],
+                                tags=device_config["tags"],
+                                scan_rate=device_config["scan_rate"]
+                            )
+
+                            logger.info(f"✅ Gateway '{gateway_config['name']}' loaded successfully")
+                            logger.info(f"   Collecting {len(device_config['tags'])} tags at {device_config['scan_rate']}ms interval")
+
+                            # Log first 3 tags as sample
+                            if device_config["tags"]:
+                                logger.info(f"   Sample tags:")
+                                for tag in device_config["tags"][:3]:
+                                    logger.info(f"     - {tag['tag_name']} ({tag.get('address', 'N/A')})")
+                                if len(device_config["tags"]) > 3:
+                                    logger.info(f"     ... and {len(device_config['tags']) - 3} more")
+
+                            device_count += 1
+                        else:
+                            logger.warning(f"⚠️  Gateway '{gateway_config['name']}' has no tags configured")
+                    else:
+                        logger.error(f"❌ Failed to add gateway '{gateway_config['name']}'")
+
+                except Exception as e:
+                    logger.error(f"Error loading gateway '{gateway_config.get('name', 'unknown')}': {str(e)}")
+                    continue
+
+            logger.info("")
+            logger.info(f"✓ Loaded {device_count} gateway(s) from database")
 
         except Exception as e:
-            logger.error(f"Failed to load devices: {str(e)}")
+            logger.error(f"Failed to load devices from backend: {str(e)}")
+            logger.warning("Falling back to local discovery mode...")
+            await self._load_devices_fallback()
+
+    async def _load_devices_fallback(self):
+        """
+        Fallback method: Load devices using local OPC-UA discovery
+        Used when backend API is unavailable
+        """
+        try:
+            logger.info("Using fallback local discovery mode...")
+
+            # OPC-UA devices to discover (fallback hardcoded configuration)
+            opcua_servers = [
+                {
+                    "device_id": "optiflow-terminal-1",
+                    "endpoint": "opc.tcp://opcua-server:4840/optiflow/terminal",
+                    "namespace_index": 2,
+                    "tag_filter": "CORR",
+                    "scan_rate": 1000
+                },
+                {
+                    "device_id": "optiflow-terminal-2",
+                    "endpoint": "opc.tcp://opcua-server:4840/optiflow/terminal",
+                    "namespace_index": 2,
+                    "tag_filter": "ARZ",
+                    "scan_rate": 2000
+                }
+            ]
+
+            device_count = 0
+
+            for server_config in opcua_servers:
+                logger.info("")
+                logger.info(f"🔍 Discovering tags from {server_config['endpoint']}...")
+
+                result = await self.device_manager.add_opcua_device_with_discovery(
+                    device_id=server_config["device_id"],
+                    endpoint=server_config["endpoint"],
+                    namespace_index=server_config.get("namespace_index"),
+                    tag_filter=server_config.get("tag_filter"),
+                    scan_rate=server_config.get("scan_rate", 1000)
+                )
+
+                if result["success"]:
+                    logger.info(f"✅ Device '{server_config['device_id']}' added with {result['tag_count']} tags")
+                    device_count += 1
+                else:
+                    logger.error(f"❌ Failed to add device '{server_config['device_id']}': {result.get('error')}")
+
+            logger.info("")
+            logger.info(f"✓ Loaded {device_count} devices using fallback mode")
+
+        except Exception as e:
+            logger.error(f"Fallback device loading failed: {str(e)}")
 
     async def health_check_loop(self):
         """Periodic health check loop"""

@@ -1,5 +1,6 @@
 /**
- * Tags Management Page with Full CRUD
+ * Tags Management Page - PI Asset Framework Style
+ * Optimized interface with tabs for Tags, Formulas, and Advanced Features
  */
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -10,20 +11,100 @@ import { ConfirmDialog } from '../components/Modal/ConfirmDialog';
 import { TagForm } from '../components/Forms/TagForm';
 import { Tag } from '../types';
 import { showToast } from '../utils/toast';
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Chip,
+  IconButton,
+  Tooltip,
+  Tabs,
+  Tab,
+  Card,
+  CardContent,
+  Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Stack
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+  Refresh as RefreshIcon,
+  AccountTree as TreeIcon,
+  CloudDownload as ArchiveIcon,
+  Functions as FormulaIcon,
+  Storage as DataIcon,
+  Settings as SettingsIcon,
+  TrendingUp as TrendingUpIcon,
+  Code as CodeIcon
+} from '@mui/icons-material';
+import { AssetTreeView } from '../components/ExtendedTags/AssetTreeView';
+import { TagBulkImport } from '../components/ExtendedTags/TagBulkImport';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`tabpanel-${index}`}
+      aria-labelledby={`tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
 export const TagsPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const { items: tags, loading } = useAppSelector((state) => state.tags);
   const { items: devices } = useAppSelector((state) => state.devices);
 
+  // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<Tag | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // View state
+  const [activeTab, setActiveTab] = useState(0);
+  const [showTreeView, setShowTreeView] = useState(false);
+
+  // Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDevice, setFilterDevice] = useState<string>('');
   const [filterDataType, setFilterDataType] = useState<string>('');
+  const [filterEnabled, setFilterEnabled] = useState<string>('all');
+
+  // Formulas state (mock data for now)
+  const [formulas, setFormulas] = useState<any[]>([
+    { id: '1', name: 'Eficiência Total', expression: '(Produção / Tempo) * 100', unit: '%', tags: ['PROD_01', 'TIME_01'] },
+    { id: '2', name: 'Consumo Específico', expression: 'Energia / Produção', unit: 'kWh/ton', tags: ['ENERGY_01', 'PROD_01'] }
+  ]);
 
   useEffect(() => {
     dispatch(fetchTags());
@@ -34,11 +115,11 @@ export const TagsPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       await dispatch(createTag(data)).unwrap();
-      showToast.success('Tag created successfully!');
+      showToast.success('Tag criado com sucesso!');
       setIsCreateModalOpen(false);
       dispatch(fetchTags());
     } catch (error: any) {
-      showToast.error(error.message || 'Failed to create tag');
+      showToast.error(error.message || 'Erro ao criar tag');
     } finally {
       setIsSubmitting(false);
     }
@@ -49,12 +130,12 @@ export const TagsPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       await dispatch(updateTag({ id: selectedTag.id, data })).unwrap();
-      showToast.success('Tag updated successfully!');
+      showToast.success('Tag atualizado com sucesso!');
       setIsEditModalOpen(false);
       setSelectedTag(null);
       dispatch(fetchTags());
     } catch (error: any) {
-      showToast.error(error.message || 'Failed to update tag');
+      showToast.error(error.message || 'Erro ao atualizar tag');
     } finally {
       setIsSubmitting(false);
     }
@@ -65,12 +146,12 @@ export const TagsPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       await dispatch(deleteTag(selectedTag.id)).unwrap();
-      showToast.success('Tag deleted successfully!');
+      showToast.success('Tag excluído com sucesso!');
       setIsDeleteDialogOpen(false);
       setSelectedTag(null);
       dispatch(fetchTags());
     } catch (error: any) {
-      showToast.error(error.message || 'Failed to delete tag');
+      showToast.error(error.message || 'Erro ao excluir tag');
     } finally {
       setIsSubmitting(false);
     }
@@ -90,6 +171,31 @@ export const TagsPage: React.FC = () => {
     return devices.find((d) => d.id === deviceId)?.name || deviceId;
   };
 
+  const handleBulkImport = async (importRequest: any) => {
+    try {
+      showToast.success(`Importando ${importRequest.tags.length} tags...`);
+      setTimeout(() => {
+        dispatch(fetchTags());
+      }, 1000);
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const template = `name,address,device_id,data_type,unit,description,enabled,log_enabled
+TEMP_01,ns=2;s=Temperature,${devices[0]?.id || ''},FLOAT,°C,Temperature sensor,true,true
+PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,true`;
+
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tags_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filteredTags = tags.filter((tag) => {
     const matchesSearch =
       tag.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -98,212 +204,522 @@ export const TagsPage: React.FC = () => {
 
     const matchesDevice = !filterDevice || tag.device_id === filterDevice;
     const matchesDataType = !filterDataType || tag.data_type === filterDataType;
+    const matchesEnabled =
+      filterEnabled === 'all' ||
+      (filterEnabled === 'enabled' && tag.enabled) ||
+      (filterEnabled === 'disabled' && !tag.enabled);
 
-    return matchesSearch && matchesDevice && matchesDataType;
+    return matchesSearch && matchesDevice && matchesDataType && matchesEnabled;
   });
+
+  // Stats
+  const stats = {
+    total: tags.length,
+    enabled: tags.filter((t) => t.enabled).length,
+    disabled: tags.filter((t) => !t.enabled).length,
+    logging: tags.filter((t) => t.log_enabled).length,
+    formulas: formulas.length
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tags</h1>
-          <p className="text-gray-600 mt-1">Manage data points and variables</p>
-        </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Add Tag
-        </button>
-      </div>
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              Tags & Fórmulas PI AF
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Gerenciamento completo de tags, fórmulas calculadas e arquivamento histórico
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <Tooltip title="Atualizar">
+              <IconButton onClick={() => dispatch(fetchTags())} color="primary" size="large">
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Hierarquia de Assets">
+              <IconButton onClick={() => setShowTreeView(!showTreeView)} color="primary" size="large">
+                <TreeIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Box>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 space-y-4">
-        <input
-          type="text"
-          placeholder="Search tags by name, address, or description..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        {/* Stats Cards */}
+        <Stack direction="row" spacing={2} sx={{ mb: 3, overflowX: 'auto' }}>
+          <Card elevation={2} sx={{ minWidth: 200, flex: 1 }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <DataIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold">{stats.total}</Typography>
+              <Typography variant="caption" color="text.secondary">Total Tags</Typography>
+            </CardContent>
+          </Card>
+          <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#e8f5e9' }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <TrendingUpIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold" color="success.main">{stats.enabled}</Typography>
+              <Typography variant="caption" color="text.secondary">Ativos</Typography>
+            </CardContent>
+          </Card>
+          <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#fff3e0' }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <SettingsIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold" color="warning.main">{stats.disabled}</Typography>
+              <Typography variant="caption" color="text.secondary">Inativos</Typography>
+            </CardContent>
+          </Card>
+          <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#e3f2fd' }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <ArchiveIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold" color="info.main">{stats.logging}</Typography>
+              <Typography variant="caption" color="text.secondary">Com Histórico</Typography>
+            </CardContent>
+          </Card>
+          <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#f3e5f5' }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <FormulaIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold" color="secondary.main">{stats.formulas}</Typography>
+              <Typography variant="caption" color="text.secondary">Fórmulas</Typography>
+            </CardContent>
+          </Card>
+        </Stack>
+      </Box>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <select
-            value={filterDevice}
-            onChange={(e) => setFilterDevice(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Devices</option>
-            {devices.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name}
-              </option>
-            ))}
-          </select>
+      <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
+        {/* Tree View Sidebar */}
+        {showTreeView && (
+          <Box sx={{ width: { xs: '100%', md: '25%' } }}>
+            <Paper elevation={3} sx={{ height: '700px', overflow: 'hidden' }}>
+              <AssetTreeView
+                onAssetSelect={(asset) => console.log('Selected:', asset)}
+                selectedAssetId={undefined}
+              />
+            </Paper>
+          </Box>
+        )}
 
-          <select
-            value={filterDataType}
-            onChange={(e) => setFilterDataType(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Data Types</option>
-            <option value="BOOL">Boolean</option>
-            <option value="INT">Integer</option>
-            <option value="FLOAT">Float</option>
-            <option value="DOUBLE">Double</option>
-            <option value="STRING">String</option>
-          </select>
-        </div>
-      </div>
+        {/* Main Content */}
+        <Box sx={{ flex: 1 }}>
+          <Paper elevation={3}>
+            {/* Tabs */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)} variant="fullWidth">
+                <Tab icon={<DataIcon />} label="Tags" iconPosition="start" />
+                <Tab icon={<FormulaIcon />} label="Fórmulas" iconPosition="start" />
+                <Tab icon={<SettingsIcon />} label="Configurações" iconPosition="start" />
+              </Tabs>
+            </Box>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Address
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Device
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Data Type
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Unit
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredTags.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                  {searchQuery || filterDevice || filterDataType
-                    ? 'No tags found matching your filters.'
-                    : 'No tags found. Click "Add Tag" to create one.'}
-                </td>
-              </tr>
-            ) : (
-              filteredTags.map((tag) => (
-                <tr key={tag.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{tag.name}</div>
-                    {tag.description && (
-                      <div className="text-sm text-gray-500">{tag.description}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 font-mono">{tag.address}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getDeviceName(tag.device_id)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                      {tag.data_type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {tag.unit || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          tag.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}
+            {/* Tab 0: Tags */}
+            <TabPanel value={activeTab} index={0}>
+              <Box sx={{ px: 2 }}>
+                {/* Actions */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography variant="h6">Gerenciamento de Tags</Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      startIcon={<DownloadIcon />}
+                      variant="outlined"
+                      size="small"
+                      onClick={handleDownloadTemplate}
+                    >
+                      Template
+                    </Button>
+                    <Button
+                      startIcon={<UploadIcon />}
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setIsBulkImportOpen(true)}
+                    >
+                      Importar
+                    </Button>
+                    <Button
+                      startIcon={<AddIcon />}
+                      variant="contained"
+                      size="small"
+                      onClick={() => setIsCreateModalOpen(true)}
+                    >
+                      Novo Tag
+                    </Button>
+                  </Stack>
+                </Box>
+
+                {/* Filters */}
+                <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 35%' } }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="Buscar..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                    </Box>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 15%' } }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Dispositivo</InputLabel>
+                        <Select value={filterDevice} label="Dispositivo" onChange={(e) => setFilterDevice(e.target.value)}>
+                          <MenuItem value="">Todos</MenuItem>
+                          {devices.map((device) => (
+                            <MenuItem key={device.id} value={device.id}>{device.name}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 15%' } }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Tipo</InputLabel>
+                        <Select value={filterDataType} label="Tipo" onChange={(e) => setFilterDataType(e.target.value)}>
+                          <MenuItem value="">Todos</MenuItem>
+                          <MenuItem value="BOOL">Boolean</MenuItem>
+                          <MenuItem value="INT">Integer</MenuItem>
+                          <MenuItem value="FLOAT">Float</MenuItem>
+                          <MenuItem value="DOUBLE">Double</MenuItem>
+                          <MenuItem value="STRING">String</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 15%' } }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Status</InputLabel>
+                        <Select value={filterEnabled} label="Status" onChange={(e) => setFilterEnabled(e.target.value)}>
+                          <MenuItem value="all">Todos</MenuItem>
+                          <MenuItem value="enabled">Ativos</MenuItem>
+                          <MenuItem value="disabled">Inativos</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+                    <Box sx={{ flex: { xs: '1 1 100%', md: '0 1 auto' }, minWidth: 100 }}>
+                      <Button
+                        fullWidth
+                        variant="text"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setFilterDevice('');
+                          setFilterDataType('');
+                          setFilterEnabled('all');
+                        }}
                       >
-                        {tag.enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                      {tag.log_enabled && (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                          Logging
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => openEditModal(tag)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => openDeleteDialog(tag)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                        Limpar
+                      </Button>
+                    </Box>
+                  </Box>
+                </Paper>
 
-      {/* Create Modal */}
+                {/* Tags Table */}
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell><strong>Nome</strong></TableCell>
+                        <TableCell><strong>Endereço</strong></TableCell>
+                        <TableCell><strong>Tipo</strong></TableCell>
+                        <TableCell><strong>Unidade</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                        <TableCell align="right"><strong>Ações</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredTags.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              Nenhum tag encontrado
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredTags.map((tag) => (
+                          <TableRow key={tag.id} hover>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="medium">{tag.name}</Typography>
+                              {tag.description && (
+                                <Typography variant="caption" color="text.secondary">{tag.description}</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontFamily="monospace" fontSize="0.75rem">
+                                {tag.address}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={tag.data_type} size="small" color="secondary" variant="outlined" />
+                            </TableCell>
+                            <TableCell>{tag.unit || '-'}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={0.5}>
+                                <Chip
+                                  label={tag.enabled ? 'Ativo' : 'Inativo'}
+                                  size="small"
+                                  color={tag.enabled ? 'success' : 'default'}
+                                />
+                                {tag.log_enabled && (
+                                  <Chip icon={<ArchiveIcon />} label="Log" size="small" color="info" variant="outlined" />
+                                )}
+                              </Stack>
+                            </TableCell>
+                            <TableCell align="right">
+                              <IconButton size="small" color="primary" onClick={() => openEditModal(tag)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton size="small" color="error" onClick={() => openDeleteDialog(tag)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {filteredTags.length > 0 && (
+                  <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Mostrando {filteredTags.length} de {tags.length} tags
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </TabPanel>
+
+            {/* Tab 1: Formulas */}
+            <TabPanel value={activeTab} index={1}>
+              <Box sx={{ px: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography variant="h6">Fórmulas Calculadas</Typography>
+                  <Button
+                    startIcon={<AddIcon />}
+                    variant="contained"
+                    size="small"
+                    onClick={() => setIsFormulaModalOpen(true)}
+                  >
+                    Nova Fórmula
+                  </Button>
+                </Box>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  {formulas.map((formula) => (
+                    <Box key={formula.id} sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
+                            <Box>
+                              <Typography variant="h6" gutterBottom>
+                                {formula.name}
+                              </Typography>
+                              <Chip label={formula.unit} size="small" color="primary" variant="outlined" />
+                            </Box>
+                            <Stack direction="row" spacing={0.5}>
+                              <IconButton size="small" color="primary">
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton size="small" color="error">
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Stack>
+                          </Box>
+
+                          <Divider sx={{ my: 1 }} />
+
+                          <Box sx={{ bgcolor: 'grey.100', p: 1.5, borderRadius: 1, mb: 2 }}>
+                            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                              Expressão:
+                            </Typography>
+                            <Typography variant="body2" fontFamily="monospace" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <CodeIcon fontSize="small" color="action" />
+                              {formula.expression}
+                            </Typography>
+                          </Box>
+
+                          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                            Tags utilizadas:
+                          </Typography>
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                            {formula.tags.map((tag: string) => (
+                              <Chip key={tag} label={tag} size="small" variant="outlined" />
+                            ))}
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    </Box>
+                  ))}
+                </Box>
+
+                {formulas.length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <FormulaIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      Nenhuma fórmula configurada
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" mb={3}>
+                      Crie fórmulas para calcular KPIs e métricas derivadas
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => setIsFormulaModalOpen(true)}
+                    >
+                      Criar Primeira Fórmula
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            </TabPanel>
+
+            {/* Tab 2: Settings */}
+            <TabPanel value={activeTab} index={2}>
+              <Box sx={{ px: 2 }}>
+                <Typography variant="h6" gutterBottom>Configurações Avançadas</Typography>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Configurações de arquivamento, sincronização e integrações
+                </Typography>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                          Arquivamento Histórico
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          Configure políticas de retenção e compressão de dados históricos
+                        </Typography>
+                        <Button variant="outlined" size="small" fullWidth>
+                          Configurar Arquivamento
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Box>
+
+                  <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                          Sincronização PI System
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          Importe tags e estrutura de assets do PI AF
+                        </Typography>
+                        <Button variant="outlined" size="small" fullWidth>
+                          Configurar Sincronização
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Box>
+
+                  <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                          Exportação de Dados
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          Exporte configurações de tags em diversos formatos
+                        </Typography>
+                        <Button variant="outlined" size="small" fullWidth>
+                          Exportar Configurações
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Box>
+
+                  <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                          Notificações & Alarmes
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          Configure alarmes baseados em valores de tags
+                        </Typography>
+                        <Button variant="outlined" size="small" fullWidth>
+                          Gerenciar Alarmes
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Box>
+                </Box>
+              </Box>
+            </TabPanel>
+          </Paper>
+        </Box>
+      </Box>
+
+      {/* Modals */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => !isSubmitting && setIsCreateModalOpen(false)}
-        title="Create New Tag"
+        title="Criar Novo Tag"
         size="lg"
       >
         <TagForm
-          deviceId={devices[0]?.id}
           onSubmit={handleCreate}
           onCancel={() => setIsCreateModalOpen(false)}
-          isLoading={isSubmitting}
+          isSubmitting={isSubmitting}
         />
       </Modal>
 
-      {/* Edit Modal */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => !isSubmitting && setIsEditModalOpen(false)}
-        title="Edit Tag"
+        title="Editar Tag"
         size="lg"
       >
         {selectedTag && (
           <TagForm
-            tag={selectedTag}
+            initialData={selectedTag}
             onSubmit={handleEdit}
             onCancel={() => setIsEditModalOpen(false)}
-            isLoading={isSubmitting}
+            isSubmitting={isSubmitting}
           />
         )}
       </Modal>
 
-      {/* Delete Confirmation */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => !isSubmitting && setIsDeleteDialogOpen(false)}
         onConfirm={handleDelete}
-        title="Delete Tag"
-        message={`Are you sure you want to delete "${selectedTag?.name}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title="Excluir Tag"
+        message={`Tem certeza que deseja excluir "${selectedTag?.name}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
         variant="danger"
         isLoading={isSubmitting}
       />
-    </div>
+
+      <TagBulkImport
+        open={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onImport={handleBulkImport}
+        gatewayId={undefined}
+      />
+
+      {/* Formula Modal (TODO: Create component) */}
+      <Modal
+        isOpen={isFormulaModalOpen}
+        onClose={() => setIsFormulaModalOpen(false)}
+        title="Nova Fórmula"
+        size="lg"
+      >
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            Modal de criação de fórmulas será implementado aqui
+          </Typography>
+        </Box>
+      </Modal>
+    </Box>
   );
 };

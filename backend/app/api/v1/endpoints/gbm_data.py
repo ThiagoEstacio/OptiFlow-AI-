@@ -14,7 +14,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import get_db, get_current_user
+from app.core.deps import get_db, get_current_user
 from app.models.user import User
 from app.services.data_import_service import DataImportService
 from app.services.gbm_insights_service import GBMInsightsService

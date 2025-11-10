@@ -4,7 +4,6 @@ import {
   Box,
   Container,
   Typography,
-  Grid,
   Card,
   CardContent,
   Alert,
@@ -179,8 +178,8 @@ const GBMInsights: React.FC = () => {
         </Box>
 
         {/* KPI Cards */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={3}>
+        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 4 }}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -191,9 +190,9 @@ const GBMInsights: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -207,9 +206,9 @@ const GBMInsights: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -220,9 +219,9 @@ const GBMInsights: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -233,120 +232,121 @@ const GBMInsights: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         {/* Performance Score */}
         {benchmarks && benchmarks.status === 'success' && (
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Performance Benchmark
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="h2" fontWeight="bold" color="primary">
-                        {benchmarks.overall_score}
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary">
-                        {benchmarks.rating}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ flex: 3 }}>
-                      <Grid container spacing={2}>
-                        {Object.entries(benchmarks.performance_scores || {}).map(
-                          ([metric, score]: [string, any]) => (
-                            <Grid item xs={6} key={metric}>
-                              <Paper sx={{ p: 2 }}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {metric.replace('avg_', '').replace('_', ' ')}
-                                </Typography>
-                                <Typography variant="h6" fontWeight="bold">
-                                  {score.toFixed(0)}%
-                                </Typography>
-                              </Paper>
-                            </Grid>
-                          )
-                        )}
-                      </Grid>
+          <Box sx={{ mb: 4 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Performance Benchmark
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h2" fontWeight="bold" color="primary">
+                      {benchmarks.overall_score}
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                      {benchmarks.rating}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 3 }}>
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                      {Object.entries(benchmarks.performance_scores || {}).map(
+                        ([metric, score]: [string, any]) => (
+                          <Box key={metric} sx={{ flex: '1 1 calc(50% - 8px)', minWidth: 200 }}>
+                            <Paper sx={{ p: 2 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {metric.replace('avg_', '').replace('_', ' ')}
+                              </Typography>
+                              <Typography variant="h6" fontWeight="bold">
+                                {score.toFixed(0)}%
+                              </Typography>
+                            </Paper>
+                          </Box>
+                        )
+                      )}
                     </Box>
                   </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
         )}
 
         {/* Charts */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Daily Trends */}
-          <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Daily Operations Trend
-                </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dailyTrends}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
-                    <Tooltip />
-                    <Legend />
-                    <Line
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="total_tonnage"
-                      stroke="#8884d8"
-                      name="Tonnage (t)"
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="operations"
-                      stroke="#82ca9d"
-                      name="Operations"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mb: 4 }}>
+          {/* Daily Trends and Product Mix */}
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            {/* Daily Trends */}
+            <Box sx={{ flex: '1 1 calc(66.67% - 16px)', minWidth: 400 }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Daily Operations Trend
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={dailyTrends}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="total_tonnage"
+                        stroke="#8884d8"
+                        name="Tonnage (t)"
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="operations"
+                        stroke="#82ca9d"
+                        name="Operations"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </Box>
 
-          {/* Product Mix */}
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Product Mix
-                </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={productAnalysis}
-                      dataKey="total_tonnage"
-                      nameKey="product_type"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label
-                    >
-                      {productAnalysis.map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
+            {/* Product Mix */}
+            <Box sx={{ flex: '1 1 calc(33.33% - 16px)', minWidth: 300 }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Product Mix
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={productAnalysis}
+                        dataKey="total_tonnage"
+                        nameKey="product_type"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label
+                      >
+                        {productAnalysis.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </Box>
+          </Box>
 
           {/* Product Performance */}
-          <Grid item xs={12}>
+          <Box>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -365,8 +365,8 @@ const GBMInsights: React.FC = () => {
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         {/* Insights */}
         <Card>

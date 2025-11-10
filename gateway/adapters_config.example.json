@@ -1,0 +1,104 @@
+{
+  "adapters": [
+    {
+      "adapter_id": "plc1_modbus",
+      "protocol_type": "modbus",
+      "enabled": true,
+      "host": "192.168.1.10",
+      "port": 502,
+      "scan_rate_ms": 1000,
+      "timeout": 5.0,
+      "retry_interval": 10.0,
+      "max_retries": 5,
+      "tags": [
+        {
+          "name": "Temperature_Zone1",
+          "address": "40001",
+          "type": "float32",
+          "function": "holding"
+        },
+        {
+          "name": "Pressure_Tank1",
+          "address": "40003",
+          "type": "float32",
+          "function": "holding"
+        },
+        {
+          "name": "Motor_Running",
+          "address": "10001",
+          "type": "bool",
+          "function": "discrete"
+        }
+      ],
+      "extra_config": {
+        "slave_id": 1,
+        "byte_order": "big",
+        "word_order": "big"
+      }
+    },
+    {
+      "adapter_id": "scada_opcua",
+      "protocol_type": "opcua",
+      "enabled": true,
+      "host": "192.168.1.20",
+      "port": 4840,
+      "scan_rate_ms": 500,
+      "timeout": 10.0,
+      "tags": [
+        {
+          "name": "Conveyor1_Speed",
+          "address": "ns=2;i=1001"
+        },
+        {
+          "name": "Conveyor1_Load",
+          "address": "ns=2;i=1002"
+        },
+        {
+          "name": "Shiploader_Position",
+          "address": "ns=2;i=2001"
+        }
+      ],
+      "extra_config": {
+        "username": "opcua_user",
+        "password": "opcua_pass",
+        "subscription_interval": 100
+      }
+    },
+    {
+      "adapter_id": "iot_mqtt",
+      "protocol_type": "mqtt",
+      "enabled": true,
+      "host": "mqtt.example.com",
+      "port": 1883,
+      "scan_rate_ms": 1000,
+      "tags": [
+        {
+          "name": "Vibration_Sensor1",
+          "address": "sensors/vibration/1",
+          "path": "value",
+          "type": "float"
+        },
+        {
+          "name": "Temperature_Ambient",
+          "address": "sensors/temperature/ambient",
+          "path": "data.temperature",
+          "type": "float"
+        },
+        {
+          "name": "All_Alarms",
+          "address": "alarms/#",
+          "path": "message",
+          "type": "string"
+        }
+      ],
+      "extra_config": {
+        "username": "mqtt_user",
+        "password": "mqtt_pass",
+        "qos": 1,
+        "clean_session": true,
+        "keepalive": 60,
+        "use_tls": false
+      }
+    }
+  ]
+}

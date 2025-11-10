@@ -6,7 +6,6 @@ import {
   Typography,
   TextField,
   Button,
-  Grid,
   Select,
   MenuItem,
   FormControl,
@@ -126,196 +125,198 @@ const ManualEntryTab: React.FC<ManualEntryTabProps> = ({
             Enter operational data manually for individual records
           </Typography>
 
-          <Grid container spacing={2} sx={{ mt: 2 }}>
-            <Grid item xs={12}>
-              <FormControl fullWidth required>
-                <InputLabel>Data Source</InputLabel>
-                <Select
-                  value={selectedDataSource}
-                  onChange={(e) => setSelectedDataSource(e.target.value as number)}
-                  label="Data Source"
-                >
-                  {manualDataSources.map((ds) => (
-                    <MenuItem key={ds.id} value={ds.id}>
-                      {ds.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Operation Type</InputLabel>
-                <Select
-                  value={formData.operation_type}
-                  onChange={(e) => handleChange('operation_type', e.target.value)}
-                  label="Operation Type"
-                >
-                  <MenuItem value="road_discharge">Road Discharge</MenuItem>
-                  <MenuItem value="rail_discharge">Rail Discharge</MenuItem>
-                  <MenuItem value="ship_loading">Ship Loading</MenuItem>
-                  <MenuItem value="receiving">Receiving</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                required
-                label="Operation Date"
-                type="datetime-local"
-                value={formData.operation_date}
-                onChange={(e) => handleChange('operation_date', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Vehicle ID"
-                value={formData.vehicle_id}
-                onChange={(e) => handleChange('vehicle_id', e.target.value)}
-                placeholder="Truck plate, ship name, etc."
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Product Type"
-                value={formData.product_type}
-                onChange={(e) => handleChange('product_type', e.target.value)}
-                placeholder="corn, soy, wheat, etc."
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                required
-                label="Net Weight (kg)"
-                type="number"
-                value={formData.net_weight_kg}
-                onChange={(e) => handleChange('net_weight_kg', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Gross Weight (kg)"
-                type="number"
-                value={formData.gross_weight_kg}
-                onChange={(e) => handleChange('gross_weight_kg', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Tare Weight (kg)"
-                type="number"
-                value={formData.tare_weight_kg}
-                onChange={(e) => handleChange('tare_weight_kg', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Moisture (%)"
-                type="number"
-                value={formData.moisture_percent}
-                onChange={(e) => handleChange('moisture_percent', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Impurity (%)"
-                type="number"
-                value={formData.impurity_percent}
-                onChange={(e) => handleChange('impurity_percent', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Loading Time (minutes)"
-                type="number"
-                value={formData.loading_time_minutes}
-                onChange={(e) => handleChange('loading_time_minutes', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Waiting Time (minutes)"
-                type="number"
-                value={formData.waiting_time_minutes}
-                onChange={(e) => handleChange('waiting_time_minutes', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Origin"
-                value={formData.origin}
-                onChange={(e) => handleChange('origin', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Destination"
-                value={formData.destination}
-                onChange={(e) => handleChange('destination', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Notes"
-                multiline
-                rows={3}
-                value={formData.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={handleSubmit}
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            <FormControl fullWidth required>
+              <InputLabel>Data Source</InputLabel>
+              <Select
+                value={selectedDataSource}
+                onChange={(e) => setSelectedDataSource(e.target.value as number)}
+                label="Data Source"
               >
-                {saving ? 'Saving...' : 'Save Entry'}
-              </Button>
-            </Grid>
+                {manualDataSources.map((ds) => (
+                  <MenuItem key={ds.id} value={ds.id}>
+                    {ds.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <FormControl fullWidth required>
+                  <InputLabel>Operation Type</InputLabel>
+                  <Select
+                    value={formData.operation_type}
+                    onChange={(e) => handleChange('operation_type', e.target.value)}
+                    label="Operation Type"
+                  >
+                    <MenuItem value="road_discharge">Road Discharge</MenuItem>
+                    <MenuItem value="rail_discharge">Rail Discharge</MenuItem>
+                    <MenuItem value="ship_loading">Ship Loading</MenuItem>
+                    <MenuItem value="receiving">Receiving</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Operation Date"
+                  type="datetime-local"
+                  value={formData.operation_date}
+                  onChange={(e) => handleChange('operation_date', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Vehicle ID"
+                  value={formData.vehicle_id}
+                  onChange={(e) => handleChange('vehicle_id', e.target.value)}
+                  placeholder="Truck plate, ship name, etc."
+                />
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Product Type"
+                  value={formData.product_type}
+                  onChange={(e) => handleChange('product_type', e.target.value)}
+                  placeholder="corn, soy, wheat, etc."
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '200px' }}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Net Weight (kg)"
+                  type="number"
+                  value={formData.net_weight_kg}
+                  onChange={(e) => handleChange('net_weight_kg', e.target.value)}
+                />
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '200px' }}>
+                <TextField
+                  fullWidth
+                  label="Gross Weight (kg)"
+                  type="number"
+                  value={formData.gross_weight_kg}
+                  onChange={(e) => handleChange('gross_weight_kg', e.target.value)}
+                />
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '200px' }}>
+                <TextField
+                  fullWidth
+                  label="Tare Weight (kg)"
+                  type="number"
+                  value={formData.tare_weight_kg}
+                  onChange={(e) => handleChange('tare_weight_kg', e.target.value)}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Moisture (%)"
+                  type="number"
+                  value={formData.moisture_percent}
+                  onChange={(e) => handleChange('moisture_percent', e.target.value)}
+                />
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Impurity (%)"
+                  type="number"
+                  value={formData.impurity_percent}
+                  onChange={(e) => handleChange('impurity_percent', e.target.value)}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Loading Time (minutes)"
+                  type="number"
+                  value={formData.loading_time_minutes}
+                  onChange={(e) => handleChange('loading_time_minutes', e.target.value)}
+                />
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Waiting Time (minutes)"
+                  type="number"
+                  value={formData.waiting_time_minutes}
+                  onChange={(e) => handleChange('waiting_time_minutes', e.target.value)}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Origin"
+                  value={formData.origin}
+                  onChange={(e) => handleChange('origin', e.target.value)}
+                />
+              </Box>
+
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <TextField
+                  fullWidth
+                  label="Destination"
+                  value={formData.destination}
+                  onChange={(e) => handleChange('destination', e.target.value)}
+                />
+              </Box>
+            </Box>
+
+            <TextField
+              fullWidth
+              label="Notes"
+              multiline
+              rows={3}
+              value={formData.notes}
+              onChange={(e) => handleChange('notes', e.target.value)}
+            />
+
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={handleSubmit}
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
+            >
+              {saving ? 'Saving...' : 'Save Entry'}
+            </Button>
 
             {success && (
-              <Grid item xs={12}>
-                <Alert severity="success">Entry saved successfully!</Alert>
-              </Grid>
+              <Alert severity="success">Entry saved successfully!</Alert>
             )}
 
             {error && (
-              <Grid item xs={12}>
-                <Alert severity="error">{error}</Alert>
-              </Grid>
+              <Alert severity="error">{error}</Alert>
             )}
-          </Grid>
+          </Box>
         </CardContent>
       </Card>
     </Box>

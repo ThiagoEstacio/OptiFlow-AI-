@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models.tag import Tag
 from app.schemas.tag import TagCreate, TagUpdate, TagResponse
 from app.services.opcua_tag_reader import update_tag_values_from_opcua
+from app.services.influxdb import influxdb_service
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -189,5 +190,75 @@ async def sync_tag_values_from_opcua(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=result["message"]
         )
-    
+
     return result
+
+
+@router.get("/realtime/{tag_name}")
+async def get_realtime_tag_value(tag_name: str):
+    """
+    Get real-time value for a tag from InfluxDB
+
+    This endpoint:
+    - Queries InfluxDB for the latest value of a tag by name
+    - Returns the current value, timestamp, quality, and source
+    - Useful for real-time dashboards and monitoring
+
+    Example: GET /api/v1/tags/realtime/TEST_COUNTER_PV
+    """
+    try:
+        result = influxdb_service.get_latest_value_by_name(tag_name)
+
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No data found for tag '{tag_name}' in the last 24 hours"
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving realtime value for tag '{tag_name}': {str(e)}"
+        )
+
+
+@router.post("/realtime/batch")
+async def get_realtime_tag_values_batch(tag_names: List[str]):
+    """
+    Get real-time values for multiple tags from InfluxDB (batch query)
+
+    This endpoint:
+    - Accepts a list of tag names in request body
+    - Returns latest values for all tags in a single optimized query
+    - More efficient than multiple individual requests
+    - Useful for SCADA dashboards monitoring many tags
+
+    Example POST body: ["TEST_COUNTER_PV", "WAREHOUSE_LEVEL_PCT_PV", "TOTAL_MASS_T_PV"]
+    """
+    try:
+        if not tag_names:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tag names list cannot be empty"
+            )
+
+        if len(tag_names) > 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 100 tags per request"
+            )
+
+        results = influxdb_service.get_latest_values_by_names(tag_names)
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving batch realtime values: {str(e)}"
+        )

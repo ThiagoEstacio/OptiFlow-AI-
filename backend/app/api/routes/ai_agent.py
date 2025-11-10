@@ -455,7 +455,7 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
     4. LLM generates final response
     """
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{OLLAMA_BASE_URL}/api/chat",
                 json={

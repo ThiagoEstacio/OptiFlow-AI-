@@ -22,9 +22,9 @@ import numpy as np
 from app.models.external_data import GBMLogisticsData
 from app.models.operational_data import DailyOperations, TruckEntry, ShipLoading
 from app.services.influxdb import influxdb_service
-from app.core.logging import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class HistoricalAnalysisService:

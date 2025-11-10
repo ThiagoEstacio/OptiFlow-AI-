@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
-  Grid,
   Paper,
   Typography,
   Button,
@@ -36,6 +35,7 @@ import {
   Bolt,
 } from '@mui/icons-material';
 import { useSimulator } from '../hooks/useSimulator';
+import { useKafkaTags } from '../hooks/useKafkaTags';
 import SystemOverview from '../components/simulator/SystemOverview';
 import EquipmentControls from '../components/simulator/EquipmentControls';
 import AlarmsPanel from '../components/simulator/AlarmsPanel';
@@ -43,8 +43,7 @@ import TrendsPanel from '../components/simulator/TrendsPanel';
 import InterlockMonitor from '../components/simulator/InterlockMonitor';
 import MaintenanceDashboard from '../components/simulator/MaintenanceDashboard';
 import EnergyDashboard from '../components/simulator/EnergyDashboard';
-import ScadaSynoptic from '../components/ScadaSynoptic';
-import ScadaProcessView from '../components/ScadaProcessView';
+import ModernScadaView from '../components/simulator/ModernScadaView';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -82,19 +81,17 @@ export default function SimulatorPage() {
     refreshStatus,
   } = useSimulator();
 
+  // Kafka real-time streaming hook
+  const { tags: kafkaTags, connected: kafkaConnected, messageCount } = useKafkaTags();
+
   const [activeTab, setActiveTab] = useState(0);
-  const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // Auto-refresh every 2 seconds
+  // Load initial status on mount
   useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      refreshStatus();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshStatus]);
+    refreshStatus().catch((err) => {
+      console.error('Failed to load initial status:', err);
+    });
+  }, [refreshStatus]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -108,16 +105,16 @@ export default function SimulatorPage() {
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Grid container alignItems="center" justifyContent="space-between">
-          <Grid item>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box>
             <Typography variant="h4" component="h1" gutterBottom>
               🏭 Simulador de Terminal Exportador
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
               Terminal de Grãos - Linha 1500 t/h
             </Typography>
-          </Grid>
-          <Grid item>
+          </Box>
+          <Box>
             <Stack direction="row" spacing={2}>
               <Button
                 variant={status?.system?.running ? "outlined" : "contained"}
@@ -146,14 +143,14 @@ export default function SimulatorPage() {
                 Reset
               </Button>
             </Stack>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Box>
 
       {/* System Status Bar */}
       <Paper sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={3}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 20%' } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 Status:
@@ -165,13 +162,13 @@ export default function SimulatorPage() {
                 size="small"
               />
             </Box>
-          </Grid>
-          <Grid item xs={12} md={2}>
+          </Box>
+          <Box sx={{ flex: { xs: '1 1 50%', md: '0 1 auto' }, minWidth: 100 }}>
             <Typography variant="body2" color="text.secondary">
               Tempo: {status?.system?.time_s?.toFixed(0) || 0}s
             </Typography>
-          </Grid>
-          <Grid item xs={12} md={2}>
+          </Box>
+          <Box sx={{ flex: { xs: '1 1 50%', md: '1 1 15%' } }}>
             <Typography variant="body2" color="text.secondary">
               Armazém: {status?.system?.warehouse_level_pct?.toFixed(1) || 0}%
             </Typography>
@@ -180,14 +177,21 @@ export default function SimulatorPage() {
               value={status?.system?.warehouse_level_pct || 0}
               sx={{ mt: 0.5 }}
             />
-          </Grid>
-          <Grid item xs={12} md={2}>
+          </Box>
+          <Box sx={{ flex: { xs: '1 1 50%', md: '0 1 auto' }, minWidth: 120 }}>
             <Typography variant="body2" color="text.secondary">
               Energia: {status?.system?.total_kWh?.toFixed(1) || 0} kWh
             </Typography>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
+          </Box>
+          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 20%' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+            <Stack direction="row" spacing={1}>
+              <Chip
+                icon={<Speed />}
+                label={kafkaConnected ? `Kafka Live (${messageCount})` : 'Kafka Offline'}
+                size="small"
+                color={kafkaConnected ? 'success' : 'default'}
+                variant={kafkaConnected ? 'filled' : 'outlined'}
+              />
               <Badge badgeContent={activeAlarms} color="warning">
                 <Chip
                   icon={<Warning />}
@@ -205,8 +209,8 @@ export default function SimulatorPage() {
                 />
               </Badge>
             </Stack>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Paper>
 
       {/* Error Display */}
@@ -227,8 +231,8 @@ export default function SimulatorPage() {
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab icon={<Speed />} label="Process View" />
-          <Tab icon={<Assessment />} label="Synoptic" />
+          <Tab icon={<Assessment />} label="Visão Geral" />
+          <Tab icon={<Speed />} label="SCADA Animado" />
           <Tab icon={<Settings />} label="Controles" />
           <Tab
             icon={
@@ -252,18 +256,15 @@ export default function SimulatorPage() {
         </Tabs>
 
         <TabPanel value={activeTab} index={0}>
-          <ScadaProcessView
-            status={status}
-            onEquipmentClick={(id) => console.log('Equipment clicked:', id)}
-          />
+          <SystemOverview status={status} />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
-          <ScadaSynoptic
+          <ModernScadaView
             status={status}
-            onCommand={(cmd, params) => {
-              if (cmd === 'start') startSystem();
-              else if (cmd === 'stop') stopSystem();
+            onEquipmentClick={(equipmentId) => {
+              console.log('Equipment clicked:', equipmentId);
+              // TODO: Show equipment detail modal
             }}
           />
         </TabPanel>
@@ -311,8 +312,8 @@ export default function SimulatorPage() {
       </Paper>
 
       {/* KPIs Footer */}
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={3}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -323,8 +324,8 @@ export default function SimulatorPage() {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -335,8 +336,8 @@ export default function SimulatorPage() {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -347,8 +348,8 @@ export default function SimulatorPage() {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -359,8 +360,8 @@ export default function SimulatorPage() {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
     </Container>
   );
 }

@@ -23,8 +23,13 @@ class Settings(BaseSettings):
 
     # Database - PostgreSQL
     DATABASE_URL: str = "postgresql+asyncpg://optiflow:optiflow_password@localhost:5432/optiflow"
-    DATABASE_POOL_SIZE: int = 10
-    DATABASE_MAX_OVERFLOW: int = 20
+    DATABASE_POOL_SIZE: int = 20  # Increased from 10 for better concurrency
+    DATABASE_MAX_OVERFLOW: int = 40  # Increased from 20 for burst handling
+    DATABASE_POOL_TIMEOUT: int = 30  # Connection pool timeout in seconds
+    DATABASE_POOL_RECYCLE: int = 3600  # Recycle connections after 1 hour
+    DATABASE_POOL_PRE_PING: bool = True  # Test connections before using
+    DATABASE_CONNECT_TIMEOUT: int = 10  # Connection timeout in seconds
+    DATABASE_COMMAND_TIMEOUT: int = 30  # Query execution timeout in seconds
 
     # Database - InfluxDB
     INFLUXDB_URL: str = "http://localhost:8086"
@@ -73,6 +78,11 @@ class Settings(BaseSettings):
     OPENAI_MAX_TOKENS: int = 1000
     OPENAI_TEMPERATURE: float = 0.7
 
+    # AI / Ollama (local LLM)
+    OLLAMA_BASE_URL: str = "http://ollama:11434"
+    OLLAMA_MODEL: str = "llama3.1:8b"
+    USE_OLLAMA: bool = True  # Set to True to use Ollama instead of OpenAI
+
     # Gateway
     GATEWAY_API_KEY: str = "secure-gateway-api-key-change-in-production"
 
@@ -85,6 +95,12 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 100
+
+    # Request Timeout & Resilience
+    REQUEST_TIMEOUT_SECONDS: int = 30  # Maximum request processing time
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 5  # Failures before opening circuit
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 60  # Seconds before trying to recover
+    CIRCUIT_BREAKER_EXPECTED_EXCEPTION: str = "Exception"  # Exception to catch
 
     # Email (for notifications)
     SMTP_HOST: Optional[str] = None

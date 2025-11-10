@@ -648,8 +648,11 @@ async def get_dashboard_summary(
     Provides overview of AI system health and recent insights
     """
     try:
-        # Get all active tags
-        tags = db.query(Tag).filter(Tag.is_active == True).limit(20).all()
+        # Get all active tags (SQLAlchemy 2.x async syntax)
+        result = await db.execute(
+            select(Tag).where(Tag.is_active == True).limit(20)
+        )
+        tags = result.scalars().all()
 
         ai_service = get_ai_insights_service()
         tag_analyses = []

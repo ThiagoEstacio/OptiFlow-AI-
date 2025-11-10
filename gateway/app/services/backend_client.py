@@ -62,7 +62,7 @@ class BackendClient:
             if not self.session:
                 await self.connect()
 
-            async with self.session.get("/api/v1/health") as response:
+            async with self.session.get("/health") as response:
                 if response.status == 200:
                     self._connected = True
                     return True

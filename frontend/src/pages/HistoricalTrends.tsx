@@ -4,7 +4,6 @@ import {
   Box,
   Container,
   Typography,
-  Grid,
   Card,
   CardContent,
   Tab,
@@ -204,8 +203,8 @@ const HistoricalTrends: React.FC = () => {
         </Box>
 
         {/* Summary Stats */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={3}>
+        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 4 }}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -218,9 +217,9 @@ const HistoricalTrends: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -234,9 +233,9 @@ const HistoricalTrends: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -253,9 +252,9 @@ const HistoricalTrends: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 200 }}>
             <Card>
               <CardContent>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -269,8 +268,8 @@ const HistoricalTrends: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         {/* Tabs */}
         <Paper sx={{ mb: 3 }}>
@@ -322,8 +321,8 @@ const HistoricalTrends: React.FC = () => {
 
         {/* Tab 2: Trend Analysis */}
         <TabPanel value={tabValue} index={1}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            <Box sx={{ flex: '1 1 calc(66.67% - 16px)', minWidth: 400 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -352,9 +351,9 @@ const HistoricalTrends: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} md={4}>
+            <Box sx={{ flex: '1 1 calc(33.33% - 16px)', minWidth: 300 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -400,8 +399,8 @@ const HistoricalTrends: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </TabPanel>
 
         {/* Tab 3: Seasonal Analysis */}

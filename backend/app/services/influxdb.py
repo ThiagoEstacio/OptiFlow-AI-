@@ -95,29 +95,51 @@ class InfluxDBService:
         """
         try:
             influx_points = []
+            skipped = 0
 
             for p in points:
-                point = Point("tag_data") \
-                    .tag("tag_id", str(p["tag_id"])) \
-                    .tag("quality", p.get("quality", "good")) \
-                    .field("value", float(p["value"]))
+                try:
+                    # Validate value is numeric
+                    value = p["value"]
+                    if isinstance(value, str):
+                        # Try to convert string to float
+                        try:
+                            value = float(value)
+                        except (ValueError, TypeError):
+                            logger.warning(f"Skipping non-numeric value '{value}' for tag {p.get('tag_id')}")
+                            skipped += 1
+                            continue
 
-                # Add optional tags
-                if "device_id" in p:
-                    point.tag("device_id", str(p["device_id"]))
-                if "site_id" in p:
-                    point.tag("site_id", str(p["site_id"]))
-                if "category" in p:
-                    point.tag("category", p["category"])
+                    point = Point("tag_data") \
+                        .tag("tag_id", str(p["tag_id"])) \
+                        .tag("quality", p.get("quality", "good")) \
+                        .field("value", float(value))
 
-                # Set timestamp
-                if "timestamp" in p:
-                    point.time(p["timestamp"])
+                    # Add optional tags
+                    if "device_id" in p:
+                        point.tag("device_id", str(p["device_id"]))
+                    if "site_id" in p:
+                        point.tag("site_id", str(p["site_id"]))
+                    if "category" in p:
+                        point.tag("category", p["category"])
 
-                influx_points.append(point)
+                    # Set timestamp
+                    if "timestamp" in p:
+                        point.time(p["timestamp"])
 
-            self.write_api.write(bucket=self.bucket, org=self.org, record=influx_points)
-            logger.info(f"Wrote {len(influx_points)} points to InfluxDB")
+                    influx_points.append(point)
+
+                except Exception as e:
+                    logger.warning(f"Error processing point for tag {p.get('tag_id')}: {e}")
+                    skipped += 1
+                    continue
+
+            if influx_points:
+                self.write_api.write(bucket=self.bucket, org=self.org, record=influx_points)
+                logger.info(f"Wrote {len(influx_points)} points to InfluxDB (skipped {skipped})")
+            else:
+                logger.warning(f"No valid points to write (skipped {skipped})")
+
             return True
 
         except Exception as e:
@@ -256,6 +278,149 @@ class InfluxDBService:
         except Exception as e:
             logger.error(f"Error getting latest value: {e}")
             return None
+
+    def get_latest_value_by_name(self, tag_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the latest value for a tag by tag name
+
+        Args:
+            tag_name: Name of the tag (e.g., 'TEST_COUNTER_PV')
+
+        Returns:
+            Latest data point or None
+        """
+        try:
+            query = f'''
+                from(bucket: "{self.bucket}")
+                |> range(start: -24h)
+                |> filter(fn: (r) => r["_measurement"] == "tag_data")
+                |> filter(fn: (r) => r["tag_id"] == "{tag_name}")
+                |> filter(fn: (r) => r["_field"] == "value")
+                |> last()
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+
+            for table in tables:
+                for record in table.records:
+                    return {
+                        "tag_name": tag_name,
+                        "timestamp": record.get_time().isoformat(),
+                        "value": record.get_value(),
+                        "quality": record.values.get("quality", "unknown"),
+                        "source": record.values.get("source", "unknown")
+                    }
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error getting latest value for tag {tag_name}: {e}")
+            return None
+
+    def get_latest_values_by_names(self, tag_names: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        Get the latest values for multiple tags by name (optimized batch query)
+
+        Args:
+            tag_names: List of tag names (e.g., ['TEST_COUNTER_PV', 'WAREHOUSE_LEVEL_PCT_PV'])
+
+        Returns:
+            Dictionary mapping tag_name to latest data point or None
+        """
+        try:
+            # Build filter for multiple tags
+            tag_filter = ' or '.join([f'r["tag_id"] == "{name}"' for name in tag_names])
+
+            query = f'''
+                from(bucket: "{self.bucket}")
+                |> range(start: -24h)
+                |> filter(fn: (r) => r["_measurement"] == "tag_data")
+                |> filter(fn: (r) => {tag_filter})
+                |> filter(fn: (r) => r["_field"] == "value")
+                |> group(columns: ["tag_id"])
+                |> last()
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+
+            results = {}
+            for table in tables:
+                for record in table.records:
+                    tag_name = record.values.get("tag_id")
+                    results[tag_name] = {
+                        "tag_name": tag_name,
+                        "timestamp": record.get_time().isoformat(),
+                        "value": record.get_value(),
+                        "quality": record.values.get("quality", "unknown"),
+                        "source": record.values.get("source", "unknown")
+                    }
+
+            # Fill in None for tags that weren't found
+            for tag_name in tag_names:
+                if tag_name not in results:
+                    results[tag_name] = None
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error getting latest values for multiple tags: {e}")
+            return {tag_name: None for tag_name in tag_names}
+
+    def list_all_measurements(self) -> List[str]:
+        """
+        Lista todas as 'measurements' (tags) disponíveis no InfluxDB
+
+        Usa auto-discovery para encontrar todas as tags que estão recebendo dados.
+        Esta é a fonte de verdade para quais tags existem no sistema.
+
+        Returns:
+            Lista de nomes de tags que existem no bucket
+        """
+        try:
+            # Usa schema.measurements() do InfluxDB para listar todas as measurements
+            query = f'''
+                import "influxdata/influxdb/schema"
+                schema.measurements(bucket: "{self.bucket}")
+            '''
+
+            tables = self.query_api.query(query, org=self.org)
+
+            measurements = []
+            for table in tables:
+                for record in table.records:
+                    measurement_name = record.get_value()
+                    # Filtra apenas tag_data (ignora outros measurements como system metrics)
+                    if measurement_name == "tag_data":
+                        # Para tag_data, precisamos listar os tag_ids únicos
+                        continue
+                    measurements.append(measurement_name)
+
+            # Se estamos usando tag_data como measurement, precisamos listar tag_ids
+            if not measurements or "tag_data" in measurements:
+                tag_query = f'''
+                    from(bucket: "{self.bucket}")
+                    |> range(start: -24h)
+                    |> filter(fn: (r) => r["_measurement"] == "tag_data")
+                    |> keep(columns: ["tag_id"])
+                    |> distinct(column: "tag_id")
+                '''
+
+                tag_tables = self.query_api.query(tag_query, org=self.org)
+                tag_ids = []
+
+                for table in tag_tables:
+                    for record in table.records:
+                        tag_id = record.values.get("tag_id")
+                        if tag_id and tag_id not in tag_ids:
+                            tag_ids.append(tag_id)
+
+                return tag_ids if tag_ids else measurements
+
+            return measurements
+
+        except Exception as e:
+            logger.error(f"Error listing measurements from InfluxDB: {e}")
+            return []
 
     def get_statistics(
         self,

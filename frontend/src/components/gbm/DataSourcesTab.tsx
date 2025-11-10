@@ -18,7 +18,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Grid,
   Alert,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
@@ -172,97 +171,89 @@ const DataSourcesTab: React.FC<DataSourcesTabProps> = ({
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Add Data Source</DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                required
-                label="Name"
-                value={formData.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-                placeholder="GBM Logística Production"
-              />
-            </Grid>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              fullWidth
+              required
+              label="Name"
+              value={formData.name}
+              onChange={(e) => handleChange('name', e.target.value)}
+              placeholder="GBM Logística Production"
+            />
 
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Source Type</InputLabel>
-                <Select
-                  value={formData.source_type}
-                  onChange={(e) => handleChange('source_type', e.target.value)}
-                  label="Source Type"
-                >
-                  <MenuItem value="excel">Excel/CSV Upload</MenuItem>
-                  <MenuItem value="api">API Integration</MenuItem>
-                  <MenuItem value="manual">Manual Entry</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <FormControl fullWidth required>
+                  <InputLabel>Source Type</InputLabel>
+                  <Select
+                    value={formData.source_type}
+                    onChange={(e) => handleChange('source_type', e.target.value)}
+                    label="Source Type"
+                  >
+                    <MenuItem value="excel">Excel/CSV Upload</MenuItem>
+                    <MenuItem value="api">API Integration</MenuItem>
+                    <MenuItem value="manual">Manual Entry</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
 
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Data Format</InputLabel>
-                <Select
-                  value={formData.data_format}
-                  onChange={(e) => handleChange('data_format', e.target.value)}
-                  label="Data Format"
-                >
-                  <MenuItem value="json">JSON</MenuItem>
-                  <MenuItem value="xml">XML</MenuItem>
-                  <MenuItem value="csv">CSV</MenuItem>
-                  <MenuItem value="excel">Excel</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '250px' }}>
+                <FormControl fullWidth>
+                  <InputLabel>Data Format</InputLabel>
+                  <Select
+                    value={formData.data_format}
+                    onChange={(e) => handleChange('data_format', e.target.value)}
+                    label="Data Format"
+                  >
+                    <MenuItem value="json">JSON</MenuItem>
+                    <MenuItem value="xml">XML</MenuItem>
+                    <MenuItem value="csv">CSV</MenuItem>
+                    <MenuItem value="excel">Excel</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
 
             {formData.source_type === 'api' && (
               <>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="API URL"
-                    value={formData.api_url}
-                    onChange={(e) => handleChange('api_url', e.target.value)}
-                    placeholder="https://api.gbmlogistica.com.br/v1/operations"
-                  />
-                </Grid>
+                <TextField
+                  fullWidth
+                  label="API URL"
+                  value={formData.api_url}
+                  onChange={(e) => handleChange('api_url', e.target.value)}
+                  placeholder="https://api.gbmlogistica.com.br/v1/operations"
+                />
 
-                <Grid item xs={12}>
-                  <FormControl fullWidth>
-                    <InputLabel>Auth Type</InputLabel>
-                    <Select
-                      value={formData.auth_type}
-                      onChange={(e) => handleChange('auth_type', e.target.value)}
-                      label="Auth Type"
-                    >
-                      <MenuItem value="none">None</MenuItem>
-                      <MenuItem value="bearer">Bearer Token</MenuItem>
-                      <MenuItem value="api_key">API Key</MenuItem>
-                      <MenuItem value="basic">Basic Auth</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
+                <FormControl fullWidth>
+                  <InputLabel>Auth Type</InputLabel>
+                  <Select
+                    value={formData.auth_type}
+                    onChange={(e) => handleChange('auth_type', e.target.value)}
+                    label="Auth Type"
+                  >
+                    <MenuItem value="none">None</MenuItem>
+                    <MenuItem value="bearer">Bearer Token</MenuItem>
+                    <MenuItem value="api_key">API Key</MenuItem>
+                    <MenuItem value="basic">Basic Auth</MenuItem>
+                  </Select>
+                </FormControl>
               </>
             )}
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label="Notes"
-                value={formData.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-                placeholder="Additional information about this data source"
-              />
-            </Grid>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Notes"
+              value={formData.notes}
+              onChange={(e) => handleChange('notes', e.target.value)}
+              placeholder="Additional information about this data source"
+            />
 
             {error && (
-              <Grid item xs={12}>
-                <Alert severity="error">{error}</Alert>
-              </Grid>
+              <Alert severity="error">{error}</Alert>
             )}
-          </Grid>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

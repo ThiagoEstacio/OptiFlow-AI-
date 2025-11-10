@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from datetime import date
 
-from app.api.dependencies import get_db, get_current_user
+from app.core.deps import get_db, get_current_user
 from app.models.user import User
 from app.services.historical_analysis_service import HistoricalAnalysisService
 

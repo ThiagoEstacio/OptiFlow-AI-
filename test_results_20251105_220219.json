@@ -1,0 +1,137 @@
+{
+  "timestamp": "2025-11-05T22:02:19.712206",
+  "summary": {
+    "total": 21,
+    "passed": 11,
+    "failed": 10,
+    "percentage": 52.38095238095239
+  },
+  "tests": [
+    {
+      "test": "Container optiflow-backend",
+      "status": "PASS",
+      "message": "Up 3 hours (unhealthy)",
+      "timestamp": "2025-11-05T22:01:39.297775"
+    },
+    {
+      "test": "Container optiflow-frontend",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:01:39.297798"
+    },
+    {
+      "test": "Container optiflow-postgres",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:01:39.297809"
+    },
+    {
+      "test": "Container optiflow-influxdb",
+      "status": "PASS",
+      "message": "Up 5 hours (healthy)",
+      "timestamp": "2025-11-05T22:01:39.297814"
+    },
+    {
+      "test": "Container optiflow-redis",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:01:39.297818"
+    },
+    {
+      "test": "Container optiflow-kafka",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:01:39.297821"
+    },
+    {
+      "test": "Backend /health endpoint",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:01:44.304544"
+    },
+    {
+      "test": "Backend /docs (Swagger)",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:01:49.310512"
+    },
+    {
+      "test": "Backend /api/v1/",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:01:54.316395"
+    },
+    {
+      "test": "Status do simulador",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:01:59.322217"
+    },
+    {
+      "test": "Insights do Autonomous Agent",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:02:04.328117"
+    },
+    {
+      "test": "Lista de tags",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:02:09.334420"
+    },
+    {
+      "test": "Lista de sites",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:02:14.340192"
+    },
+    {
+      "test": "PostgreSQL - Tabela tags",
+      "status": "FAIL",
+      "message": "Cannot query tags",
+      "timestamp": "2025-11-05T22:02:14.397285"
+    },
+    {
+      "test": "InfluxDB /health",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:14.403269"
+    },
+    {
+      "test": "InfluxDB /api/v2/ping",
+      "status": "FAIL",
+      "message": "Status: 401",
+      "timestamp": "2025-11-05T22:02:14.407100"
+    },
+    {
+      "test": "Frontend homepage",
+      "status": "PASS",
+      "message": "Status: 200, Length: 749",
+      "timestamp": "2025-11-05T22:02:14.416694"
+    },
+    {
+      "test": "Frontend React app",
+      "status": "PASS",
+      "message": "React app detected",
+      "timestamp": "2025-11-05T22:02:14.416713"
+    },
+    {
+      "test": "Grafana",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:14.423943"
+    },
+    {
+      "test": "Kafka UI",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:14.706054"
+    },
+    {
+      "test": "Simulator check",
+      "status": "FAIL",
+      "message": "HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=5)",
+      "timestamp": "2025-11-05T22:02:19.712166"
+    }
+  ]
+}

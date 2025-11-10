@@ -14,8 +14,8 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from app.models.asset import Asset, AssetType
-from app.models.alarm import Alarm, AlarmSeverity
-from app.models.operations import TruckEntry, ShipLoading, Silo
+from app.models.alarm import AlarmDefinition, AlarmSeverity
+# from app.models.operations import TruckEntry, ShipLoading, Silo
 
 logger = logging.getLogger(__name__)
 
@@ -319,12 +319,12 @@ class ROICalculator:
         """
 
         # Count critical alarms that were addressed quickly
-        critical_alarms_query = select(func.count(Alarm.id)).where(
+        critical_alarms_query = select(func.count(AlarmDefinition.id)).where(
             and_(
-                Alarm.site_id == site_id,
-                Alarm.timestamp >= start_date,
-                Alarm.severity == AlarmSeverity.CRITICAL,
-                Alarm.acknowledged == True
+                AlarmDefinition.site_id == site_id,
+                AlarmDefinition.timestamp >= start_date,
+                AlarmDefinition.severity == AlarmSeverity.CRITICAL,
+                AlarmDefinition.acknowledged == True
             )
         )
         critical_result = await self.db.execute(critical_alarms_query)

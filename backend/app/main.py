@@ -4,12 +4,18 @@ OptiFlow AI Platform - Main FastAPI Application
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import logging
 from contextlib import asynccontextmanager
+import time
+import asyncio
+import async_timeout
+
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry
 
 from app.core.config import settings
 from app.api.v1.api import api_router
@@ -17,8 +23,12 @@ from app.api.routes.simulator import router as simulator_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.ai_agent import router as ai_agent_router
 from app.api.v1.endpoints.websocket import router as websocket_router
-from app.db.session import init_db, get_db
+from app.db.session import init_db, get_db, check_db_health
 from app.services.autonomous_agent import init_autonomous_agent
+from app.services.kafka_producer import init_kafka_producer, cleanup_kafka_producer
+from app.services.timeseries_consumer import start_timeseries_consumer, stop_timeseries_consumer
+from app.middleware.timeout import TimeoutMiddleware
+from app.middleware.circuit_breaker import CircuitBreakerMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -30,33 +40,208 @@ logger = logging.getLogger(__name__)
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+# ========================================
+# Prometheus Metrics Configuration
+# ========================================
+
+# HTTP Request Metrics
+http_requests_total = Counter(
+    'http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status']
+)
+
+http_request_duration_seconds = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request latency',
+    ['method', 'endpoint']
+)
+
+http_requests_in_progress = Gauge(
+    'http_requests_in_progress',
+    'HTTP requests currently being processed',
+    ['method', 'endpoint']
+)
+
+# Application Metrics
+app_info = Info('optiflow_app', 'OptiFlow AI Platform information')
+app_info.info({
+    'version': settings.APP_VERSION,
+    'environment': settings.ENVIRONMENT,
+    'name': settings.APP_NAME
+})
+
+# Database Metrics
+db_connections_active = Gauge(
+    'db_connections_active',
+    'Active database connections'
+)
+
+db_queries_total = Counter(
+    'db_queries_total',
+    'Total database queries executed',
+    ['operation']
+)
+
+db_query_duration_seconds = Histogram(
+    'db_query_duration_seconds',
+    'Database query duration',
+    ['operation']
+)
+
+# Extended Tags Metrics (PI AF)
+extended_tags_total = Gauge(
+    'extended_tags_total',
+    'Total number of extended tags',
+    ['tag_type', 'gateway_id']
+)
+
+extended_tags_archived = Gauge(
+    'extended_tags_archived',
+    'Number of tags with archiving enabled',
+    ['archive_type', 'gateway_id']
+)
+
+tag_formulas_total = Gauge(
+    'tag_formulas_total',
+    'Total number of tag formulas'
+)
+
+tag_calculations_total = Counter(
+    'tag_calculations_total',
+    'Total tag formula calculations executed',
+    ['formula_id', 'success']
+)
+
+# Gateway Metrics
+gateway_tags_total = Gauge(
+    'gateway_tags_total',
+    'Total tags per gateway',
+    ['gateway_id', 'gateway_name']
+)
+
+gateway_connection_status = Gauge(
+    'gateway_connection_status',
+    'Gateway connection status (1=connected, 0=disconnected)',
+    ['gateway_id', 'gateway_name']
+)
+
+# AI Agent Metrics
+ai_agent_interactions_total = Counter(
+    'ai_agent_interactions_total',
+    'Total AI agent interactions',
+    ['agent_type', 'success']
+)
+
+ai_agent_response_duration_seconds = Histogram(
+    'ai_agent_response_duration_seconds',
+    'AI agent response latency',
+    ['agent_type']
+)
+
+# Asset Metrics
+assets_total = Gauge(
+    'assets_total',
+    'Total number of assets',
+    ['asset_type']
+)
+
+# Alarm Metrics
+active_alarms_total = Gauge(
+    'active_alarms_total',
+    'Total active alarms',
+    ['priority', 'gateway_id']
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Startup and shutdown events
+    Startup and shutdown events with improved resilience
     """
     logger.info("🚀 Starting OptiFlow AI Platform...")
 
-    # Initialize database
-    try:
-        await init_db()
-        logger.info("✅ Database initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
-        raise
+    # Initialize database with exponential backoff retry logic
+    max_retries = 5
+    base_delay = 2  # seconds
+    max_delay = 30  # seconds
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"📊 Attempting database connection (attempt {attempt}/{max_retries})...")
+
+            # Try with timeout
+            async with async_timeout.timeout(45):  # 45 second timeout for initialization
+                await init_db()
+
+            logger.info("✅ Database initialized successfully")
+
+            # Verify connection health
+            if await check_db_health():
+                logger.info("✅ Database health check passed")
+            else:
+                logger.warning("⚠️  Database initialized but health check failed")
+
+            break  # Success!
+
+        except asyncio.TimeoutError:
+            # Calculate exponential backoff delay
+            retry_delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+
+            if attempt < max_retries:
+                logger.warning(
+                    f"⚠️  Database connection timeout (attempt {attempt}/{max_retries})"
+                )
+                logger.info(f"🔄 Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(
+                    f"❌ Database initialization failed after {max_retries} timeout attempts"
+                )
+                raise Exception("Database initialization timeout - service cannot start")
+
+        except Exception as e:
+            # Calculate exponential backoff delay
+            retry_delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+
+            if attempt < max_retries:
+                logger.warning(
+                    f"⚠️  Database connection attempt {attempt} failed: {e}"
+                )
+                logger.info(f"🔄 Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(
+                    f"❌ Database initialization failed after {max_retries} attempts: {e}"
+                )
+                raise
     
     # Initialize autonomous AI agent
-    # Fixed: Eliminated nested database sessions that caused connection pool exhaustion
-    # All monitoring methods now share a single session passed from start() method
-    # This prevents deadlocks, timeouts, and ensures stable autonomous operation
+    # Re-enabled after session management refactoring
     try:
         await init_autonomous_agent()
-        logger.info("🤖 Autonomous AI Agent initialized and started successfully")
+        logger.info("✅ Autonomous AI Agent initialized and running")
     except Exception as e:
         logger.error(f"⚠️  Autonomous agent initialization failed: {e}")
         logger.warning("⚠️  System will continue without autonomous monitoring")
         # Don't raise - agent is optional, system works without it
+
+    # Initialize Kafka producer for real-time streaming (event-driven architecture)
+    try:
+        await init_kafka_producer()
+        logger.info("✅ Kafka producer initialized - event-driven architecture enabled")
+    except Exception as e:
+        logger.warning(f"⚠️  Kafka producer initialization failed: {e}")
+        logger.warning("⚠️  System will continue without Kafka publishing")
+
+    # Initialize Kafka consumer for time-series data to InfluxDB
+    try:
+        await start_timeseries_consumer()
+        logger.info("✅ Kafka consumer initialized - consuming to InfluxDB")
+    except Exception as e:
+        logger.warning(f"⚠️  Kafka consumer initialization failed: {e}")
+        logger.warning("⚠️  System will continue without Kafka consuming")
+    #     # Don't raise - Kafka is optional, system works without it
 
     logger.info(f"🌐 Environment: {settings.ENVIRONMENT}")
     logger.info(f"📊 API Version: {settings.API_V1_PREFIX}")
@@ -65,6 +250,20 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("👋 Shutting down OptiFlow AI Platform...")
+
+    # Cleanup Kafka consumer
+    try:
+        await stop_timeseries_consumer()
+        logger.info("✅ Kafka consumer cleaned up")
+    except Exception as e:
+        logger.warning(f"⚠️  Kafka consumer cleanup warning: {e}")
+
+    # Cleanup Kafka producer
+    try:
+        await cleanup_kafka_producer()
+        logger.info("✅ Kafka producer cleaned up")
+    except Exception as e:
+        logger.warning(f"⚠️  Kafka producer cleanup warning: {e}")
 
 
 # Create FastAPI application
@@ -109,6 +308,68 @@ app.add_middleware(
 # GZip compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# Request timeout middleware - prevent indefinite hangs
+app.add_middleware(TimeoutMiddleware, timeout_seconds=settings.REQUEST_TIMEOUT_SECONDS)
+
+# Circuit breaker middleware - handle cascading failures
+app.add_middleware(CircuitBreakerMiddleware)
+
+# Prometheus metrics middleware
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    """Track HTTP request metrics"""
+    # Skip metrics endpoint itself to avoid recursion
+    if request.url.path == "/metrics":
+        return await call_next(request)
+
+    method = request.method
+    endpoint = request.url.path
+
+    # Track requests in progress
+    http_requests_in_progress.labels(method=method, endpoint=endpoint).inc()
+
+    # Track request duration
+    start_time = time.time()
+
+    try:
+        response = await call_next(request)
+        status = response.status_code
+
+        # Record metrics
+        http_requests_total.labels(
+            method=method,
+            endpoint=endpoint,
+            status=status
+        ).inc()
+
+        duration = time.time() - start_time
+        http_request_duration_seconds.labels(
+            method=method,
+            endpoint=endpoint
+        ).observe(duration)
+
+        return response
+
+    except Exception as e:
+        # Record error
+        http_requests_total.labels(
+            method=method,
+            endpoint=endpoint,
+            status=500
+        ).inc()
+
+        duration = time.time() - start_time
+        http_request_duration_seconds.labels(
+            method=method,
+            endpoint=endpoint
+        ).observe(duration)
+
+        raise
+
+    finally:
+        # Decrement in-progress counter
+        http_requests_in_progress.labels(method=method, endpoint=endpoint).dec()
+
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
@@ -140,21 +401,144 @@ async def root(request: Request):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint - No rate limit"""
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "healthy",
-            "version": settings.APP_VERSION,
-            "environment": settings.ENVIRONMENT
-        }
-    )
+    """
+    Health check endpoint with graceful degradation
+
+    Returns 200 if application is running (even if database is down)
+    Includes database status in response for monitoring
+    """
+    # Check database health (with timeout)
+    db_healthy = False
+    db_error = None
+
+    try:
+        db_healthy = await check_db_health()
+    except Exception as e:
+        db_error = str(e)
+        logger.warning(f"Database health check failed: {e}")
+
+    # Application is healthy if it's running, even if DB is down
+    # This allows load balancers to keep routing traffic
+    # and application can handle DB errors gracefully
+    response_data = {
+        "status": "healthy",
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "services": {
+            "api": "healthy",
+            "database": "healthy" if db_healthy else "degraded",
+        },
+    }
+
+    if not db_healthy:
+        response_data["warnings"] = [
+            "Database connection degraded - some features may be limited"
+        ]
+        if db_error:
+            response_data["db_error"] = db_error
+
+    # Return 200 even if DB is down - application can still serve some requests
+    return JSONResponse(status_code=200, content=response_data)
 
 
 @app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint (placeholder)"""
-    return {"message": "Metrics endpoint - to be implemented with prometheus_client"}
+async def metrics(request: Request):
+    """
+    Prometheus metrics endpoint
+
+    Exposes application metrics in Prometheus format for scraping.
+    Includes HTTP requests, database operations, extended tags, gateway status,
+    AI agent interactions, and custom OptiFlow metrics.
+    """
+    try:
+        # Update database connection metrics
+        from app.db.session import engine
+        if hasattr(engine, 'pool'):
+            pool = engine.pool
+            db_connections_active.set(pool.checkedout())
+
+        # Update extended tags metrics (PI AF)
+        db_session = None
+        try:
+            from app.db.session import AsyncSessionLocal
+            from app.models.extended_tags import GatewayTagExtended
+            from sqlalchemy import select, func
+
+            db_session = AsyncSessionLocal()
+
+            # Count tags by type and gateway
+            result = await db_session.execute(
+                select(
+                    GatewayTagExtended.tag_type,
+                    GatewayTagExtended.gateway_id,
+                    func.count(GatewayTagExtended.id)
+                ).group_by(
+                    GatewayTagExtended.tag_type,
+                    GatewayTagExtended.gateway_id
+                )
+            )
+
+            # Reset gauge before updating
+            extended_tags_total._metrics.clear()
+
+            for tag_type, gateway_id, count in result:
+                extended_tags_total.labels(
+                    tag_type=tag_type,
+                    gateway_id=str(gateway_id)
+                ).set(count)
+
+            # Count archived tags by type
+            result = await db_session.execute(
+                select(
+                    GatewayTagExtended.archive_type,
+                    GatewayTagExtended.gateway_id,
+                    func.count(GatewayTagExtended.id)
+                ).where(
+                    GatewayTagExtended.archive_enabled == True
+                ).group_by(
+                    GatewayTagExtended.archive_type,
+                    GatewayTagExtended.gateway_id
+                )
+            )
+
+            # Reset gauge before updating
+            extended_tags_archived._metrics.clear()
+
+            for archive_type, gateway_id, count in result:
+                extended_tags_archived.labels(
+                    archive_type=archive_type,
+                    gateway_id=str(gateway_id)
+                ).set(count)
+
+            # Count formulas
+            from app.models.extended_tags import TagFormula
+            result = await db_session.execute(
+                select(func.count(TagFormula.id))
+            )
+            formula_count = result.scalar() or 0
+            tag_formulas_total.set(formula_count)
+
+        except Exception as e:
+            logger.warning(f"Could not update extended tags metrics: {e}")
+        finally:
+            if db_session:
+                await db_session.close()
+
+        # Generate metrics in Prometheus format
+        metrics_output = generate_latest()
+
+        return Response(
+            content=metrics_output,
+            media_type=CONTENT_TYPE_LATEST
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating metrics: {e}")
+        return Response(
+            content=f"# Error generating metrics: {str(e)}\n",
+            media_type=CONTENT_TYPE_LATEST,
+            status_code=500
+        )
 
 
 if __name__ == "__main__":

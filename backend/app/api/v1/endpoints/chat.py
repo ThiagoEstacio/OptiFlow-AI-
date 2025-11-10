@@ -24,6 +24,7 @@ from app.schemas.chat import (
     InsightResponse
 )
 from app.services.ai_service import AIService
+from app.services.agent_data_service import AgentDataService
 
 
 router = APIRouter()
@@ -222,31 +223,107 @@ async def _process_chat_demo(request: ChatRequest, db: AsyncSession):
     """Process chat for demo mode without user authentication"""
     # Get AI response without saving to database
     try:
-        # Build context from request
+        # Initialize data service
+        data_service = AgentDataService(db)
+
+        # Build enhanced context with real data
+        user_message = request.message.lower()
+        context_data = {
+            "mode": "demo",
+            "platform": "OptiFlow AI Industrial IoT Platform",
+            "capabilities": [
+                "Consultar valores de tags em tempo real",
+                "Buscar tags por nome ou descrição",
+                "Analisar dados históricos",
+                "Insights de otimização de processos",
+                "Monitoramento de alarmes e eventos"
+            ]
+        }
+
+        # Check if user is asking about specific tags or categories
+        relevant_tags = []
+
+        # Search for relevant tags based on user query
+        if any(keyword in user_message for keyword in ["velocidade", "speed", "correia", "belt", "conveyor"]):
+            tags = await data_service.search_tags_by_category("velocidade")
+            if tags:
+                relevant_tags.extend(tags[:5])
+
+        if any(keyword in user_message for keyword in ["temperatura", "temperature", "temp"]):
+            tags = await data_service.search_tags_by_category("temperatura")
+            if tags:
+                relevant_tags.extend(tags[:5])
+
+        if any(keyword in user_message for keyword in ["motor", "engine"]):
+            tags = await data_service.search_tags_by_category("motor")
+            if tags:
+                relevant_tags.extend(tags[:5])
+
+        # If no specific category, try general search for keywords in the message
+        if not relevant_tags:
+            # Extract potential tag names from the message
+            words = user_message.split()
+            for word in words:
+                if len(word) > 3:  # Only search for words longer than 3 chars
+                    found_tags = await data_service.search_tags(word, limit=3)
+                    if found_tags:
+                        relevant_tags.extend(found_tags)
+                        break
+
+        # Get gateway info
+        gateway_info = await data_service.get_gateway_info(gateway_id=1)
+        if gateway_info:
+            context_data["gateway"] = {
+                "name": gateway_info["name"],
+                "total_tags": gateway_info["total_tags"],
+                "status": "ativo" if gateway_info["is_active"] else "inativo"
+            }
+
+        # Add relevant tags to context
+        if relevant_tags:
+            context_data["available_tags"] = [
+                {
+                    "name": tag["name"],
+                    "description": tag["description"],
+                    "unit": tag["unit"],
+                    "type": tag["data_type"]
+                }
+                for tag in relevant_tags[:10]  # Limit to 10 most relevant
+            ]
+
+        # Build messages with enriched context
         message_list = [{"role": "user", "content": request.message}]
-        
-        # Get AI response using the AIService
+
+        # Get AI response using the AIService with enriched context
         ai_response = await ai_service.generate_response(
             messages=message_list,
-            context={
-                "mode": "demo",
-                "platform": "OptiFlow AI",
-                "capabilities": [
-                    "Consultar valores de tags em tempo real",
-                    "Analisar dados históricos",
-                    "Insights de otimização de processos",
-                    "Monitoramento de alarmes e eventos"
-                ]
-            }
+            context=context_data
         )
-        
-        # Return simplified response for demo mode (not using ChatResponse schema)
+
+        # Generate demo IDs
+        from uuid import uuid4
+        demo_conversation_id = uuid4()
+        demo_message_id = uuid4()
+
+        # Return ChatResponse format expected by frontend
         return {
-            "conversation_id": None,
-            "message": ai_response,
-            "mode": "demo",
-            "model": ai_service.model if ai_service.api_key else "fallback",
-            "timestamp": datetime.now().isoformat()
+            "conversation_id": str(demo_conversation_id),
+            "message": {
+                "id": str(demo_message_id),
+                "conversation_id": str(demo_conversation_id),
+                "role": "assistant",
+                "content": ai_response,
+                "message_metadata": {
+                    "mode": "demo",
+                    "model": ai_service.model if ai_service.use_ollama else "fallback"
+                },
+                "created_at": datetime.now().isoformat()
+            },
+            "suggestions": [
+                "Quais dispositivos estão offline?",
+                "Mostre-me os alarmes ativos",
+                "Como está a performance do sistema?"
+            ]
         }
     except Exception as e:
         import traceback

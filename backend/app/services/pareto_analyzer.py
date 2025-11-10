@@ -13,7 +13,7 @@ from sqlalchemy import select, and_, func, text
 from collections import Counter
 
 from app.models.asset import Asset
-from app.models.alarm import Alarm
+from app.models.alarm import AlarmDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -160,15 +160,15 @@ class ParetoAnalyzer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
 
-            query = select(Alarm).where(
+            query = select(AlarmDefinition).where(
                 and_(
-                    Alarm.triggered_at >= start_date,
-                    Alarm.severity.in_(["critical", "high", "medium"])
+                    AlarmDefinition.triggered_at >= start_date,
+                    AlarmDefinition.severity.in_(["critical", "high", "medium"])
                 )
             )
 
             if asset_id:
-                query = query.where(Alarm.asset_id == asset_id)
+                query = query.where(AlarmDefinition.asset_id == asset_id)
 
             if site_id:
                 # Join with assets to filter by site
@@ -362,16 +362,16 @@ class ParetoAnalyzer:
             previous_end = datetime.utcnow() - timedelta(days=start_offset)
 
             # Get failures for previous period
-            query = select(Alarm).where(
+            query = select(AlarmDefinition).where(
                 and_(
-                    Alarm.triggered_at >= previous_start,
-                    Alarm.triggered_at <= previous_end,
-                    Alarm.severity.in_(["critical", "high", "medium"])
+                    AlarmDefinition.triggered_at >= previous_start,
+                    AlarmDefinition.triggered_at <= previous_end,
+                    AlarmDefinition.severity.in_(["critical", "high", "medium"])
                 )
             )
 
             if asset_id:
-                query = query.where(Alarm.asset_id == asset_id)
+                query = query.where(AlarmDefinition.asset_id == asset_id)
 
             if site_id:
                 query = query.join(Asset).where(Asset.site_id == site_id)

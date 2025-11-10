@@ -34,7 +34,7 @@ except ImportError:
     logger.warning("scikit-learn not available. ML predictions disabled.")
 
 from app.models.asset import Asset
-from app.models.alarm import Alarm
+from app.models.alarm import AlarmDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class MLFailurePredictor:
 
     Features used:
     - Asset health score history
-    - Alarm frequency and severity
+    - AlarmDefinition frequency and severity
     - Operating hours
     - Time since last maintenance
     - Environmental conditions
@@ -251,12 +251,12 @@ class MLFailurePredictor:
             for asset in assets:
                 # Get historical alarms
                 alarm_result = await self.db.execute(
-                    select(Alarm).where(
+                    select(AlarmDefinition).where(
                         and_(
-                            Alarm.asset_id == asset.id,
-                            Alarm.triggered_at >= start_date
+                            AlarmDefinition.asset_id == asset.id,
+                            AlarmDefinition.triggered_at >= start_date
                         )
-                    ).order_by(Alarm.triggered_at)
+                    ).order_by(AlarmDefinition.triggered_at)
                 )
                 alarms = alarm_result.scalars().all()
 
@@ -277,7 +277,7 @@ class MLFailurePredictor:
 
     def _simulate_features_from_alarm(
         self,
-        alarm: Alarm,
+        alarm: AlarmDefinition,
         asset: Asset
     ) -> List[float]:
         """Simulate feature extraction (placeholder for production implementation)."""
@@ -294,7 +294,7 @@ class MLFailurePredictor:
             25.0,  # Simulated temperature
             60.0,  # Simulated load percentage
             7.0,  # Days since last maintenance (simulated)
-            3.0,  # Alarm count last 24h (simulated)
+            3.0,  # AlarmDefinition count last 24h (simulated)
         ]
 
     async def _extract_features(self, asset: Asset) -> List[float]:
@@ -303,10 +303,10 @@ class MLFailurePredictor:
         start_date = datetime.utcnow() - timedelta(days=7)
 
         result = await self.db.execute(
-            select(func.count(Alarm.id)).where(
+            select(func.count(AlarmDefinition.id)).where(
                 and_(
-                    Alarm.asset_id == asset.id,
-                    Alarm.triggered_at >= start_date
+                    AlarmDefinition.asset_id == asset.id,
+                    AlarmDefinition.triggered_at >= start_date
                 )
             )
         )

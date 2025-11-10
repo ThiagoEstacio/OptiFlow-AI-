@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
 from app.services.loading_optimizer import LoadingOptimizer
-from app.models.operations import ShipLoading, Berth, Silo, ProductType
+from app.models.operational_data import ShipLoading
+try:
+    from app.models.operational_data import Berth, Silo
+except ImportError:
+    Berth = None
+    Silo = None
 
 
 @pytest.fixture

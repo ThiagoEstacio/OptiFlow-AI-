@@ -59,11 +59,22 @@ async def list_assets(
     # Enrich response with computed properties
     response_assets = []
     for asset in assets:
-        asset_dict = AssetResponse.from_orm(asset).model_dump()
-        asset_dict['level'] = asset.level
-        asset_dict['full_path'] = asset.full_path
-        asset_dict['children_count'] = len(asset.children)
-        asset_dict['attributes_count'] = len(asset.attributes)
+        asset_dict = {
+            'id': asset.id,
+            'name': asset.name,
+            'description': asset.description,
+            'asset_type': asset.asset_type.value if hasattr(asset.asset_type, 'value') else asset.asset_type,
+            'is_active': bool(asset.is_active),
+            'metadata': asset.asset_metadata or {},
+            'parent_id': asset.parent_id,
+            'template_id': asset.template_id,
+            'created_at': asset.created_at,
+            'updated_at': asset.updated_at,
+            'level': asset.level,
+            'full_path': asset.full_path,
+            'children_count': len(asset.children),
+            'attributes_count': len(asset.attributes)
+        }
         response_assets.append(asset_dict)
 
     return response_assets
@@ -88,12 +99,12 @@ async def get_asset_tree(
             id=asset.id,
             name=asset.name,
             asset_type=asset.asset_type.value if hasattr(asset.asset_type, 'value') else asset.asset_type,
-            is_active=asset.is_active,
+            is_active=bool(asset.is_active),
             parent_id=asset.parent_id,
             level=asset.level,
             full_path=asset.full_path,
             attributes_count=len(asset.attributes),
-            metadata=asset.metadata,
+            metadata=asset.asset_metadata or {},
             children=[]
         )
 

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
-  Grid,
   Paper,
   Typography,
   Chip,
@@ -244,8 +243,8 @@ const AdminPage: React.FC = () => {
       </Box>
 
       {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 3 }}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '220px' }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -253,16 +252,16 @@ const AdminPage: React.FC = () => {
                 <Typography variant="h6">CPU</Typography>
               </Box>
               <Typography variant="h4">{systemMetrics?.cpu_percent.toFixed(1)}%</Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={systemMetrics?.cpu_percent || 0} 
+              <LinearProgress
+                variant="determinate"
+                value={systemMetrics?.cpu_percent || 0}
                 sx={{ mt: 1 }}
               />
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '220px' }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -272,9 +271,9 @@ const AdminPage: React.FC = () => {
               <Typography variant="h4">
                 {((systemMetrics?.memory_used_mb || 0) / 1024).toFixed(1)} GB
               </Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={((systemMetrics?.memory_used_mb || 0) / (systemMetrics?.memory_total_mb || 1)) * 100} 
+              <LinearProgress
+                variant="determinate"
+                value={((systemMetrics?.memory_used_mb || 0) / (systemMetrics?.memory_total_mb || 1)) * 100}
                 sx={{ mt: 1 }}
               />
               <Typography variant="caption" color="text.secondary">
@@ -282,9 +281,9 @@ const AdminPage: React.FC = () => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '220px' }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -292,9 +291,9 @@ const AdminPage: React.FC = () => {
                 <Typography variant="h6">Disco</Typography>
               </Box>
               <Typography variant="h4">{systemMetrics?.disk_used_gb} GB</Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={((systemMetrics?.disk_used_gb || 0) / (systemMetrics?.disk_total_gb || 1)) * 100} 
+              <LinearProgress
+                variant="determinate"
+                value={((systemMetrics?.disk_used_gb || 0) / (systemMetrics?.disk_total_gb || 1)) * 100}
                 sx={{ mt: 1 }}
               />
               <Typography variant="caption" color="text.secondary">
@@ -302,9 +301,9 @@ const AdminPage: React.FC = () => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '220px' }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -316,9 +315,9 @@ const AdminPage: React.FC = () => {
                   <Typography variant="body2" noWrap>
                     {gpuInfo.name}
                   </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={((gpuInfo.memory_total_mb! - gpuInfo.memory_free_mb!) / gpuInfo.memory_total_mb!) * 100} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={((gpuInfo.memory_total_mb! - gpuInfo.memory_free_mb!) / gpuInfo.memory_total_mb!) * 100}
                     sx={{ mt: 1 }}
                     color="success"
                   />
@@ -333,8 +332,8 @@ const AdminPage: React.FC = () => {
               )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* GPU Acceleration Alert */}
       {gpuInfo?.available && (
@@ -406,9 +405,9 @@ const AdminPage: React.FC = () => {
 
       {/* Services Tab */}
       <TabPanel value={tabValue} index={1}>
-        <Grid container spacing={2}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           {services.map((service) => (
-            <Grid item xs={12} sm={6} md={4} key={service.name}>
+            <Box key={service.name} sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '280px' }}>
               <Card>
                 <CardContent>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
@@ -424,16 +423,16 @@ const AdminPage: React.FC = () => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
           ))}
-        </Grid>
+        </Box>
       </TabPanel>
 
       {/* GPU Tab */}
       <TabPanel value={tabValue} index={2}>
         {gpuInfo?.available ? (
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
               <Paper sx={{ p: 3 }}>
                 <Typography variant="h6" gutterBottom>
                   Informações da GPU
@@ -465,8 +464,8 @@ const AdminPage: React.FC = () => {
                   </TableBody>
                 </Table>
               </Paper>
-            </Grid>
-            <Grid item xs={12} md={6}>
+            </Box>
+            <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
               <Paper sx={{ p: 3 }}>
                 <Typography variant="h6" gutterBottom>
                   Utilização
@@ -475,8 +474,8 @@ const AdminPage: React.FC = () => {
                   <Typography variant="body2" gutterBottom>
                     VRAM
                   </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
+                  <LinearProgress
+                    variant="determinate"
                     value={((gpuInfo.memory_total_mb! - gpuInfo.memory_free_mb!) / gpuInfo.memory_total_mb!) * 100}
                     sx={{ height: 10, borderRadius: 1 }}
                     color="success"
@@ -486,8 +485,8 @@ const AdminPage: React.FC = () => {
                   </Typography>
                 </Box>
               </Paper>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         ) : (
           <Alert severity="warning">
             GPU não disponível. Verifique se o NVIDIA driver está instalado e se o container tem acesso GPU.

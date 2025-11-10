@@ -9,6 +9,8 @@ from app.models.ml_model import MLModel, Prediction
 from app.models.asset import Asset, AssetAttribute, AssetTemplate, AssetType
 from app.models.operational_data import TruckEntry, ShipLoading, DailyOperations
 from app.models.external_data import DataSource, DataImport, GBMLogisticsData
+from app.models.dashboard import Dashboard, Widget, DashboardShare, DashboardTemplate, DashboardModule, WidgetType
+from app.models.chat import Conversation, Message, MessageRole
 
 __all__ = [
     "Organization",
@@ -31,4 +33,13 @@ __all__ = [
     "DataSource",
     "DataImport",
     "GBMLogisticsData",
+    "Dashboard",
+    "Widget",
+    "DashboardShare",
+    "DashboardTemplate",
+    "DashboardModule",
+    "WidgetType",
+    "Conversation",
+    "Message",
+    "MessageRole",
 ]

@@ -187,7 +187,7 @@ async def stream_analytics(
                 try:
                     # Create analytics service (need to get DB session)
                     # For WebSocket, we'll create a new session for each query
-                    from app.core.database import SessionLocal
+                    from app.db.session import AsyncSessionLocal
 
                     async with SessionLocal() as db:
                         analytics_service = AnalyticsService(db)
@@ -296,7 +296,7 @@ async def stream_analytics_simple(
 
         while True:
             try:
-                from app.core.database import SessionLocal
+                from app.db.session import AsyncSessionLocal
 
                 async with SessionLocal() as db:
                     analytics_service = AnalyticsService(db)

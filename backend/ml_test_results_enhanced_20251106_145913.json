@@ -1,0 +1,403 @@
+{
+  "test_1_mtbf_mttr": {
+    "mtbf": {
+      "mean": 476.28092531049646,
+      "median": 457.27213354631795,
+      "std": 199.19509280175262,
+      "min": 144.89624828283618,
+      "max": 1173.0592731602694
+    },
+    "mttr": {
+      "mean": 3.8202225726338948,
+      "median": 3.1573009782598436,
+      "std": 2.8179797985565753,
+      "min": 0.3733135434896189,
+      "max": 13.749071192870046
+    },
+    "weibull_params": {
+      "shape": 2.524690401150591,
+      "scale": 537.3945626098675
+    },
+    "reliability": {
+      "100h": 0.9857725303394016,
+      "200h": 0.920848304874459,
+      "500h": 0.43451506281871743,
+      "1000h": 0.008258460358958532
+    },
+    "failure_rate_per_hour": 0.0020996011951309643,
+    "availability": 0.9920428797359097,
+    "equipment_analysis": [
+      {
+        "equipment_id": "motor_0",
+        "n_failures": 20,
+        "mtbf_mean": 414.857682226241,
+        "mttr_mean": 3.323525699424689,
+        "total_cost": 65657.61087992178
+      },
+      {
+        "equipment_id": "motor_1",
+        "n_failures": 20,
+        "mtbf_mean": 503.0390312588037,
+        "mttr_mean": 4.017381617419807,
+        "total_cost": 58927.59749096929
+      },
+      {
+        "equipment_id": "motor_2",
+        "n_failures": 20,
+        "mtbf_mean": 458.38850503763706,
+        "mttr_mean": 3.906889124195679,
+        "total_cost": 61013.72138487713
+      },
+      {
+        "equipment_id": "motor_3",
+        "n_failures": 20,
+        "mtbf_mean": 466.31926775304,
+        "mttr_mean": 4.403340220804141,
+        "total_cost": 62399.31488573975
+      },
+      {
+        "equipment_id": "motor_4",
+        "n_failures": 20,
+        "mtbf_mean": 538.8001402767602,
+        "mttr_mean": 3.4499762013251583,
+        "total_cost": 54011.50746246703
+      }
+    ]
+  },
+  "test_2_lstm": {
+    "metrics": {
+      "mae": 13.927941405256448,
+      "mse": 309.81878848044005,
+      "rmse": 17.601670048050554,
+      "r2": 0.9878501418616557,
+      "mape": 6.3251503653127035
+    },
+    "directional_accuracy": 0.9633294528521537,
+    "training_history": {
+      "final_loss": 0.0007088171551004052,
+      "final_val_loss": 0.0030359220691025257,
+      "epochs_trained": 15
+    },
+    "model_type": "LSTM_Real",
+    "n_train": 6873,
+    "n_test": 1719
+  },
+  "test_3_efficiency": {
+    "best_model": "GradientBoosting",
+    "metrics": {
+      "mae": 0.04613658571187922,
+      "mse": 0.004106866459145625,
+      "rmse": 0.06408483798173813,
+      "r2": 0.680255510961051,
+      "mape": 3.664345909081946
+    },
+    "rf_metrics": {
+      "mae": 0.04850859516237899,
+      "mse": 0.004588428766411733,
+      "rmse": 0.06773794185249307,
+      "r2": 0.6427629614932381,
+      "mape": 3.8463592240486997
+    },
+    "gb_metrics": {
+      "mae": 0.04613658571187922,
+      "mse": 0.004106866459145625,
+      "rmse": 0.06408483798173813,
+      "r2": 0.680255510961051,
+      "mape": 3.664345909081946
+    },
+    "rf_cv_scores": {
+      "mean": 0.6465229870083266,
+      "std": 0.034134123517848
+    },
+    "gb_cv_scores": {
+      "mean": 0.7016655122196462,
+      "std": 0.028749436276722745
+    },
+    "feature_importance": {
+      "production_tons": 0.5737156237826034,
+      "hour": 0.18621978055274158,
+      "month": 0.10413452874740055,
+      "temperature_c": 0.04811912658223036,
+      "day_of_week": 0.04619632276205902,
+      "is_weekend": 0.041614617572964994
+    },
+    "n_features": 6,
+    "n_train": 7008,
+    "n_test": 1752
+  },
+  "test_4_anomalies": {
+    "n_samples": 1000,
+    "n_anomalies": 100,
+    "anomaly_rate": 0.1,
+    "score_stats": {
+      "mean": -0.49533116114282255,
+      "std": 0.05476857737915099,
+      "min": -0.6701377279715163,
+      "max": -0.4003116870101822,
+      "q25": -0.5292028681678342,
+      "q50": -0.49121733041779353,
+      "q75": -0.45124346685922445
+    },
+    "anomaly_examples": [
+      {
+        "index": 4,
+        "alarm_type": "bearing",
+        "severity": "medium",
+        "duration_minutes": 19.881179164223624,
+        "temperature_c": 45.65832847853394,
+        "anomaly_score": -0.5746526716164246
+      },
+      {
+        "index": 17,
+        "alarm_type": "vibration",
+        "severity": "low",
+        "duration_minutes": 226.23046898876896,
+        "temperature_c": 41.28226988690635,
+        "anomaly_score": -0.6139367378621534
+      },
+      {
+        "index": 36,
+        "alarm_type": "vibration",
+        "severity": "critical",
+        "duration_minutes": 182.50910555169818,
+        "temperature_c": 38.483765002189536,
+        "anomaly_score": -0.618017882684697
+      },
+      {
+        "index": 45,
+        "alarm_type": "vibration",
+        "severity": "medium",
+        "duration_minutes": 124.14060789692805,
+        "temperature_c": 13.569964734552737,
+        "anomaly_score": -0.5752081337876984
+      },
+      {
+        "index": 107,
+        "alarm_type": "overcurrent",
+        "severity": "medium",
+        "duration_minutes": 78.08876887269257,
+        "temperature_c": 76.00035465702143,
+        "anomaly_score": -0.591015816976593
+      },
+      {
+        "index": 109,
+        "alarm_type": "overcurrent",
+        "severity": "critical",
+        "duration_minutes": 126.71391385490688,
+        "temperature_c": 60.0640008699583,
+        "anomaly_score": -0.6073586858708439
+      },
+      {
+        "index": 110,
+        "alarm_type": "overheating",
+        "severity": "critical",
+        "duration_minutes": 86.10502910392644,
+        "temperature_c": -0.27215783740432187,
+        "anomaly_score": -0.5860633765595729
+      },
+      {
+        "index": 111,
+        "alarm_type": "bearing",
+        "severity": "low",
+        "duration_minutes": 106.96635590056549,
+        "temperature_c": 13.102529832630818,
+        "anomaly_score": -0.575990564847529
+      },
+      {
+        "index": 125,
+        "alarm_type": "overheating",
+        "severity": "critical",
+        "duration_minutes": 194.00778858634146,
+        "temperature_c": 47.11975879119347,
+        "anomaly_score": -0.615762296713078
+      },
+      {
+        "index": 127,
+        "alarm_type": "bearing",
+        "severity": "medium",
+        "duration_minutes": 85.27600293812414,
+        "temperature_c": 15.047357881562451,
+        "anomaly_score": -0.6053931164396841
+      }
+    ]
+  },
+  "test_5_correlation": {
+    "pearson": {
+      "consumption_kwh": {
+        "consumption_kwh": 1.0,
+        "production_tons": 0.9967971941756529,
+        "efficiency_kwh_per_ton": -0.08080534543034025,
+        "temperature_c": 0.17526332519106064,
+        "hour": 0.07616651552487684
+      },
+      "production_tons": {
+        "consumption_kwh": 0.9967971941756529,
+        "production_tons": 1.0,
+        "efficiency_kwh_per_ton": -0.14127362185336123,
+        "temperature_c": 0.17538087453291687,
+        "hour": 0.07651626162076333
+      },
+      "efficiency_kwh_per_ton": {
+        "consumption_kwh": -0.08080534543034025,
+        "production_tons": -0.14127362185336123,
+        "efficiency_kwh_per_ton": 1.0,
+        "temperature_c": -0.02446496572965352,
+        "hour": -0.019565902665019768
+      },
+      "temperature_c": {
+        "consumption_kwh": 0.17526332519106064,
+        "production_tons": 0.17538087453291687,
+        "efficiency_kwh_per_ton": -0.02446496572965352,
+        "temperature_c": 1.0,
+        "hour": 0.5779288324293121
+      },
+      "hour": {
+        "consumption_kwh": 0.07616651552487684,
+        "production_tons": 0.07651626162076333,
+        "efficiency_kwh_per_ton": -0.019565902665019768,
+        "temperature_c": 0.5779288324293121,
+        "hour": 1.0
+      }
+    },
+    "spearman": {
+      "consumption_kwh": {
+        "consumption_kwh": 1.0,
+        "production_tons": 0.99513637771649,
+        "efficiency_kwh_per_ton": 0.008980493302099997,
+        "temperature_c": 0.1653888791273185,
+        "hour": 0.08954222002009198
+      },
+      "production_tons": {
+        "consumption_kwh": 0.99513637771649,
+        "production_tons": 1.0,
+        "efficiency_kwh_per_ton": -0.07987580759697785,
+        "temperature_c": 0.16424333465001914,
+        "hour": 0.08868902478545593
+      },
+      "efficiency_kwh_per_ton": {
+        "consumption_kwh": 0.008980493302099997,
+        "production_tons": -0.07987580759697785,
+        "efficiency_kwh_per_ton": 1.0,
+        "temperature_c": -0.0066234041656256714,
+        "hour": -0.007684937228917521
+      },
+      "temperature_c": {
+        "consumption_kwh": 0.1653888791273185,
+        "production_tons": 0.16424333465001914,
+        "efficiency_kwh_per_ton": -0.0066234041656256714,
+        "temperature_c": 1.0,
+        "hour": 0.5876991776025802
+      },
+      "hour": {
+        "consumption_kwh": 0.08954222002009198,
+        "production_tons": 0.08868902478545593,
+        "efficiency_kwh_per_ton": -0.007684937228917521,
+        "temperature_c": 0.5876991776025802,
+        "hour": 1.0
+      }
+    },
+    "p_values": {
+      "consumption_kwh_vs_production_tons": {
+        "correlation": 0.9967971941756489,
+        "p_value": 0.0,
+        "significant": "True"
+      },
+      "consumption_kwh_vs_efficiency_kwh_per_ton": {
+        "correlation": -0.08080534543034294,
+        "p_value": 3.6114013607770684e-14,
+        "significant": "True"
+      },
+      "consumption_kwh_vs_temperature_c": {
+        "correlation": 0.17526332519106103,
+        "p_value": 2.2500141403405986e-61,
+        "significant": "True"
+      },
+      "consumption_kwh_vs_hour": {
+        "correlation": 0.07616651552487591,
+        "p_value": 9.459653387476416e-13,
+        "significant": "True"
+      },
+      "production_tons_vs_efficiency_kwh_per_ton": {
+        "correlation": -0.14127362185336434,
+        "p_value": 2.743423302485401e-40,
+        "significant": "True"
+      },
+      "production_tons_vs_temperature_c": {
+        "correlation": 0.17538087453291687,
+        "p_value": 1.8664782985561885e-61,
+        "significant": "True"
+      },
+      "production_tons_vs_hour": {
+        "correlation": 0.0765162616207625,
+        "p_value": 7.443999080917226e-13,
+        "significant": "True"
+      },
+      "efficiency_kwh_per_ton_vs_temperature_c": {
+        "correlation": -0.024464965729659033,
+        "p_value": 0.022032260043063155,
+        "significant": "True"
+      },
+      "efficiency_kwh_per_ton_vs_hour": {
+        "correlation": -0.019565902665019754,
+        "p_value": 0.06707336796911724,
+        "significant": "False"
+      },
+      "temperature_c_vs_hour": {
+        "correlation": 0.5779288324293104,
+        "p_value": 0.0,
+        "significant": "True"
+      }
+    },
+    "strong_correlations": [
+      {
+        "pair": "consumption_kwh_vs_production_tons",
+        "correlation": 0.9967971941756489,
+        "p_value": 0.0,
+        "significant": "True"
+      }
+    ],
+    "n_variables": 5
+  },
+  "test_6_optimization": {
+    "cost_current": {
+      "total_yearly": 1216729.734940929,
+      "monthly": 101394.14457841076
+    },
+    "cost_optimized": {
+      "total_yearly": 1196402.630609286,
+      "monthly": 99700.2192174405
+    },
+    "savings": {
+      "total_yearly": 20327.104331643088,
+      "monthly": 1693.9253609702573,
+      "percentage": 1.6706343034042763
+    },
+    "tariff_analysis": [
+      {
+        "period": "peak",
+        "tariff_brl": 0.85,
+        "consumption_current_kwh": 254088.8041455405,
+        "consumption_optimized_kwh": 203271.0433164324,
+        "cost_current_brl": 215975.4835237094,
+        "cost_optimized_brl": 172780.38681896753
+      },
+      {
+        "period": "intermediate",
+        "tariff_brl": 0.65,
+        "consumption_current_kwh": 172775.118306501,
+        "consumption_optimized_kwh": 172775.118306501,
+        "cost_current_brl": 112303.82689922565,
+        "cost_optimized_brl": 112303.82689922565
+      },
+      {
+        "period": "off_peak",
+        "tariff_brl": 0.45,
+        "consumption_current_kwh": 1974334.2767066532,
+        "consumption_optimized_kwh": 2025152.0375357613,
+        "cost_current_brl": 888450.424517994,
+        "cost_optimized_brl": 911318.4168910927
+      }
+    ],
+    "optimization_strategy": "Deslocar 20% da carga de ponta (18h-21h) para fora ponta (22h-6h)"
+  }
+}

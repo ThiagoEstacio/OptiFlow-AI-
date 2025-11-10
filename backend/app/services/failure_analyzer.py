@@ -16,7 +16,7 @@ from sqlalchemy import select, and_, or_, func, text
 import statistics
 
 from app.models.asset import Asset
-from app.models.alarm import Alarm
+from app.models.alarm import AlarmDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -158,13 +158,13 @@ class FailureAnalyzer:
             start_time = failure_time - timedelta(minutes=self.correlation_window)
 
             result = await self.db.execute(
-                select(Alarm).where(
+                select(AlarmDefinition).where(
                     and_(
-                        Alarm.asset_id == asset_id,
-                        Alarm.triggered_at >= start_time,
-                        Alarm.triggered_at <= failure_time
+                        AlarmDefinition.asset_id == asset_id,
+                        AlarmDefinition.triggered_at >= start_time,
+                        AlarmDefinition.triggered_at <= failure_time
                     )
-                ).order_by(Alarm.triggered_at.desc())
+                ).order_by(AlarmDefinition.triggered_at.desc())
             )
 
             alarms = result.scalars().all()
@@ -214,12 +214,12 @@ class FailureAnalyzer:
         try:
             # Query past failures from alarms table
             result = await self.db.execute(
-                select(Alarm).where(
+                select(AlarmDefinition).where(
                     and_(
-                        Alarm.asset_id == asset_id,
-                        Alarm.severity.in_(["critical", "high"])
+                        AlarmDefinition.asset_id == asset_id,
+                        AlarmDefinition.severity.in_(["critical", "high"])
                     )
-                ).order_by(Alarm.triggered_at.desc()).limit(20)
+                ).order_by(AlarmDefinition.triggered_at.desc()).limit(20)
             )
 
             alarms = result.scalars().all()
@@ -250,13 +250,13 @@ class FailureAnalyzer:
             end_time = failure_time + timedelta(minutes=time_window)
 
             result = await self.db.execute(
-                select(Alarm).where(
+                select(AlarmDefinition).where(
                     and_(
-                        Alarm.triggered_at >= start_time,
-                        Alarm.triggered_at <= end_time,
-                        Alarm.severity.in_(["critical", "high"])
+                        AlarmDefinition.triggered_at >= start_time,
+                        AlarmDefinition.triggered_at <= end_time,
+                        AlarmDefinition.severity.in_(["critical", "high"])
                     )
-                ).order_by(Alarm.triggered_at)
+                ).order_by(AlarmDefinition.triggered_at)
             )
 
             alarms = result.scalars().all()

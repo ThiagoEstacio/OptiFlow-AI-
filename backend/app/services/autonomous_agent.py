@@ -25,6 +25,7 @@ from app.services.asset_health import AssetHealthCalculator
 from app.services.asset_health_alert_manager import AssetHealthAlertManager
 from app.services.asset_health_analytics import AssetHealthAnalytics
 from app.services.influxdb import influxdb_service
+from app.services.pareto_analyzer import ParetoAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -98,17 +99,50 @@ class AutonomousAgent:
                 async with AsyncSessionLocal() as db:
                     data_service = DataService(db)
                     toolkit = AgentToolkit(data_service)
-                    
-                    # Get all active tags
-                    result = await db.execute(
-                        select(Tag).where(Tag.is_active == True).limit(50)
-                    )
-                    tags = result.scalars().all()
-                    
-                    if not tags:
-                        logger.warning("No active tags found for monitoring")
+
+                    # AUTO-DISCOVERY: Get all tags from InfluxDB (single source of truth)
+                    tag_names = influxdb_service.list_all_measurements()
+
+                    if not tag_names:
+                        logger.warning("⚠️  No tags found in InfluxDB for monitoring")
                         await asyncio.sleep(self.monitoring_interval)
                         continue
+
+                    logger.info(f"🔍 Auto-discovered {len(tag_names)} tags from InfluxDB: {', '.join(tag_names[:5])}{'...' if len(tag_names) > 5 else ''}")
+
+                    # Get tag metadata from PostgreSQL if available (optional enrichment)
+                    # This provides additional context like category, min/max values
+                    result = await db.execute(
+                        select(Tag).where(Tag.name.in_(tag_names))
+                    )
+                    tag_metadata_map = {tag.name: tag for tag in result.scalars().all()}
+
+                    # Create lightweight tag objects for discovered tags
+                    # If metadata exists in PostgreSQL, use it; otherwise use defaults
+                    tags = []
+                    for tag_name in tag_names[:50]:  # Limit to 50 tags per cycle
+                        if tag_name in tag_metadata_map:
+                            # Use existing metadata from PostgreSQL
+                            tags.append(tag_metadata_map[tag_name])
+                        else:
+                            # Create lightweight tag object for monitoring
+                            # (no database persistence, just for analysis)
+                            from app.models.tag import TagCategory, TagDataType
+                            import uuid
+                            lightweight_tag = type('Tag', (), {
+                                'id': uuid.uuid4(),  # Generate temporary UUID
+                                'name': tag_name,
+                                'tag_address': tag_name,
+                                'description': f'Auto-discovered tag: {tag_name}',
+                                'category': TagCategory.PROCESS,
+                                'data_type': TagDataType.FLOAT,
+                                'is_active': True,
+                                'min_value': None,
+                                'max_value': None,
+                                'unit': '',
+                                'device_id': None,
+                            })()
+                            tags.append(lightweight_tag)
                     
                     # Run monitoring strategies sequentially (all using same session to avoid nested sessions)
                     monitoring_methods = [
@@ -118,6 +152,7 @@ class AutonomousAgent:
                         ("monitor_asset_health", self.monitor_asset_health),
                         ("identify_optimization_opportunities", self.identify_optimization_opportunities),
                         ("predict_future_states", self.predict_future_states),
+                        ("generate_quality_insights", self.generate_quality_insights),
                     ]
 
                     for method_name, method in monitoring_methods:
@@ -128,6 +163,16 @@ class AutonomousAgent:
                                     self.add_insight(insight)
                         except Exception as e:
                             logger.error(f"{method_name} failed: {e}")
+
+                    # Monitor ML/DS insights (separate from tag-based monitoring)
+                    try:
+                        ml_insights = await self.monitor_ml_insights(db)
+                        if ml_insights:
+                            for insight in ml_insights:
+                                self.add_insight(insight)
+                            logger.info(f"✅ Added {len(ml_insights)} ML insights to autonomous agent")
+                    except Exception as e:
+                        logger.error(f"monitor_ml_insights failed: {e}")
                     
                     logger.info(f"✅ Monitoring cycle complete. Total insights: {len(self.insights)}")
                     
@@ -581,6 +626,116 @@ class AutonomousAgent:
 
         return insights
 
+    async def monitor_ml_insights(self, db: AsyncSession) -> List[AutonomousInsight]:
+        """
+        Monitora insights ML/DS e gera alertas proativos
+
+        Verifica:
+        - Alertas críticos de MTBF/MTTR
+        - Consumo energético anormal
+        - Anomalias detectadas
+        - Oportunidades de economia
+
+        Returns:
+            Lista de insights gerados
+        """
+        insights = []
+
+        try:
+            from app.services.agent_ml_integration import agent_ml_integration
+            from app.models.organization import Organization
+            from sqlalchemy import select
+
+            # Get first organization (in multi-tenant system, this would be per-user)
+            result = await db.execute(select(Organization).limit(1))
+            organization = result.scalar_one_or_none()
+
+            if not organization:
+                logger.warning("No organization found for ML monitoring")
+                return []
+
+            organization_id = str(organization.id)
+
+            # Verificar alertas críticos ML
+            critical_alerts = await agent_ml_integration.check_critical_alerts(
+                db=db,
+                organization_id=organization_id
+            )
+
+            # Gerar insights para cada alerta crítico
+            for alert in critical_alerts:
+                try:
+                    # Mapear prioridade para severidade
+                    severity_map = {
+                        'high': 'critical',
+                        'medium': 'high',
+                        'low': 'medium'
+                    }
+                    severity = severity_map.get(alert['priority'], 'medium')
+
+                    # Criar recomendações baseadas no tipo de alerta
+                    recommendations = []
+                    if alert['type'] == 'maintenance_critical':
+                        recommendations = [
+                            f"Agendar manutenção preventiva urgente para {alert.get('equipment_id', 'equipamento')}",
+                            "Verificar histórico de falhas e padrões de degradação",
+                            "Considerar substituição se manutenções forem frequentes"
+                        ]
+                    elif alert['type'] == 'energy_abnormal':
+                        recommendations = [
+                            "Investigar causa do consumo energético anormal",
+                            "Verificar eficiência dos equipamentos",
+                            "Revisar parâmetros operacionais e setpoints"
+                        ]
+                    elif alert['type'] == 'anomalies_multiple':
+                        recommendations = [
+                            "Investigar anomalias detectadas nas últimas 24h",
+                            "Verificar se há padrão comum entre anomalias",
+                            "Analisar condições operacionais durante anomalias"
+                        ]
+
+                    # Criar insight
+                    insight = AutonomousInsight(
+                        insight_id=f"ml_alert_{alert['type']}_{datetime.now().timestamp()}",
+                        title=f"🤖 ML Alert: {alert['message']}",
+                        description=f"Alerta ML/DS detectado. Tipo: {alert['type']}. Ação: {alert.get('action', 'investigar')}",
+                        category="prediction",
+                        severity=severity,
+                        tags=['ml', 'predictive', alert['type']],
+                        metrics={
+                            "alert_type": alert['type'],
+                            "priority": alert['priority'],
+                            "action": alert.get('action', 'investigate'),
+                        },
+                        recommendations=recommendations,
+                        timestamp=datetime.now(),
+                        data=alert.get('details', {})
+                    )
+
+                    insights.append(insight)
+
+                    logger.info(
+                        f"🤖 ML Alert generated: {alert['type']} - "
+                        f"Priority: {alert['priority']}, Message: {alert['message']}"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Error creating ML insight from alert: {e}")
+                    continue
+
+            # Log resumo
+            if insights:
+                logger.info(f"✅ Generated {len(insights)} ML insights from {len(critical_alerts)} critical alerts")
+            else:
+                logger.debug("No critical ML alerts at this time")
+
+        except Exception as e:
+            logger.error(f"Error in monitor_ml_insights: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+        return insights
+
     def _calculate_anomaly_severity(self, anomaly_count: int) -> str:
         """Calculate severity based on anomaly count"""
         if anomaly_count >= 10:
@@ -592,14 +747,193 @@ class AutonomousAgent:
         else:
             return "low"
     
+    async def generate_quality_insights(self, tags: List[Tag], toolkit: AgentToolkit, db: AsyncSession) -> List[AutonomousInsight]:
+        """
+        Generate quality-based insights using quality tools (Pareto, SPC, etc.)
+
+        This method integrates quality management tools to provide actionable insights:
+        - Pareto Analysis: Identify vital few issues causing most problems (80/20 rule)
+        - Statistical Process Control: Detect process variations
+        - Root Cause Analysis: Understand failure patterns
+        """
+        insights = []
+
+        try:
+            # 1. PARETO ANALYSIS - Find top issues causing most problems
+            logger.info("🎯 Running Pareto Analysis for quality insights...")
+            pareto_analyzer = ParetoAnalyzer(db)
+
+            # Analyze failures over last 7 days
+            pareto_result = await pareto_analyzer.generate_pareto(days=7, min_occurrences=1)
+
+            if pareto_result.get("status") == "success" and pareto_result.get("items"):
+                items = pareto_result["items"]
+                vital_few = [item for item in items if item.get("is_vital_few", False)]
+
+                if vital_few:
+                    # Generate insight for Pareto vital few
+                    top_3 = vital_few[:3]
+                    total_percentage = sum(item["percentage"] for item in top_3)
+
+                    insight = AutonomousInsight(
+                        insight_id=f"quality_pareto_{datetime.now().timestamp()}",
+                        title=f"🎯 Pareto: {len(top_3)} problemas causam {total_percentage:.1f}% das falhas",
+                        description=(
+                            f"Análise Pareto identificou que {len(vital_few)} tipos de falha causam 80% dos problemas. "
+                            f"Focar nos top 3 pode reduzir {total_percentage:.1f}% das falhas totais."
+                        ),
+                        category="optimization",
+                        severity="medium",
+                        tags=["pareto", "quality", "80-20"],
+                        metrics={
+                            "total_failure_types": len(items),
+                            "vital_few_count": len(vital_few),
+                            "vital_few_percentage": pareto_result.get("vital_few_percentage", 0),
+                            "top_3_issues": [
+                                {
+                                    "type": item["failure_type"],
+                                    "count": item["count"],
+                                    "percentage": item["percentage"]
+                                }
+                                for item in top_3
+                            ]
+                        },
+                        recommendations=[
+                            f"Priorizar correção de: {top_3[0]['failure_type']} ({top_3[0]['percentage']:.1f}% das falhas)",
+                            f"Investigar causas raiz de: {top_3[1]['failure_type']}" if len(top_3) > 1 else "Monitorar tendências",
+                            "Implementar ações corretivas nos problemas identificados",
+                            "Aplicar Diagrama de Ishikawa para análise de causas",
+                        ],
+                        timestamp=datetime.now(),
+                        data={
+                            "tool": "pareto",
+                            "pareto_chart": items,
+                            "analysis_period": "7 days"
+                        }
+                    )
+                    insights.append(insight)
+                    logger.info(f"✅ Generated Pareto insight: {len(vital_few)} vital few identified")
+
+            # 2. FAILURE PATTERN ANALYSIS - Identify recurring patterns
+            # Check if we have multiple failures of the same type (indicating systematic issue)
+            if pareto_result.get("items"):
+                high_frequency_failures = [
+                    item for item in pareto_result["items"]
+                    if item.get("count", 0) >= 5  # 5 or more occurrences
+                ]
+
+                if high_frequency_failures:
+                    for failure in high_frequency_failures[:2]:  # Top 2 high-frequency
+                        insight = AutonomousInsight(
+                            insight_id=f"quality_pattern_{failure['failure_type']}_{datetime.now().timestamp()}",
+                            title=f"⚠️ Padrão Recorrente: {failure['failure_type']}",
+                            description=(
+                                f"Falha '{failure['failure_type']}' ocorreu {failure['count']} vezes "
+                                f"nos últimos 7 dias ({failure['percentage']:.1f}% do total). "
+                                f"Isso indica um problema sistemático que requer análise de causa raiz."
+                            ),
+                            category="alert",
+                            severity="high" if failure['count'] >= 10 else "medium",
+                            tags=["pattern", "recurring", "quality"],
+                            metrics={
+                                "failure_type": failure['failure_type'],
+                                "occurrence_count": failure['count'],
+                                "percentage": failure['percentage'],
+                                "cumulative_percentage": failure.get('cumulative_percentage', 0)
+                            },
+                            recommendations=[
+                                "Aplicar 5 Porquês para encontrar causa raiz",
+                                "Criar Diagrama de Ishikawa (espinha de peixe)",
+                                "Verificar se existe padrão temporal (horário, turno, dia)",
+                                "Implementar ação corretiva permanente",
+                                "Adicionar Check Sheet para rastrear ocorrências"
+                            ],
+                            timestamp=datetime.now(),
+                            data={
+                                "tool": "pattern_analysis",
+                                "failure_details": failure
+                            }
+                        )
+                        insights.append(insight)
+
+            # 3. PROCESS STABILITY CHECK - Using statistical analysis
+            # Check variance in critical process tags
+            process_tags = [tag for tag in tags if hasattr(tag, 'category') and
+                          tag.category.value in ["process", "control"]][:5]
+
+            for tag in process_tags:
+                try:
+                    # Get statistics for the tag
+                    result = await toolkit.execute_tool(
+                        "calculate_statistics",
+                        {
+                            "tag_id": str(tag.id),
+                            "duration": "24h"
+                        }
+                    )
+
+                    if result.success and result.data:
+                        stats = result.data
+                        mean = stats.get("mean", 0)
+                        stddev = stats.get("stddev", 0)
+
+                        # Calculate coefficient of variation (CV)
+                        cv = (stddev / mean * 100) if mean != 0 else 0
+
+                        # High variability indicates unstable process
+                        if cv > 15:  # CV > 15% indicates high variability
+                            insight = AutonomousInsight(
+                                insight_id=f"quality_stability_{tag.id}_{datetime.now().timestamp()}",
+                                title=f"📊 Variabilidade Alta: {tag.name}",
+                                description=(
+                                    f"Tag '{tag.name}' apresenta coeficiente de variação de {cv:.1f}% "
+                                    f"(> 15%), indicando processo instável. Média: {mean:.2f}, "
+                                    f"Desvio Padrão: {stddev:.2f}."
+                                ),
+                                category="alert",
+                                severity="medium" if cv < 25 else "high",
+                                tags=[str(tag.id), "stability", "spc", "quality"],
+                                metrics={
+                                    "coefficient_of_variation": cv,
+                                    "mean": mean,
+                                    "stddev": stddev,
+                                    "tag_name": tag.name
+                                },
+                                recommendations=[
+                                    "Implementar Carta de Controle (SPC) para monitoramento contínuo",
+                                    "Investigar causas de variação especial",
+                                    "Verificar se equipamento está operando dentro de especificação",
+                                    "Considerar ajuste de parâmetros de controle",
+                                    "Aplicar Regras de Western Electric para detectar padrões"
+                                ],
+                                timestamp=datetime.now(),
+                                data={
+                                    "tool": "statistical_process_control",
+                                    "statistics": stats,
+                                    "cv_threshold": 15
+                                }
+                            )
+                            insights.append(insight)
+                            logger.info(f"✅ Generated stability insight for {tag.name}: CV={cv:.1f}%")
+
+                except Exception as e:
+                    logger.error(f"Error analyzing stability for tag {tag.id}: {e}")
+
+            logger.info(f"✅ Quality insights generation complete: {len(insights)} insights generated")
+
+        except Exception as e:
+            logger.error(f"Error in generate_quality_insights: {e}")
+
+        return insights
+
     def add_insight(self, insight: AutonomousInsight):
         """Add insight to the feed"""
         self.insights.insert(0, insight)  # Add to beginning
-        
+
         # Keep only max_insights
         if len(self.insights) > self.max_insights:
             self.insights = self.insights[:self.max_insights]
-        
+
         logger.info(f"📝 New insight: [{insight.severity}] {insight.title}")
     
     def get_insights(

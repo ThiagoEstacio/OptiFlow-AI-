@@ -9,6 +9,7 @@ Models for importing and tracking data from external sources:
 """
 
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Date, ForeignKey, Text, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -55,11 +56,11 @@ class DataSource(Base):
     notes = Column(Text)
 
     # Site reference
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id"), nullable=False)
     site = relationship("Site")
 
     # Metadata
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -124,7 +125,7 @@ class DataImport(Base):
 
     # Approval workflow
     requires_approval = Column(Boolean, default=False)
-    approved_by = Column(Integer, ForeignKey("users.id"))
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     approved_at = Column(DateTime(timezone=True))
     approval_notes = Column(Text)
 
@@ -137,15 +138,15 @@ class DataImport(Base):
     raw_data_sample = Column(JSON)  # First few records for preview
 
     # Site reference
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id"), nullable=False)
     site = relationship("Site")
 
     # Metadata
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    created_by_user = relationship("User")
+    created_by_user = relationship("User", foreign_keys=[created_by])
     approved_by_user = relationship("User", foreign_keys=[approved_by])
 
     # Relationships
@@ -274,12 +275,12 @@ class GBMLogisticsData(Base):
 
     # Validation
     validated = Column(Boolean, default=False, index=True)
-    validated_by = Column(Integer, ForeignKey("users.id"))
+    validated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     validated_at = Column(DateTime(timezone=True))
     validation_notes = Column(Text)
 
     # Site reference
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id"), nullable=False)
     site = relationship("Site")
 
     # Metadata

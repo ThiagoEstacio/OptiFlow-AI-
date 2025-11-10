@@ -3,7 +3,7 @@
  * Uses WebSocket for live updates without database polling
  */
 import React from 'react';
-import { Box, Paper, Typography, Chip, Grid, Stack } from '@mui/material';
+import { Box, Paper, Typography, Chip, Stack } from '@mui/material';
 import { SignalCellularAlt, WifiOff } from '@mui/icons-material';
 import { useTagStream } from '../hooks/useTagStream';
 
@@ -94,132 +94,132 @@ export default function RealTimeMonitor() {
 
       {/* Gates */}
       <Typography variant="h6" gutterBottom>
-        📍 Portões (Gates)
+        Portões (Gates)
       </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={4}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 4 }}>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="GATE01 - Posição"
             nodeId="ns=2;i=8"
             unit="%"
             format={(v) => parseFloat(v).toFixed(1)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="GATE01 - Vazão"
             nodeId="ns=2;i=10"
             unit="t/h"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="GATE02 - Posição"
             nodeId="ns=2;i=13"
             unit="%"
             format={(v) => parseFloat(v).toFixed(1)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="GATE02 - Vazão"
             nodeId="ns=2;i=15"
             unit="t/h"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="GATE03 - Posição"
             nodeId="ns=2;i=18"
             unit="%"
             format={(v) => parseFloat(v).toFixed(1)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="GATE03 - Vazão"
             nodeId="ns=2;i=20"
             unit="t/h"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Conveyor 1 */}
       <Typography variant="h6" gutterBottom>
-        🔄 Transportador 01 (CORR01)
+        Transportador 01 (CORR01)
       </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 4 }}>
+        <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
           <TagDisplay
             label="Status"
             nodeId="ns=2;i=58"
-            format={(v) => (v === '1' || v.toLowerCase() === 'true' ? '▶️ LIGADO' : '⏸️ DESLIGADO')}
+            format={(v) => (v === '1' || v.toLowerCase() === 'true' ? 'LIGADO' : 'DESLIGADO')}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
           <TagDisplay
             label="Velocidade"
             nodeId="ns=2;i=60"
             unit="m/s"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
           <TagDisplay
             label="Vazão"
             nodeId="ns=2;i=61"
             unit="t/h"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '200px' }}>
           <TagDisplay
             label="Temperatura Correia"
             nodeId="ns=2;i=66"
             unit="°C"
             format={(v) => parseFloat(v).toFixed(1)}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* KPIs */}
       <Typography variant="h6" gutterBottom>
-        📈 KPIs do Sistema
+        KPIs do Sistema
       </Typography>
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={4}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="Energia Total"
             nodeId="ns=2;i=130"
             unit="kWh"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="Produção Total"
             nodeId="ns=2;i=131"
             unit="t"
             format={(v) => parseFloat(v).toFixed(2)}
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Box>
+        <Box sx={{ flex: '1 1 calc(33.333% - 11px)', minWidth: '250px' }}>
           <TagDisplay
             label="Eficiência Energética"
             nodeId="ns=2;i=132"
             unit="kWh/t"
             format={(v) => parseFloat(v).toFixed(3)}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Debug Info */}
       <Paper sx={{ p: 2, mt: 4, bgcolor: 'grey.900' }}>
         <Typography variant="caption" color="text.secondary">
-          💡 Arquitetura: OPC UA → WebSocket → React (Tempo Real sem Banco de Dados)
+          Arquitetura: OPC UA → WebSocket → React (Tempo Real sem Banco de Dados)
         </Typography>
       </Paper>
     </Box>

@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Alert,
   CircularProgress,
   Paper,
@@ -138,8 +137,8 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
   return (
     <Box>
       {/* Summary Cards */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 3 }}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '200px' }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -153,9 +152,9 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '200px' }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -172,9 +171,9 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
               />
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '200px' }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -188,9 +187,9 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '200px' }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
@@ -204,12 +203,12 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
               </Typography>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Breakdown by Category */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} md={7}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 3 }}>
+        <Box sx={{ flex: '1 1 calc(58% - 12px)', minWidth: '400px' }}>
           <Card>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
@@ -242,9 +241,9 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={5}>
+        <Box sx={{ flex: '1 1 calc(42% - 12px)', minWidth: '300px' }}>
           <Card>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
@@ -273,13 +272,13 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Detailed Breakdown */}
-      <Grid container spacing={3}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
         {breakdownData.map((category, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
+          <Box key={index} sx={{ flex: '1 1 calc(25% - 18px)', minWidth: '250px' }}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" mb={2}>
@@ -355,9 +354,9 @@ const ROICalculator: React.FC<Props> = ({ siteId, periodDays, roiData }) => {
                 )}
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
         ))}
-      </Grid>
+      </Box>
 
       {/* 6-Month Trend */}
       {trendData && trendData.trend_data && (

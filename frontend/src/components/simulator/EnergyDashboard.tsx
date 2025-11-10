@@ -5,7 +5,6 @@ import {
   CardContent,
   CardHeader,
   Chip,
-  Grid,
   Paper,
   Stack,
   Typography,
@@ -84,8 +83,8 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
   return (
     <Box>
       {/* Summary Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(25% - 12px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -113,9 +112,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={3}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(25% - 12px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -149,9 +148,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={3}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(25% - 12px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -179,9 +178,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={3}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(25% - 12px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -209,15 +208,15 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Cost Breakdown */}
       <Card sx={{ mb: 3 }}>
         <CardHeader title="Detalhamento de Custos" />
         <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
               <Paper sx={{ p: 2, bgcolor: 'warning.lighter' }}>
                 <Stack spacing={1}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -234,9 +233,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                   </Typography>
                 </Stack>
               </Paper>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} md={6}>
+            <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
               <Paper sx={{ p: 2, bgcolor: 'success.lighter' }}>
                 <Stack spacing={1}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -253,15 +252,15 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                   </Typography>
                 </Stack>
               </Paper>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 
       {/* Equipment Electrical Measurements */}
-      <Grid container spacing={2}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
         {equipmentList.map(([equipId, data]) => (
-          <Grid item xs={12} md={6} key={equipId}>
+          <Box key={equipId} sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 8px)' } }}>
             <Card>
               <CardHeader
                 title={
@@ -300,8 +299,8 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                   <Divider />
 
                   {/* Electrical Measurements Grid */}
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)' }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack>
                           <Typography variant="caption" color="text.secondary">
@@ -312,9 +311,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                           </Typography>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={6}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)' }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack>
                           <Typography variant="caption" color="text.secondary">
@@ -325,9 +324,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                           </Typography>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={6}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)' }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack>
                           <Typography variant="caption" color="text.secondary">
@@ -338,9 +337,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                           </Typography>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={6}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)' }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack>
                           <Typography variant="caption" color="text.secondary">
@@ -351,9 +350,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                           </Typography>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={12}>
+                    <Box sx={{ flex: '1 1 100%' }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'info.lighter' }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                           <Typography variant="body2" color="text.secondary">
@@ -364,8 +363,8 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                           </Typography>
                         </Stack>
                       </Paper>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
 
                   {/* Power Factor Warning */}
                   {data.power_factor < 0.92 && (
@@ -388,9 +387,9 @@ export default function EnergyDashboard({ energy }: EnergyDashboardProps) {
                 </Stack>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
         ))}
-      </Grid>
+      </Box>
 
       {/* Legend */}
       <Box sx={{ mt: 3 }}>

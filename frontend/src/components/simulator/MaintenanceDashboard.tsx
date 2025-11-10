@@ -4,23 +4,22 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Chip,
-  Grid,
-  LinearProgress,
-  Paper,
-  Stack,
   Typography,
-  Alert,
+  LinearProgress,
+  Chip,
+  Stack,
+  Paper,
   Divider,
+  Alert,
 } from '@mui/material';
 import {
   Build,
-  Thermostat,
-  Vibration,
-  Timer,
-  Warning,
   CheckCircle,
+  Warning,
   Error as ErrorIcon,
+  Vibration,
+  Thermostat,
+  Timer,
 } from '@mui/icons-material';
 
 interface MaintenanceData {
@@ -87,8 +86,8 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
   return (
     <Box>
       {/* Summary Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -116,9 +115,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -146,9 +145,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -176,9 +175,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={3}>
+        <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 250 }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -206,13 +205,13 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Equipment Details */}
-      <Grid container spacing={2}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         {equipmentList.map(([equipId, data]) => (
-          <Grid item xs={12} md={6} key={equipId}>
+          <Box sx={{ flex: '1 1 calc(50% - 16px)', minWidth: 400 }} key={equipId}>
             <Card>
               <CardHeader
                 title={
@@ -251,8 +250,8 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
                   <Divider />
 
                   {/* Sensors Grid */}
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: 150 }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Vibration fontSize="small" color="primary" />
@@ -266,9 +265,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
                           </Box>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={6}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: 150 }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Thermostat fontSize="small" color="error" />
@@ -282,9 +281,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
                           </Box>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={6}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: 150 }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Timer fontSize="small" color="info" />
@@ -298,9 +297,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
                           </Box>
                         </Stack>
                       </Paper>
-                    </Grid>
+                    </Box>
 
-                    <Grid item xs={6}>
+                    <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: 150 }}>
                       <Paper sx={{ p: 1.5, bgcolor: 'background.default' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Warning fontSize="small" color="warning" />
@@ -314,8 +313,8 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
                           </Box>
                         </Stack>
                       </Paper>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
 
                   {/* Recommendations */}
                   {data.health_pct < 80 && (
@@ -344,9 +343,9 @@ export default function MaintenanceDashboard({ maintenance }: MaintenanceDashboa
                 </Stack>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
         ))}
-      </Grid>
+      </Box>
 
       {/* Legend */}
       <Box sx={{ mt: 3 }}>

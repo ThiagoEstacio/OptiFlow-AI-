@@ -84,6 +84,75 @@ services:
       timeout: 5s
       retries: 5
 
+  # Zookeeper - Kafka Coordination Service
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: optiflow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    networks:
+      - optiflow-network
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka - Real-time Streaming Platform
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: optiflow-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_COMPRESSION_TYPE: lz4
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Kafka UI - Web Interface for Kafka Management
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: optiflow-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: optiflow
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - optiflow-network
+
   # Ollama - Local LLM for AI Assistant
   ollama:
     image: ollama/ollama:latest
@@ -107,7 +176,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.gpu
+      dockerfile: Dockerfile
     container_name: optiflow-backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
@@ -117,11 +186,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # GPU Support
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64
-      
+      # GPU Support - DISABLED
+      # NVIDIA_VISIBLE_DEVICES: all
+      # NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      # LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64
+
       # Application
       APP_NAME: "OptiFlow AI Platform"
       ENVIRONMENT: development
@@ -168,15 +237,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     
-    # GPU Support (RTX 4060)
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    
+    # GPU Support (RTX 4060) - DISABLED
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
     networks:
       - optiflow-network
     depends_on:
@@ -250,7 +319,7 @@ services:
       context: ./gateway
       dockerfile: Dockerfile
     container_name: optiflow-gateway
-    command: python app/main.py
+    command: python -m app
     volumes:
       - ./gateway:/app
       - ./gateway/config:/app/config
@@ -302,8 +371,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      VITE_API_URL: http://backend:8000
-      VITE_WS_URL: ws://backend:8000
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
     networks:
       - optiflow-network
     depends_on:
@@ -329,7 +398,75 @@ services:
     depends_on:
       - postgres
 
-  # Prometheus (Metrics)
+  # ========================================
+  # Monitoring Exporters
+  # ========================================
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: optiflow-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://optiflow:optiflow_password@postgres:5432/optiflow?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - optiflow-network
+    depends_on:
+      - postgres
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: optiflow-redis-exporter
+    environment:
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: "optiflow_redis_password"
+    ports:
+      - "9121:9121"
+    networks:
+      - optiflow-network
+    depends_on:
+      - redis
+
+  # Node Exporter (Host Metrics)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: optiflow-node-exporter
+    command:
+      - '--path.rootfs=/host'
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"
+    networks:
+      - optiflow-network
+
+  # cAdvisor (Container Metrics)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: optiflow-cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8081:8080"
+    networks:
+      - optiflow-network
+    restart: unless-stopped
+
+  # ========================================
+  # Prometheus (Metrics Collection)
+  # ========================================
+
   prometheus:
     image: prom/prometheus:latest
     container_name: optiflow-prometheus
@@ -340,11 +477,17 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
       - optiflow-network
+    depends_on:
+      - postgres-exporter
+      - redis-exporter
+      - node-exporter
+      - cadvisor
 
   # Grafana (Dashboards)
   grafana:
@@ -380,3 +523,6 @@ volumes:
   prometheus_data:
   grafana_data:
   ollama_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:

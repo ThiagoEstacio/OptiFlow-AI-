@@ -8,6 +8,7 @@ Models for tracking port terminal operations:
 """
 
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Date, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -56,11 +57,11 @@ class TruckEntry(Base):
     notes = Column(Text)
 
     # Site reference
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id"), nullable=False)
     site = relationship("Site")
 
     # Metadata
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -151,11 +152,11 @@ class ShipLoading(Base):
     notes = Column(Text)
 
     # Site reference
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id"), nullable=False)
     site = relationship("Site")
 
     # Metadata
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -275,11 +276,11 @@ class DailyOperations(Base):
     notes = Column(Text)
 
     # Site reference
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id"), nullable=False)
     site = relationship("Site")
 
     # Metadata
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { toggleSidebar } from '../../store/slices/uiSlice';
+import { useNotificationBadges } from '../../hooks/useNotificationBadges';
 import {
   Dashboard as DashboardIcon,
   BarChart as AnalyticsIcon,
@@ -21,8 +22,31 @@ import {
   ShowChart as TrendsIcon,
   Menu as MenuIcon,
   ChevronLeft as CollapseIcon,
+  Router as GatewayIcon,
+  // ISA-95 Module Icons
+  PrecisionManufacturing as OperationsIcon,
+  Build as MaintenanceIcon,
+  Engineering as EngineeringIcon,
+  Visibility as MonitorIcon,
+  TouchApp as ControlIcon,
+  ListAlt as LogsIcon,
+  Assignment as WorkOrderIcon,
+  History as HistoryIcon,
+  Timeline as TimelineIcon,
+  CalendarMonth as CalendarIcon,
+  Speed as PerformanceIcon,
+  AutoGraph as OptimizationIcon,
+  Assessment as AssessmentIcon,
+  AttachMoney as FinancialIcon,
+  WarningAmber as RisksIcon,
+  // Data & ML Demo Icons
+  DataUsage as DataIcon,
+  PlayCircle as PlayIcon,
+  Science as ScienceIcon,
+  // Quality Management Icons
+  FactCheck as QualityIcon,
 } from '@mui/icons-material';
-import { Box, Divider, Typography, Collapse, List, ListItem, ListItemIcon, ListItemText, IconButton, Tooltip } from '@mui/material';
+import { Box, Divider, Typography, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText, IconButton, Tooltip } from '@mui/material';
 
 interface NavItem {
   path: string;
@@ -42,7 +66,10 @@ export const EnhancedSidebar: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const sites = useAppSelector((state) => state.sites.items);
-  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'data', 'management']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['Principal', 'Operações']);
+
+  // Notification badges
+  const { badges } = useNotificationBadges(30000); // Refresh every 30s
 
   // Get first site ID for dynamic routes
   const defaultSiteId = sites.length > 0 ? sites[0].id : 1;
@@ -51,26 +78,78 @@ export const EnhancedSidebar: React.FC = () => {
     {
       title: 'Principal',
       items: [
-        { path: '/', label: 'Dashboard', icon: <DashboardIcon /> },
-        { path: '/analytics-hub', label: 'Centro de Análise', icon: <AnalyticsIcon /> },
-        { path: '/asset-health-hub', label: 'Saúde de Assets', icon: <HealthIcon /> },
+        { path: '/', label: 'Dashboard Home', icon: <DashboardIcon /> },
+        { path: '/insights', label: 'Insights IA', icon: <InsightsIcon /> },
+        { path: '/ml-insights', label: 'ML/DS Insights', icon: <OptimizationIcon /> },
         { path: '/chat', label: 'Assistente IA', icon: <ChatIcon /> },
       ],
     },
     {
-      title: 'Dados GBM Logística',
+      title: 'Operações',
       items: [
-        { path: `/gbm-import/${defaultSiteId}`, label: 'Importar Dados', icon: <ImportIcon />, requiresSite: true },
-        { path: `/gbm-insights/${defaultSiteId}`, label: 'Insights GBM', icon: <InsightsIcon />, requiresSite: true },
-        { path: `/historical-trends/${defaultSiteId}`, label: 'Tendências Históricas', icon: <TrendsIcon />, requiresSite: true },
-        { path: `/executive/${defaultSiteId}`, label: 'Dashboard Executivo', icon: <ExecutiveIcon />, requiresSite: true },
+        { path: '/operations', label: 'Hub de Operações', icon: <OperationsIcon /> },
+        { path: '/operations/dashboards', label: 'Meus Dashboards', icon: <DashboardIcon /> },
+        { path: '/data/realtime', label: 'Monitoramento Tempo Real', icon: <DataIcon /> },
+        { path: '/data/alarms-events', label: 'Alarmes & Eventos', icon: <AlarmsIcon />, badge: badges.activeAlarms },
+        { path: '/operations/scada', label: 'SCADA Monitor', icon: <MonitorIcon /> },
+        { path: '/operations/process-control', label: 'Controle de Processo', icon: <ControlIcon /> },
+        { path: '/operations/logs', label: 'Logs de Operação', icon: <LogsIcon /> },
       ],
     },
     {
-      title: 'Ferramentas',
+      title: 'Manutenção',
       items: [
-        { path: '/dashboard-builder', label: 'Construtor', icon: <BuilderIcon /> },
-        { path: '/simulator', label: 'Simulador', icon: <SimulatorIcon /> },
+        { path: '/maintenance', label: 'Hub de Manutenção', icon: <MaintenanceIcon /> },
+        { path: '/maintenance/dashboards', label: 'Meus Dashboards', icon: <DashboardIcon /> },
+        { path: '/maintenance/predictive', label: 'Manutenção Preditiva', icon: <HealthIcon /> },
+        { path: '/maintenance/work-orders', label: 'Ordens de Trabalho', icon: <WorkOrderIcon />, badge: badges.openWorkOrders },
+        { path: '/maintenance/failure-history', label: 'Histórico de Falhas', icon: <HistoryIcon /> },
+        { path: '/maintenance/reliability', label: 'Análise MTBF/MTTR', icon: <TimelineIcon /> },
+        { path: '/maintenance/calendar', label: 'Calendário', icon: <CalendarIcon /> },
+      ],
+    },
+    {
+      title: 'Engenharia',
+      items: [
+        { path: '/engineering', label: 'Hub de Engenharia', icon: <EngineeringIcon /> },
+        { path: '/engineering/dashboards', label: 'Meus Dashboards', icon: <DashboardIcon /> },
+        { path: '/data/historical', label: 'Análise Histórica', icon: <HistoryIcon /> },
+        { path: '/engineering/optimization', label: 'Otimização de Processo', icon: <OptimizationIcon /> },
+        { path: '/engineering/performance', label: 'Análise de Performance', icon: <PerformanceIcon /> },
+        { path: '/engineering/modeling', label: 'Modelagem de Processo', icon: <AssessmentIcon /> },
+        { path: '/engineering/trends', label: 'Análise de Tendências', icon: <TrendsIcon /> },
+      ],
+    },
+    {
+      title: 'Executivo',
+      items: [
+        { path: `/executive/${defaultSiteId}`, label: 'Dashboard Executivo', icon: <ExecutiveIcon />, requiresSite: true },
+        { path: '/executive/dashboards', label: 'Meus Dashboards', icon: <DashboardIcon /> },
+        { path: `/gbm-insights/${defaultSiteId}`, label: 'Insights GBM', icon: <InsightsIcon />, requiresSite: true },
+        { path: `/historical-trends/${defaultSiteId}`, label: 'Tendências Históricas', icon: <TrendsIcon />, requiresSite: true },
+        { path: `/gbm-import/${defaultSiteId}`, label: 'Importar Dados', icon: <ImportIcon />, requiresSite: true },
+        { path: '/executive/financial', label: 'Análise Financeira', icon: <FinancialIcon /> },
+        { path: '/executive/risks', label: 'Análise de Riscos', icon: <RisksIcon /> },
+      ],
+    },
+    {
+      title: 'Analytics & IA',
+      items: [
+        { path: '/analytics-hub', label: 'Centro de Análise', icon: <AnalyticsIcon /> },
+        { path: '/asset-health-hub', label: 'Saúde de Assets', icon: <HealthIcon /> },
+        { path: '/quality', label: 'Gestão da Qualidade', icon: <QualityIcon /> },
+        { path: '/ml-demo', label: 'ML Pipeline Demo', icon: <ScienceIcon /> },
+      ],
+    },
+    {
+      title: 'Configuração',
+      items: [
+        { path: '/config', label: 'Hub de Configuração', icon: <SettingsIcon /> },
+        { path: '/config/simulator', label: 'Simulador', icon: <SimulatorIcon /> },
+        { path: '/config/data-sources', label: 'Fontes de Dados', icon: <GatewayIcon /> },
+        { path: '/config/tags', label: 'Tags', icon: <TagsIcon /> },
+        { path: '/config/alarms', label: 'Alarmes', icon: <AlarmsIcon /> },
+        { path: '/dashboard-builder', label: 'Construtor Dashboard', icon: <BuilderIcon /> },
       ],
     },
     {
@@ -78,14 +157,12 @@ export const EnhancedSidebar: React.FC = () => {
       items: [
         { path: '/sites', label: 'Sites', icon: <SitesIcon /> },
         { path: '/devices', label: 'Dispositivos', icon: <DevicesIcon /> },
-        { path: '/tags', label: 'Tags', icon: <TagsIcon /> },
-        { path: '/alarms', label: 'Alarmes', icon: <AlarmsIcon />, badge: 0 },
       ],
     },
     {
       title: 'Sistema',
       items: [
-        { path: '/admin', label: 'Admin', icon: <AdminIcon /> },
+        { path: '/admin', label: 'Administração', icon: <AdminIcon /> },
         { path: '/settings', label: 'Configurações', icon: <SettingsIcon /> },
       ],
     },
@@ -225,63 +302,66 @@ export const EnhancedSidebar: React.FC = () => {
                     placement="right"
                     arrow
                   >
-                    <ListItem
-                      button
-                      component={NavLink}
-                      to={item.path}
-                      sx={{
-                        px: sidebarOpen ? 3 : 2,
-                        py: 1.5,
-                        mx: 1,
-                        my: 0.5,
-                        borderRadius: 2,
-                        transition: 'all 0.2s',
-                        '&.active': {
-                          bgcolor: 'primary.main',
-                          '&:hover': {
-                            bgcolor: 'primary.dark',
-                          },
-                        },
-                        '&:hover': {
-                          bgcolor: 'grey.800',
-                        },
-                        justifyContent: sidebarOpen ? 'flex-start' : 'center',
-                      }}
-                    >
-                      <ListItemIcon
+                    <ListItem disablePadding>
+                      <ListItemButton
+                        component={NavLink}
+                        to={item.path}
                         sx={{
+                          px: sidebarOpen ? 3 : 2,
+                          py: 1.5,
+                          mx: 1,
+                          my: 0.5,
+                          borderRadius: 2,
+                          transition: 'all 0.2s',
+                          textDecoration: 'none',
                           color: 'inherit',
-                          minWidth: sidebarOpen ? 40 : 'auto',
+                          '&.active': {
+                            bgcolor: 'primary.main',
+                            '&:hover': {
+                              bgcolor: 'primary.dark',
+                            },
+                          },
+                          '&:hover': {
+                            bgcolor: 'grey.800',
+                          },
+                          justifyContent: sidebarOpen ? 'flex-start' : 'center',
                         }}
                       >
-                        {item.icon}
-                      </ListItemIcon>
-                      {sidebarOpen && (
-                        <ListItemText
-                          primary={item.label}
-                          primaryTypographyProps={{
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                          }}
-                        />
-                      )}
-                      {sidebarOpen && item.badge !== undefined && item.badge > 0 && (
-                        <Box
+                        <ListItemIcon
                           sx={{
-                            bgcolor: 'error.main',
-                            color: 'white',
-                            borderRadius: 10,
-                            px: 1,
-                            py: 0.5,
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            minWidth: 20,
-                            textAlign: 'center',
+                            color: 'inherit',
+                            minWidth: sidebarOpen ? 40 : 'auto',
                           }}
                         >
-                          {item.badge}
-                        </Box>
-                      )}
+                          {item.icon}
+                        </ListItemIcon>
+                        {sidebarOpen && (
+                          <ListItemText
+                            primary={item.label}
+                            primaryTypographyProps={{
+                              fontSize: '0.875rem',
+                              fontWeight: 500,
+                            }}
+                          />
+                        )}
+                        {sidebarOpen && item.badge !== undefined && item.badge > 0 && (
+                          <Box
+                            sx={{
+                              bgcolor: 'error.main',
+                              color: 'white',
+                              borderRadius: 10,
+                              px: 1,
+                              py: 0.5,
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              minWidth: 20,
+                              textAlign: 'center',
+                            }}
+                          >
+                            {item.badge}
+                          </Box>
+                        )}
+                      </ListItemButton>
                     </ListItem>
                   </Tooltip>
                 ))}

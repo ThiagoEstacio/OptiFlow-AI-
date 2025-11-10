@@ -1,7 +1,7 @@
 /**
  * API Client for OptiFlow Backend
  */
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import type {
   User,
   LoginRequest,
@@ -19,6 +19,81 @@ import type {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+// Configuration constants for fault tolerance
+const API_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff in milliseconds
+const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]; // HTTP status codes that should trigger retry
+
+// Extended config to track retry count
+interface RetryableAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retryCount?: number;
+  _isRetry?: boolean;
+}
+
+/**
+ * Sleep utility for exponential backoff
+ */
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Determine if an error is retryable
+ */
+const isRetryableError = (error: AxiosError): boolean => {
+  // Network errors (no response)
+  if (!error.response) {
+    return true;
+  }
+
+  // Check if status code is retryable
+  const status = error.response.status;
+  return RETRYABLE_STATUS_CODES.includes(status);
+};
+
+/**
+ * Get user-friendly error message
+ */
+export const getErrorMessage = (error: any): string => {
+  if (axios.isAxiosError(error)) {
+    // Network errors
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        return 'Request timed out. Please check your connection and try again.';
+      }
+      if (error.code === 'ERR_NETWORK') {
+        return 'Unable to connect to server. Please check your internet connection.';
+      }
+      return 'Network error. Please check your connection and try again.';
+    }
+
+    // HTTP errors
+    const status = error.response.status;
+    if (status === 401) {
+      return 'Your session has expired. Please log in again.';
+    }
+    if (status === 403) {
+      return 'You do not have permission to perform this action.';
+    }
+    if (status === 404) {
+      return 'The requested resource was not found.';
+    }
+    if (status === 408) {
+      return 'Request timed out. Please try again.';
+    }
+    if (status === 429) {
+      return 'Too many requests. Please wait a moment and try again.';
+    }
+    if (status >= 500) {
+      return 'Server is temporarily unavailable. Please try again in a moment.';
+    }
+
+    // Use server message if available
+    return error.response.data?.message || error.response.data?.detail || 'An unexpected error occurred.';
+  }
+
+  return error.message || 'An unexpected error occurred.';
+};
+
 class ApiClient {
   private client: AxiosInstance;
   private token: string | null = null;
@@ -26,6 +101,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: BASE_URL,
+      timeout: API_TIMEOUT,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -39,7 +115,7 @@ class ApiClient {
 
     // Request interceptor
     this.client.interceptors.request.use(
-      (config) => {
+      (config: RetryableAxiosRequestConfig) => {
         if (this.token) {
           config.headers.Authorization = `Bearer ${this.token}`;
         }
@@ -48,15 +124,53 @@ class ApiClient {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor
+    // Response interceptor with retry logic
     this.client.interceptors.response.use(
-      (response) => response,
-      (error: AxiosError) => {
+      (response: AxiosResponse) => response,
+      async (error: AxiosError) => {
+        const config = error.config as RetryableAxiosRequestConfig;
+
+        // Handle 401 Unauthorized
         if (error.response?.status === 401) {
-          // Unauthorized - clear token and redirect to login
-          this.clearToken();
-          window.location.href = '/login';
+          // Don't retry login requests
+          if (!config.url?.includes('/auth/login')) {
+            this.clearToken();
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
         }
+
+        // Initialize retry count
+        if (!config._retryCount) {
+          config._retryCount = 0;
+        }
+
+        // Check if we should retry
+        if (config._retryCount < MAX_RETRIES && isRetryableError(error)) {
+          config._retryCount++;
+          config._isRetry = true;
+
+          // Calculate delay with exponential backoff
+          const delay = RETRY_DELAYS[config._retryCount - 1] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+
+          // Log retry attempt (in production, you might want to send this to monitoring)
+          console.warn(
+            `Request failed. Retrying attempt ${config._retryCount}/${MAX_RETRIES} after ${delay}ms`,
+            {
+              url: config.url,
+              status: error.response?.status,
+              message: error.message,
+            }
+          );
+
+          // Wait before retrying
+          await sleep(delay);
+
+          // Retry the request
+          return this.client(config);
+        }
+
+        // Max retries exceeded or non-retryable error
         return Promise.reject(error);
       }
     );
@@ -74,6 +188,23 @@ class ApiClient {
 
   getToken(): string | null {
     return this.token;
+  }
+
+  // Generic HTTP methods for direct API access
+  async get<T = any>(url: string, config?: any): Promise<AxiosResponse<T>> {
+    return this.client.get<T>(url, config);
+  }
+
+  async post<T = any>(url: string, data?: any, config?: any): Promise<AxiosResponse<T>> {
+    return this.client.post<T>(url, data, config);
+  }
+
+  async put<T = any>(url: string, data?: any, config?: any): Promise<AxiosResponse<T>> {
+    return this.client.put<T>(url, data, config);
+  }
+
+  async delete<T = any>(url: string, config?: any): Promise<AxiosResponse<T>> {
+    return this.client.delete<T>(url, config);
   }
 
   // Auth endpoints
@@ -178,8 +309,26 @@ class ApiClient {
 
   // Tag endpoints
   async getTags(params?: { device_id?: string }): Promise<Tag[]> {
-    const response = await this.client.get<Tag[]>('/api/v1/tags/', { params });
-    return response.data;
+    // Use gateway-config/all-tags endpoint to get all gateway tags
+    const response = await this.client.get<any[]>('/api/v1/gateway-config/all-tags', {
+      params: { limit: 10000 }
+    });
+    // Transform gateway tags to Tag format
+    return response.data.map((tag: any) => ({
+      id: tag.id.toString(),
+      name: tag.tag_name,
+      address: tag.address_config?.node_id || JSON.stringify(tag.address_config),
+      device_id: tag.gateway_id.toString(),
+      data_type: tag.data_type.toUpperCase(),
+      unit: tag.unit || '',
+      description: tag.description || '',
+      enabled: tag.enabled,
+      log_enabled: false,
+      scale_factor: tag.scale_factor,
+      offset: tag.offset,
+      created_at: tag.created_at,
+      updated_at: tag.created_at
+    }));
   }
 
   async getTag(id: string): Promise<Tag> {

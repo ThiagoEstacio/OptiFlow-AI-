@@ -9,7 +9,6 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   Box,
-  Grid,
   Card,
   CardContent,
   Typography,
@@ -260,25 +259,27 @@ const ExecutiveDashboard: React.FC = () => {
       {/* Tab Panels */}
       <TabPanel value={tabValue} index={0}>
         {/* Overview Tab */}
-        <Grid container spacing={3}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* KPIs Summary */}
-          <Grid item xs={12} md={6}>
-            <MaintenanceKPIs data={dashboardData?.maintenance} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <OperationalKPIs data={dashboardData?.operations} />
-          </Grid>
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: 400 }}>
+              <MaintenanceKPIs data={dashboardData?.maintenance} />
+            </Box>
+            <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: 400 }}>
+              <OperationalKPIs data={dashboardData?.operations} />
+            </Box>
+          </Box>
 
           {/* Asset Health */}
-          <Grid item xs={12}>
+          <Box>
             <AssetHealthSummary data={dashboardData?.asset_health} />
-          </Grid>
+          </Box>
 
           {/* Critical Alerts */}
-          <Grid item xs={12}>
+          <Box>
             <CriticalAlerts alerts={dashboardData?.critical_alerts || []} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
@@ -288,41 +289,39 @@ const ExecutiveDashboard: React.FC = () => {
 
       <TabPanel value={tabValue} index={2}>
         {/* Operations Tab */}
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <OperationalKPIs data={dashboardData?.operations} detailed />
-          </Grid>
-        </Grid>
+        <Box>
+          <OperationalKPIs data={dashboardData?.operations} detailed />
+        </Box>
       </TabPanel>
 
       <TabPanel value={tabValue} index={3}>
         {/* Maintenance Tab */}
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: 400 }}>
             <MaintenanceKPIs data={dashboardData?.maintenance} detailed />
-          </Grid>
-          <Grid item xs={12} md={6}>
+          </Box>
+          <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: 400 }}>
             <AssetHealthSummary data={dashboardData?.asset_health} detailed />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </TabPanel>
 
       <TabPanel value={tabValue} index={4}>
         {/* Insights Tab */}
-        <Grid container spacing={3}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* Correlation Analysis */}
-          <Grid item xs={12}>
+          <Box>
             <CorrelationAnalysis correlations={dashboardData?.correlations || []} />
-          </Grid>
+          </Box>
 
           {/* Risks & Opportunities */}
-          <Grid item xs={12}>
+          <Box>
             <RisksOpportunities
               risks={dashboardData?.risks || []}
               opportunities={dashboardData?.opportunities || []}
             />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </TabPanel>
     </Box>
   );

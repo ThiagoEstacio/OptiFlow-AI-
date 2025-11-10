@@ -15,10 +15,10 @@ import logging
 
 from app.db.session import get_db
 from app.models.user import User
-from app.api.deps import get_current_user
+from app.core.deps import get_current_user
 from app.services.executive_dashboard import ExecutiveDashboard
 from app.services.roi_calculator import ROICalculator
-from app.services.executive_report_generator import ExecutiveReportGenerator
+# from app.services.executive_report_generator import ExecutiveReportGenerator
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

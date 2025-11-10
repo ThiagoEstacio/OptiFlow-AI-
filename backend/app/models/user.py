@@ -56,6 +56,8 @@ class User(Base):
     # Relationships
     organization = relationship("Organization", back_populates="users")
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+    dashboards = relationship("Dashboard", back_populates="user", cascade="all, delete-orphan")
+    shared_dashboards = relationship("DashboardShare", foreign_keys="DashboardShare.user_id", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email}>"

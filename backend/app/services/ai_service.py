@@ -1,11 +1,12 @@
 """
-AI Service for chatbot functionality using OpenAI API.
+AI Service for chatbot functionality using OpenAI API or Ollama.
 Provides intelligent insights and assistance for OptiFlow platform.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import json
 import os
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -19,12 +20,15 @@ from app.core.config import settings
 class AIService:
     """
     Service for AI-powered chatbot functionality.
-    Uses OpenAI API to provide intelligent responses and insights.
+    Uses Ollama (local LLM) or OpenAI API to provide intelligent responses and insights.
     """
 
     def __init__(self):
+        self.use_ollama = settings.USE_OLLAMA
+        self.ollama_base_url = settings.OLLAMA_BASE_URL
+        self.ollama_model = settings.OLLAMA_MODEL
         self.api_key = settings.OPENAI_API_KEY
-        self.model = settings.OPENAI_MODEL
+        self.model = settings.OPENAI_MODEL if not self.use_ollama else self.ollama_model
         self.max_tokens = settings.OPENAI_MAX_TOKENS
         self.temperature = settings.OPENAI_TEMPERATURE
 
@@ -35,7 +39,7 @@ class AIService:
         stream: bool = False
     ) -> str:
         """
-        Generate AI response using OpenAI API.
+        Generate AI response using Ollama or OpenAI API.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
@@ -46,7 +50,11 @@ class AIService:
             Generated response text
         """
         try:
-            # If OpenAI API key is not configured, return a helpful default response
+            # Use Ollama if configured
+            if self.use_ollama:
+                return await self._generate_ollama_response(messages, context)
+
+            # Otherwise use OpenAI
             if not self.api_key:
                 return self._get_fallback_response(messages, context)
 
@@ -78,6 +86,60 @@ class AIService:
 
         except Exception as e:
             print(f"Error generating AI response: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return self._get_fallback_response(messages, context)
+
+    async def _generate_ollama_response(
+        self,
+        messages: List[Dict[str, str]],
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate AI response using Ollama.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            context: Additional context for the AI
+
+        Returns:
+            Generated response text
+        """
+        try:
+            # Prepare system message with context
+            system_message = self._build_system_message(context)
+
+            # Combine system message with conversation messages
+            full_messages = [
+                {"role": "system", "content": system_message}
+            ] + messages
+
+            # Call Ollama API (timeout increased for initial model load)
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"{self.ollama_base_url}/api/chat",
+                    json={
+                        "model": self.ollama_model,
+                        "messages": full_messages,
+                        "stream": False,
+                        "options": {
+                            "temperature": self.temperature,
+                            "num_predict": self.max_tokens
+                        }
+                    }
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return result["message"]["content"]
+                else:
+                    print(f"Ollama API error: {response.status_code} - {response.text}")
+                    return self._get_fallback_response(messages, context)
+
+        except Exception as e:
+            print(f"Error calling Ollama: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return self._get_fallback_response(messages, context)
 
     def _build_system_message(self, context: Optional[Dict[str, Any]] = None) -> str:

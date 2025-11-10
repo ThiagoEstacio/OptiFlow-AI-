@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Grid, Paper, Typography, Slider, Button, TextField, Stack } from '@mui/material';
+import { Box, Paper, Typography, Slider, Button, TextField, Stack } from '@mui/material';
 import { SimulatorStatus } from '../../hooks/useSimulator';
 
 interface EquipmentControlsProps {
@@ -15,8 +15,8 @@ export default function EquipmentControls({ status, onSetGate, onSetAllGates, on
   const [shiploaderValue, setShiploaderValue] = useState(1500);
 
   return (
-    <Grid container spacing={3}>
-      <Grid item xs={12} md={6}>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+      <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 12px)' } }}>
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>Controle de Comportas</Typography>
           <Stack spacing={2}>
@@ -29,16 +29,16 @@ export default function EquipmentControls({ status, onSetGate, onSetAllGates, on
             </Box>
           </Stack>
         </Paper>
-      </Grid>
+      </Box>
 
-      <Grid item xs={12} md={6}>
+      <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(50% - 12px)' } }}>
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>Controle do Shiploader</Typography>
           <Stack spacing={2}>
-            <TextField 
-              label="Setpoint (t/h)" 
-              type="number" 
-              value={shiploaderValue} 
+            <TextField
+              label="Setpoint (t/h)"
+              type="number"
+              value={shiploaderValue}
               onChange={(e) => setShiploaderValue(Number(e.target.value))}
               InputProps={{ inputProps: { min: 0, max: 1500 } }}
             />
@@ -47,7 +47,7 @@ export default function EquipmentControls({ status, onSetGate, onSetAllGates, on
             </Button>
           </Stack>
         </Paper>
-      </Grid>
-    </Grid>
+      </Box>
+    </Box>
   );
 }

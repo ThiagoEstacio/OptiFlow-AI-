@@ -7,7 +7,6 @@ import { fetchActiveAlarms } from '../store/slices/alarmsSlice';
 import {
   Box,
   Container,
-  Grid,
   Card,
   CardContent,
   Typography,
@@ -192,9 +191,9 @@ export const ModernDashboard: React.FC = () => {
         </Box>
 
         {/* Stats Grid */}
-        <Grid container spacing={3} sx={{ mb: 6 }}>
+        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 6 }}>
           {stats.map((stat, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
+            <Box key={index} sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 250 }}>
               <Card
                 sx={{
                   height: '100%',
@@ -230,18 +229,18 @@ export const ModernDashboard: React.FC = () => {
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
           ))}
-        </Grid>
+        </Box>
 
         {/* Feature Cards */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h5" gutterBottom fontWeight="bold" sx={{ mb: 3 }}>
             Recursos Principais
           </Typography>
-          <Grid container spacing={3}>
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
             {featureCards.map((feature, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
+              <Box key={index} sx={{ flex: '1 1 calc(25% - 24px)', minWidth: 250 }}>
                 <Card
                   sx={{
                     height: '100%',
@@ -323,15 +322,15 @@ export const ModernDashboard: React.FC = () => {
                     </Box>
                   </CardContent>
                 </Card>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         </Box>
 
         {/* Recent Activity */}
-        <Grid container spacing={3}>
+        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
           {/* Recent Sites */}
-          <Grid item xs={12} md={6}>
+          <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: 400 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom fontWeight="bold">
@@ -383,10 +382,10 @@ export const ModernDashboard: React.FC = () => {
                 )}
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
           {/* System Status */}
-          <Grid item xs={12} md={6}>
+          <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: 400 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom fontWeight="bold">
@@ -425,8 +424,8 @@ export const ModernDashboard: React.FC = () => {
                 </Box>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         {/* Quick Start Guide */}
         <Card sx={{ mt: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
@@ -437,40 +436,40 @@ export const ModernDashboard: React.FC = () => {
             <Typography variant="body2" color="white" sx={{ mb: 2, opacity: 0.9 }}>
               Siga estes passos para aproveitar ao máximo o OptiFlow AI:
             </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={3}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 200 }}>
                 <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
                   <Typography variant="h4" color="primary" fontWeight="bold">
                     1
                   </Typography>
                   <Typography variant="body2">Configure seus sites</Typography>
                 </Paper>
-              </Grid>
-              <Grid item xs={12} sm={3}>
+              </Box>
+              <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 200 }}>
                 <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
                   <Typography variant="h4" color="primary" fontWeight="bold">
                     2
                   </Typography>
                   <Typography variant="body2">Importe dados GBM</Typography>
                 </Paper>
-              </Grid>
-              <Grid item xs={12} sm={3}>
+              </Box>
+              <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 200 }}>
                 <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
                   <Typography variant="h4" color="primary" fontWeight="bold">
                     3
                   </Typography>
                   <Typography variant="body2">Analise insights</Typography>
                 </Paper>
-              </Grid>
-              <Grid item xs={12} sm={3}>
+              </Box>
+              <Box sx={{ flex: '1 1 calc(25% - 16px)', minWidth: 200 }}>
                 <Paper sx={{ p: 2, textAlign: 'center', height: '100%' }}>
                   <Typography variant="h4" color="primary" fontWeight="bold">
                     4
                   </Typography>
                   <Typography variant="body2">Reduza custos!</Typography>
                 </Paper>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </CardContent>
         </Card>
       </Box>

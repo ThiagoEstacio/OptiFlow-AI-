@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, Grid, Box } from '@mui/material';
+import { Card, CardContent, Typography, Box } from '@mui/material';
 import { LocalShipping, DirectionsBoat, Scale, Speed } from '@mui/icons-material';
 
 interface Props {
@@ -48,31 +48,31 @@ const OperationalKPIs: React.FC<Props> = ({ data, detailed = false }) => {
           Operational Performance
         </Typography>
 
-        <Grid container spacing={2} mt={1}>
-          {kpiCards.map((kpi, index) => (
-            <Grid item xs={6} sm={3} key={index}>
-              <Box textAlign="center">
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            {kpiCards.map((kpi, index) => (
+              <Box key={index} sx={{ flex: '1 1 calc(25% - 12px)', minWidth: '150px', textAlign: 'center' }}>
                 <Box sx={{ color: kpi.color, mb: 1 }}>{kpi.icon}</Box>
                 <Typography variant="body2" color="text.secondary">{kpi.label}</Typography>
                 <Typography variant="h5" fontWeight="bold">{kpi.value}</Typography>
                 <Typography variant="caption" color="text.secondary">{kpi.subtitle}</Typography>
               </Box>
-            </Grid>
-          ))}
+            ))}
+          </Box>
 
           {detailed && (
-            <>
-              <Grid item xs={12} sm={6}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
                 <Typography variant="body2" color="text.secondary">Berth Utilization</Typography>
                 <Typography variant="h5">{data.berth_utilization_percent || 0}%</Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              </Box>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
                 <Typography variant="body2" color="text.secondary">Avg Processing Time</Typography>
                 <Typography variant="h5">{data.trucks?.avg_processing_time_hours || 0}h</Typography>
-              </Grid>
-            </>
+              </Box>
+            </Box>
           )}
-        </Grid>
+        </Box>
       </CardContent>
     </Card>
   );

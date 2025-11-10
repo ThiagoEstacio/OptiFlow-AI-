@@ -27,6 +27,31 @@ from app.services.dem_physics import DEMEngine
 # Import Operational Events Manager
 from app.services.operational_events import OperationalEventsManager
 
+# Import Failure System
+try:
+    from app.services.failures import (
+        FailureGenerator,
+        BeltFailureModel,
+        BearingFailureModel,
+        MotorFailureModel,
+        SensorFailureModel,
+        EnvironmentalFactors
+    )
+    from app.services.failures.failure_models import (
+        BeltFailureState,
+        BearingFailureState,
+        MotorFailureState,
+        SensorFailureState,
+        BeltFailureType,
+        BearingFailureType,
+        MotorFailureType,
+        SensorFailureType
+    )
+    from app.services.failures.environmental_factors import EnvironmentalConditions, WeatherCondition
+    FAILURES_AVAILABLE = True
+except Exception as e:
+    FAILURES_AVAILABLE = False
+
 # Import InfluxDB service
 try:
     from app.services.influxdb import influxdb_service
@@ -35,11 +60,31 @@ except Exception as e:
     influxdb_service = None
     INFLUXDB_AVAILABLE = False
 
+# Import Kafka Producer service
+try:
+    from app.services.kafka_producer import get_kafka_producer
+    KAFKA_AVAILABLE = True
+except Exception as e:
+    get_kafka_producer = None
+    KAFKA_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+# Log availability after logger is initialized
+if FAILURES_AVAILABLE:
+    logger.info("✅ Failure system imported successfully")
+else:
+    logger.warning("⚠️  Failure system not available - will run without failures")
 
 # Log InfluxDB availability after logger is initialized
 if not INFLUXDB_AVAILABLE:
     logger.warning("InfluxDB service not available - data will not be persisted")
+
+# Log Kafka availability after logger is initialized
+if KAFKA_AVAILABLE:
+    logger.info("✅ Kafka producer imported successfully - real-time streaming enabled")
+else:
+    logger.warning("⚠️ Kafka producer not available - streaming disabled")
 
 
 # ============================================================================
@@ -344,7 +389,67 @@ class GrainTerminalSimulator:
         self.energy_manager.register_equipment('BAL01', 50.0)
         self.energy_manager.register_equipment('SLD01', 320.0)
         logger.info("✅ EnergyManager initialized")
-        
+
+        # ========================================================================
+        # Failure System - Realistic equipment failures
+        # ========================================================================
+
+        if FAILURES_AVAILABLE:
+            # Failure Generator
+            from app.services.failures.failure_generator import FailureConfig
+            failure_config = FailureConfig(
+                base_mtbf_hours=10000.0,  # 10,000 hours base MTBF
+                min_mtbf_hours=100.0,      # Minimum 100 hours at 0% health
+                enabled=True,              # Enable failure generation
+                verbose=False              # Set to True for debug logging
+            )
+            self.failure_generator = FailureGenerator(failure_config)
+
+            # Failure Models
+            self.belt_failure_model = BeltFailureModel()
+            self.bearing_failure_model = BearingFailureModel()
+            self.motor_failure_model = MotorFailureModel()
+            self.sensor_failure_model = SensorFailureModel()
+
+            # Environmental Factors
+            self.environmental_factors = EnvironmentalFactors()
+            self.environmental_conditions = EnvironmentalConditions(
+                ambient_temp_C=25.0,
+                equipment_temp_C=40.0,
+                humidity_pct=60.0,
+                weather=WeatherCondition.CLEAR,
+                dust_level_ppm=50.0,
+                hours_continuous_operation=0.0,
+                starts_today=0,
+                overload_events_today=0
+            )
+
+            # Failure States for Equipment
+            self.failure_states = {}
+
+            # Initialize failure states for belts
+            for belt_id in self.belts.keys():
+                self.failure_states[belt_id] = {
+                    'belt': BeltFailureState(),
+                    'bearing': BearingFailureState(),
+                    'motor': MotorFailureState(),
+                    'sensor_temp': SensorFailureState(),
+                    'sensor_current': SensorFailureState()
+                }
+
+            # Initialize for elevator
+            self.failure_states['ELV01'] = {
+                'belt': BeltFailureState(),
+                'bearing': BearingFailureState(),
+                'motor': MotorFailureState(),
+                'sensor_temp': SensorFailureState()
+            }
+
+            logger.info("✅ Failure System initialized - Realistic failures enabled")
+        else:
+            self.failure_generator = None
+            logger.warning("⚠️  Failure System disabled - module not available")
+
         # ========================================================================
         # DEM Physics Engine
         # ========================================================================
@@ -700,9 +805,18 @@ class GrainTerminalSimulator:
         
         # 14. Ship Loading Management (NEW - gerencia carregamento de navios)
         self._step_ship_loading(dt_s)
-        
+
         # 15. Update legacy values from new managers
         self._sync_legacy_values()
+
+        # 16. Publish to Kafka for real-time streaming (NEW)
+        # DISABLED_FOR_TESTING:         logger.info(f"🚀 About to call _publish_to_kafka() - time: {self.time_s}s")
+        # DISABLED_FOR_TESTING:         try:
+        # DISABLED_FOR_TESTING:             with open('/tmp/kafka_debug.txt', 'a') as f:
+        # DISABLED_FOR_TESTING:                 f.write(f"Step called at time: {self.time_s}s\n")
+        # DISABLED_FOR_TESTING:         except:
+        # DISABLED_FOR_TESTING:             pass
+        # DISABLED_FOR_TESTING:         # DISABLED_FOR_TESTING:         self._publish_to_kafka()
 
     # ------------------------------------------------------------------------
     # PRIVATE: SHIP LOADING MANAGEMENT
@@ -1318,17 +1432,17 @@ class GrainTerminalSimulator:
                 self._set_alarm(f'AL_{belt_id}_BEARING_TEMP_ALTA')
 
         if self.elevator.temp_motor_C >= Config.TEMP_MOTOR_TRIP:
-            self._set_trip('TRIP_ELV01_MOTOR_SOBRETEMP')
-        elif self.elevator.temp_motor_C >= Config.TEMP_MOTOR_ALARM:
-            self._set_alarm('AL_ELV01_MOTOR_TEMP_ALTA')
-
-        # Underspeed
-        for belt_id, belt in self.belts.items():
-            if belt.underspeed_alarm:
-                self._set_alarm(f'AL_{belt_id}_SUBVELOCIDADE')
-
-        # Elevator slip
-        if self.elevator.slip:
+# DISABLED_KAFKA:             self._set_trip('TRIP_ELV01_MOTOR_SOBRETEMP')
+# DISABLED_KAFKA:         elif self.elevator.temp_motor_C >= Config.TEMP_MOTOR_ALARM:
+# DISABLED_KAFKA:             self._set_alarm('AL_ELV01_MOTOR_TEMP_ALTA')
+# DISABLED_KAFKA: 
+# DISABLED_KAFKA:         # Underspeed
+# DISABLED_KAFKA:         for belt_id, belt in self.belts.items():
+# DISABLED_KAFKA:             if belt.underspeed_alarm:
+# DISABLED_KAFKA:                 self._set_alarm(f'AL_{belt_id}_SUBVELOCIDADE')
+# DISABLED_KAFKA: 
+# DISABLED_KAFKA:         # Elevator slip
+# DISABLED_KAFKA:         if self.elevator.slip:
             self._set_alarm('AL_ELV01_ESCORREGAMENTO')
 
     def _set_alarm(self, tag: str):
@@ -1630,3 +1744,251 @@ class GrainTerminalSimulator:
             'alarms': [{'tag': a.tag, 'active': a.active, 'count': a.count} for a in self.alarms if a.active],
             'trips': [{'tag': t.tag, 'active': t.active, 'count': t.count} for t in self.trips if t.active]
         }
+
+    # ------------------------------------------------------------------------
+    # PRIVATE: KAFKA STREAMING (NEW)
+    # ------------------------------------------------------------------------
+
+    def _publish_to_kafka(self):
+        """
+        Publish key simulator tags to Kafka for real-time streaming
+
+        This method is called at the end of each simulation step to push
+        real-time data to frontend via WebSocket.
+        """
+        logger.info(f"🔍 _publish_to_kafka() called - time: {self.time_s}s")
+
+        # Dynamic check for Kafka availability
+        try:
+            from app.services.kafka_producer import get_kafka_producer
+        except ImportError:
+            logger.warning("Import Error - Kafka producer not available")
+            return  # Kafka not available
+
+        try:
+            import asyncio
+            kafka_producer = get_kafka_producer()
+
+            # Check if producer is actually enabled
+            if not kafka_producer.enabled:
+                logger.warning(f"⚠️  Kafka producer not enabled - skipping publish (time: {self.time_s}s)")
+                return
+
+            # Check if producer is initialized (lazy initialization)
+            if kafka_producer.producer is None:
+                logger.info(f"⚙️  Kafka producer not started yet - initializing now...")
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If event loop is running, schedule as task
+                    asyncio.ensure_future(kafka_producer.start())
+                    # Wait briefly for initialization
+                    import time
+                    time.sleep(0.1)
+                else:
+                    # If no event loop, run in new loop
+                    asyncio.run(kafka_producer.start())
+
+                # Check again after initialization attempt
+                if kafka_producer.producer is None:
+                    logger.warning(f"⚠️  Failed to initialize Kafka producer")
+                    return
+
+            logger.info(f"📤 Publishing tags to Kafka - Time: {self.time_s}s")
+
+            # Build tag updates for critical process variables
+            tags = []
+
+            # Gate flow tags
+            for i, gate in enumerate(self.gates):
+                tags.append({
+                    'tag_id': f'GATE_{i+1:02d}_FLOW',
+                    'name': f'Gate {i+1} Flow',
+                    'value': round(gate.flow_tph, 2),
+                    'quality': 'good' if not gate.failure else 'bad',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                })
+                tags.append({
+                    'tag_id': f'GATE_{i+1:02d}_OPEN_PCT',
+                    'name': f'Gate {i+1} Opening',
+                    'value': round(gate.open_pct, 1),
+                    'quality': 'good' if not gate.failure else 'bad',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                })
+
+            # Belt tags
+            for belt_name in ['CORR01', 'CORR02', 'CORR03']:
+                belt = self.belts[belt_name]
+                tags.extend([
+                    {
+                        'tag_id': f'{belt_name}_FLOW',
+                        'name': f'Belt {belt_name} Flow',
+                        'value': round(belt.flow_tph, 2),
+                        'quality': 'good',
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'source': 'simulator'
+                    },
+                    {
+                        'tag_id': f'{belt_name}_SPEED',
+                        'name': f'Belt {belt_name} Speed',
+                        'value': round(belt.speed_mps, 2),
+                        'quality': 'good',
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'source': 'simulator'
+                    },
+                    {
+                        'tag_id': f'{belt_name}_LOAD_PCT',
+                        'name': f'Belt {belt_name} Load',
+                        'value': round(belt.load_pct, 1),
+                        'quality': 'good',
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'source': 'simulator'
+                    },
+                    {
+                        'tag_id': f'{belt_name}_POWER_KW',
+                        'name': f'Belt {belt_name} Power',
+                        'value': round(belt.power_kW, 2),
+                        'quality': 'good',
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'source': 'simulator'
+                    }
+                ])
+
+            # Elevator tags
+            tags.extend([
+                {
+                    'tag_id': 'ELEV_01_FLOW',
+                    'name': 'Elevator Flow',
+                    'value': round(self.elevator.flow_tph, 2),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'ELEV_01_SPEED',
+                    'name': 'Elevator Speed',
+                    'value': round(self.elevator.speed_mps, 2),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'ELEV_01_POWER_KW',
+                    'name': 'Elevator Power',
+                    'value': round(self.elevator.power_kW, 2),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                }
+            ])
+
+            # Balance tags
+            tags.extend([
+                {
+                    'tag_id': 'BALANCE_01_WEIGHT',
+                    'name': 'Balance Weight',
+                    'value': round(self.balance.weight_kg, 1),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'BALANCE_01_STATE',
+                    'name': 'Balance State',
+                    'value': self.balance.cycle_state.value,
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                }
+            ])
+
+            # Shiploader tags
+            tags.extend([
+                {
+                    'tag_id': 'SHIPLOADER_01_FLOW_SP',
+                    'name': 'Shiploader Setpoint',
+                    'value': round(self.shiploader.flow_sp_tph, 2),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'SHIPLOADER_01_FLOW_PV',
+                    'name': 'Shiploader Flow',
+                    'value': round(self.shiploader.flow_pv_tph, 2),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'SHIPLOADER_01_POWER_KW',
+                    'name': 'Shiploader Power',
+                    'value': round(self.shiploader.power_kW, 2),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                }
+            ])
+
+            # System tags
+            tags.extend([
+                {
+                    'tag_id': 'SYSTEM_RUNNING',
+                    'name': 'System Running',
+                    'value': 1.0 if self.running else 0.0,
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'WAREHOUSE_LEVEL_PCT',
+                    'name': 'Warehouse Level',
+                    'value': round(self.warehouse_level_pct, 1),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                },
+                {
+                    'tag_id': 'SYSTEM_TOTAL_POWER_KW',
+                    'name': 'Total Power',
+                    'value': round(
+                        sum(b.power_kW for b in self.belts.values()) +
+                        self.elevator.power_kW +
+                        self.shiploader.power_kW,
+                        2
+                    ),
+                    'quality': 'good',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'simulator'
+                }
+            ])
+
+            # Publish tags asynchronously (non-blocking)
+            # Create task to avoid blocking simulation
+            try:
+                loop = asyncio.get_running_loop()
+                # Schedule the publish task without awaiting
+                logger.info(f"🔄 Scheduling publish task in event loop (tags: {len(tags)})")
+                asyncio.ensure_future(kafka_producer.publish_bulk(tags), loop=loop)
+            except RuntimeError as re:
+                # No event loop in current thread, try creating new task in thread pool
+                logger.info(f"⚠️  No event loop in current thread - using threading fallback")
+                try:
+                    import threading
+                    def publish_in_thread():
+                        try:
+                            import asyncio
+                            logger.info(f"🧵 Publishing in separate thread (tags: {len(tags)})")
+                            asyncio.run(kafka_producer.publish_bulk(tags))
+                        except Exception as e:
+                            logger.error(f"❌ Thread publish error: {e}", exc_info=True)
+
+                    thread = threading.Thread(target=publish_in_thread, daemon=True)
+                    thread.start()
+                except Exception as e:
+                    logger.debug(f"Failed to publish in thread: {e}")
+
+        except Exception as e:
+            # Don't crash simulator if Kafka fails - graceful degradation
+            logger.error(f"❌ Kafka publish error (non-critical): {e}", exc_info=True)

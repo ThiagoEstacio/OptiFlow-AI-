@@ -2,8 +2,9 @@
  * Auth Redux Slice
  */
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { apiClient } from '../../api/client';
+import { apiClient, getErrorMessage } from '../../api/client';
 import type { User, LoginRequest } from '../../types';
+import axios from 'axios';
 
 interface AuthState {
   user: User | null;
@@ -11,6 +12,8 @@ interface AuthState {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
+  isTimeout: boolean;
+  isNetworkError: boolean;
 }
 
 const initialState: AuthState = {
@@ -19,6 +22,8 @@ const initialState: AuthState = {
   isAuthenticated: !!apiClient.getToken(),
   loading: false,
   error: null,
+  isTimeout: false,
+  isNetworkError: false,
 };
 
 // Async thunks
@@ -30,7 +35,23 @@ export const login = createAsyncThunk(
       const user = await apiClient.getCurrentUser();
       return { token: response.access_token, user };
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Login failed');
+      // Determine error type for better handling
+      const isTimeout = axios.isAxiosError(error) && (
+        error.code === 'ECONNABORTED' ||
+        error.response?.status === 408 ||
+        error.response?.status === 504
+      );
+
+      const isNetworkError = axios.isAxiosError(error) && (
+        !error.response ||
+        error.code === 'ERR_NETWORK'
+      );
+
+      return rejectWithValue({
+        message: getErrorMessage(error),
+        isTimeout,
+        isNetworkError,
+      });
     }
   }
 );
@@ -42,7 +63,22 @@ export const getCurrentUser = createAsyncThunk(
       const user = await apiClient.getCurrentUser();
       return user;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to get user');
+      const isTimeout = axios.isAxiosError(error) && (
+        error.code === 'ECONNABORTED' ||
+        error.response?.status === 408 ||
+        error.response?.status === 504
+      );
+
+      const isNetworkError = axios.isAxiosError(error) && (
+        !error.response ||
+        error.code === 'ERR_NETWORK'
+      );
+
+      return rejectWithValue({
+        message: getErrorMessage(error),
+        isTimeout,
+        isNetworkError,
+      });
     }
   }
 );
@@ -58,6 +94,8 @@ const authSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+      state.isTimeout = false;
+      state.isNetworkError = false;
     },
   },
   extraReducers: (builder) => {
@@ -66,6 +104,8 @@ const authSlice = createSlice({
       .addCase(login.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.isTimeout = false;
+        state.isNetworkError = false;
       })
       .addCase(login.fulfilled, (state, action: PayloadAction<{ token: string; user: User }>) => {
         state.loading = false;
@@ -73,10 +113,15 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.isAuthenticated = true;
         state.error = null;
+        state.isTimeout = false;
+        state.isNetworkError = false;
       })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        const payload = action.payload as { message: string; isTimeout: boolean; isNetworkError: boolean };
+        state.error = payload?.message || 'Login failed';
+        state.isTimeout = payload?.isTimeout || false;
+        state.isNetworkError = payload?.isNetworkError || false;
         state.isAuthenticated = false;
       })
       // Get current user
@@ -87,12 +132,19 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload;
         state.isAuthenticated = true;
+        state.error = null;
+        state.isTimeout = false;
+        state.isNetworkError = false;
       })
-      .addCase(getCurrentUser.rejected, (state) => {
+      .addCase(getCurrentUser.rejected, (state, action) => {
         state.loading = false;
         state.isAuthenticated = false;
         state.user = null;
         state.token = null;
+        const payload = action.payload as { message: string; isTimeout: boolean; isNetworkError: boolean };
+        state.error = payload?.message || 'Failed to get user';
+        state.isTimeout = payload?.isTimeout || false;
+        state.isNetworkError = payload?.isNetworkError || false;
       })
       // Logout
       .addCase(logout.fulfilled, (state) => {
@@ -100,6 +152,8 @@ const authSlice = createSlice({
         state.token = null;
         state.isAuthenticated = false;
         state.error = null;
+        state.isTimeout = false;
+        state.isNetworkError = false;
       });
   },
 });

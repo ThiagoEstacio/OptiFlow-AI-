@@ -10,6 +10,7 @@ import {
   InsightRequest,
   InsightResponse,
   Message,
+  MessageRole,
 } from '../types/chat';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -26,7 +27,7 @@ const chatApi = axios.create({
 // Add token to requests
 chatApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
-  if (token) {
+  if (token && token !== 'null' && token !== 'undefined') {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -37,15 +38,39 @@ chatApi.interceptors.request.use((config) => {
  */
 export const chatApiClient = {
   /**
-   * Send a chat message and get AI response
-   * Falls back to demo endpoint if not authenticated
+   * Send a chat message and get AI response using Llama agent
+   * Uses the AI agent endpoint which doesn't require authentication
    */
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
-    const token = localStorage.getItem('auth_token');
-    const endpoint = token ? `${BASE_PATH}/chat` : `${BASE_PATH}/chat/demo`;
-    
-    const response = await chatApi.post<ChatResponse>(endpoint, request);
-    return response.data;
+    // Use the AI agent endpoint that works with Ollama/Llama
+    const agentEndpoint = '/api/v1/agent/dashboard/chat';
+
+    console.log('Using Llama agent endpoint:', agentEndpoint);
+
+    try {
+      const response = await chatApi.post<any>(agentEndpoint, {
+        message: request.message,
+      });
+      
+      // Transform agent response to chat response format
+      const conversationId = request.conversation_id || 'agent-session';
+      const messageId = `msg-${Date.now()}`;
+      
+      return {
+        conversation_id: conversationId,
+        message: {
+          id: messageId,
+          conversation_id: conversationId,
+          role: MessageRole.ASSISTANT,
+          content: response.data.response || response.data.message || 'No response',
+          created_at: new Date().toISOString(),
+        },
+        suggestions: response.data.suggestions,
+      };
+    } catch (error) {
+      console.error('Error calling Llama agent:', error);
+      throw error;
+    }
   },
 
   /**

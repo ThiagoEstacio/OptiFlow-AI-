@@ -11,12 +11,12 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Grid,
   Chip,
   List,
   ListItem,
   ListItemText,
   Paper,
+  CircularProgress,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -140,9 +140,9 @@ rail_discharge,2025-01-15 16:00:00,Train-001,wheat,50000,52500,2500,13.0,0.5,180
 
   return (
     <Box>
-      <Grid container spacing={3}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
         {/* Upload Card */}
-        <Grid item xs={12} md={6}>
+        <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -265,10 +265,10 @@ rail_discharge,2025-01-15 16:00:00,Train-001,wheat,50000,52500,2500,13.0,0.5,180
               )}
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
         {/* Instructions Card */}
-        <Grid item xs={12} md={6}>
+        <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -334,27 +334,25 @@ rail_discharge,2025-01-15 16:00:00,Train-001,wheat,50000,52500,2500,13.0,0.5,180
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
+      </Box>
 
-        {/* Supported Formats */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Supported Data Formats
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip label="GBM Logística" color="primary" />
-                <Chip label="Excel (.xlsx)" color="success" />
-                <Chip label="Excel 97-2003 (.xls)" color="success" />
-                <Chip label="CSV (.csv)" color="success" />
-                <Chip label="Custom APIs" color="info" />
-                <Chip label="Manual Entry" color="warning" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {/* Supported Formats */}
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Supported Data Formats
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip label="GBM Logística" color="primary" />
+            <Chip label="Excel (.xlsx)" color="success" />
+            <Chip label="Excel 97-2003 (.xls)" color="success" />
+            <Chip label="CSV (.csv)" color="success" />
+            <Chip label="Custom APIs" color="info" />
+            <Chip label="Manual Entry" color="warning" />
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
 };

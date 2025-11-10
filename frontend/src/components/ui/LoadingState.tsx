@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, CircularProgress, Typography, Skeleton, Card, CardContent, Grid } from '@mui/material';
+import { Box, CircularProgress, Typography, Skeleton, Card, CardContent } from '@mui/material';
 
 interface LoadingStateProps {
   message?: string;
@@ -23,14 +23,14 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
       <Box sx={{ width: '100%' }}>
         <Skeleton variant="rectangular" height={60} sx={{ mb: 2 }} />
         <Skeleton variant="rectangular" height={200} sx={{ mb: 2 }} />
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
             <Skeleton variant="rectangular" height={100} />
-          </Grid>
-          <Grid item xs={6}>
+          </Box>
+          <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
             <Skeleton variant="rectangular" height={100} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Box>
     );
   }

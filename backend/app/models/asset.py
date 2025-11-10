@@ -48,6 +48,19 @@ class Asset(Base):
     description = Column(Text, nullable=True)
     asset_type = Column(SQLEnum(AssetType), nullable=False, index=True)
 
+    # Site reference (for efficient queries)
+    site_id = Column(Integer, nullable=True, index=True)
+
+    # Health score (0-100, calculated from asset health analysis)
+    health_score = Column(Integer, nullable=True, index=True)
+
+    # Maintenance tracking
+    last_maintenance = Column(DateTime(timezone=True), nullable=True, index=True)
+    next_maintenance = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    # Asset status (operational, maintenance, stopped, etc.)
+    status = Column(String(50), nullable=True, index=True, default="operational")
+
     # Hierarchy - self-referential foreign key
     parent_id = Column(UUID(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), nullable=True, index=True)
 
@@ -58,8 +71,8 @@ class Asset(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Additional metadata (flexible JSON storage)
-    metadata = Column(JSONB, default=dict, nullable=False)
-    # metadata can contain:
+    asset_metadata = Column(JSONB, default=dict, nullable=False)
+    # asset_metadata can contain:
     # - manufacturer, model, serial_number
     # - installation_date, warranty_expiry
     # - location (GPS coordinates, building, floor)

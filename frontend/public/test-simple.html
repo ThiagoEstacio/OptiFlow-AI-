@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiFlow - Teste Simples (Sem React)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        .status-icon {
+            font-size: 24px;
+            margin-right: 15px;
+        }
+        .success { color: #4ade80; }
+        .info { color: #60a5fa; }
+        .warning { color: #fbbf24; }
+        button {
+            background: #4ade80;
+            color: #1e293b;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #22c55e;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.4);
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .buttons {
+            text-align: center;
+            margin: 30px 0;
+        }
+        a {
+            color: #60a5fa;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        a:hover {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 OptiFlow AI - Teste de Conectividade</h1>
+
+        <div class="status">
+            <span class="status-icon success">✅</span>
+            <div>
+                <strong>HTML Carregado:</strong> Página estática funcionando perfeitamente
+            </div>
+        </div>
+
+        <div class="status">
+            <span class="status-icon success">✅</span>
+            <div>
+                <strong>JavaScript Básico:</strong> <span id="js-test">Testando...</span>
+            </div>
+        </div>
+
+        <div class="status">
+            <span class="status-icon info">ℹ️</span>
+            <div>
+                <strong>Vite Server:</strong> http://localhost:3000
+            </div>
+        </div>
+
+        <div class="status">
+            <span class="status-icon info">ℹ️</span>
+            <div>
+                <strong>Backend API:</strong> http://localhost:8000
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button onclick="testBackend()">🔍 Testar Backend</button>
+            <button onclick="testCSP()">🛡️ Testar CSP</button>
+            <button onclick="location.href='/'">🏠 Ir para App Principal</button>
+        </div>
+
+        <div id="result" class="result" style="display:none;"></div>
+
+        <div class="status">
+            <span class="status-icon warning">⚠️</span>
+            <div>
+                <strong>Se ver este teste mas o app principal não carregar:</strong><br>
+                1. Abrir DevTools (F12)<br>
+                2. Ver o Console para erros<br>
+                3. Tentar modo anônimo (Ctrl+Shift+N)<br>
+                4. Limpar cache (Ctrl+Shift+Delete)<br>
+                5. Desabilitar extensões do browser<br>
+                <br>
+                📚 Documentação: <a href="/SOLUCAO_CSP.md" target="_blank">SOLUCAO_CSP.md</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test 1: Basic JavaScript
+        document.getElementById('js-test').innerHTML = 'Funcionando! ✅';
+
+        // Test 2: Backend connectivity
+        async function testBackend() {
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.innerHTML = '⏳ Testando conexão com backend...';
+
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                result.innerHTML = `✅ Backend OK!\n\n${JSON.stringify(data, null, 2)}`;
+                result.style.color = '#4ade80';
+            } catch (error) {
+                result.innerHTML = `❌ Erro ao conectar com backend:\n\n${error.message}`;
+                result.style.color = '#f87171';
+            }
+        }
+
+        // Test 3: CSP detection
+        function testCSP() {
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+
+            // Check meta tags
+            const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+
+            let info = '🛡️ TESTE CSP (Content Security Policy)\n\n';
+
+            if (cspMeta) {
+                info += '❌ Meta tag CSP detectada:\n';
+                info += cspMeta.getAttribute('content') + '\n\n';
+            } else {
+                info += '✅ Nenhuma meta tag CSP detectada\n\n';
+            }
+
+            // Try eval (CSP blocks this)
+            try {
+                eval('console.log("eval test")');
+                info += '✅ eval() funcionando (CSP não está bloqueando)\n';
+            } catch (e) {
+                info += '❌ eval() bloqueado - CSP ATIVO!\n';
+                info += 'Erro: ' + e.message + '\n';
+            }
+
+            // Browser info
+            info += '\n📊 Informações do Browser:\n';
+            info += 'User Agent: ' + navigator.userAgent + '\n';
+            info += 'URL: ' + window.location.href + '\n';
+
+            result.innerHTML = info;
+            result.style.color = '#60a5fa';
+        }
+
+        // Auto-test on load
+        console.log('✅ OptiFlow AI - Teste simples carregado com sucesso!');
+        console.log('📍 Se você vê esta mensagem, JavaScript básico está funcionando.');
+        console.log('🔍 Execute testBackend() ou testCSP() para testes adicionais.');
+    </script>
+</body>
+</html>

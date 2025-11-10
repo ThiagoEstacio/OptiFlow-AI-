@@ -9,7 +9,7 @@ from uuid import uuid4
 from unittest.mock import patch, Mock
 
 from app.services.report_generator import ReportGenerator
-from app.models.operations import TruckEntry, ShipLoading, ProductType
+from app.models.operational_data import TruckEntry, ShipLoading
 
 
 @pytest.fixture

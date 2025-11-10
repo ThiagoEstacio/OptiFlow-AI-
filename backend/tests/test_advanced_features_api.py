@@ -8,7 +8,7 @@ from uuid import uuid4
 from unittest.mock import patch, Mock
 
 from app.models.asset import Asset, AssetType
-from app.models.operations import ShipLoading, ProductType
+from app.models.operational_data import ShipLoading
 
 
 @pytest.fixture

@@ -1,15 +1,12 @@
-# SmartPort Grafana Dashboards Configuration
-
 apiVersion: 1
 
 providers:
-  - name: 'SmartPort Dashboards'
+  - name: 'OptiFlow Dashboards'
     orgId: 1
-    folder: 'SmartPort'
+    folder: 'OptiFlow AI'
     type: file
     disableDeletion: false
-    updateIntervalSeconds: 30
+    updateIntervalSeconds: 10
     allowUiUpdates: true
     options:
       path: /etc/grafana/provisioning/dashboards
-      foldersFromFilesStructure: true

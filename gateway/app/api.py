@@ -1,0 +1,238 @@
+"""
+Gateway HTTP API - For configuration and tag browsing
+Similar to KEPServerEX admin interface
+"""
+from typing import Optional, List, Dict, Any
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from app.core.logger import logger
+from app.services.opcua_browser import OPCUABrowser
+
+
+# Pydantic models
+class BrowseRequest(BaseModel):
+    """Request to browse OPC-UA server"""
+    endpoint: str
+    namespace_index: Optional[int] = None
+    tag_filter: Optional[str] = None
+
+
+class DiscoverTagsResponse(BaseModel):
+    """Response for tag discovery"""
+    success: bool
+    endpoint: str
+    namespaces: List[Dict[str, Any]]
+    tags: List[Dict[str, Any]]
+    tag_count: int
+    error: Optional[str] = None
+
+
+class SearchTagsRequest(BaseModel):
+    """Request to search tags"""
+    endpoint: str
+    search_term: str
+    namespace_index: Optional[int] = None
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="OptiFlow Gateway API",
+    description="Configuration and tag browsing API for OptiFlow Gateway",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, restrict this
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "name": "OptiFlow Gateway API",
+        "version": "1.0.0",
+        "description": "Tag browsing and configuration API"
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {"status": "healthy"}
+
+
+@app.post("/api/browse", response_model=DiscoverTagsResponse)
+async def browse_opcua_server(request: BrowseRequest):
+    """
+    Browse an OPC-UA server and discover all available tags
+    Similar to KEPServerEX tag browsing
+
+    Args:
+        request: Browse request with endpoint and optional filters
+
+    Returns:
+        Discovered namespaces and tags
+    """
+    browser = OPCUABrowser(request.endpoint)
+
+    try:
+        logger.info(f"API: Browsing OPC-UA server {request.endpoint}")
+
+        # Connect to server
+        connected = await browser.connect()
+        if not connected:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to connect to OPC-UA server"
+            )
+
+        # Get namespaces
+        namespaces = await browser.get_namespaces()
+        logger.info(f"API: Found {len(namespaces)} namespaces")
+
+        # Discover tags
+        namespace_filter = [request.namespace_index] if request.namespace_index is not None else None
+        tags = await browser.discover_all_tags(namespace_filter=namespace_filter)
+
+        # Apply tag name filter if provided
+        if request.tag_filter:
+            search_lower = request.tag_filter.lower()
+            tags = [
+                tag for tag in tags
+                if search_lower in tag["tag_name"].lower() or
+                   search_lower in tag["display_name"].lower()
+            ]
+
+        logger.info(f"API: Discovered {len(tags)} tags")
+
+        return DiscoverTagsResponse(
+            success=True,
+            endpoint=request.endpoint,
+            namespaces=namespaces,
+            tags=tags,
+            tag_count=len(tags)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"API: Browse failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Browse operation failed: {str(e)}"
+        )
+    finally:
+        await browser.disconnect()
+
+
+@app.post("/api/search")
+async def search_tags(request: SearchTagsRequest):
+    """
+    Search for tags by name in an OPC-UA server
+
+    Args:
+        request: Search request with endpoint and search term
+
+    Returns:
+        Matching tags
+    """
+    browser = OPCUABrowser(request.endpoint)
+
+    try:
+        logger.info(f"API: Searching tags in {request.endpoint} for '{request.search_term}'")
+
+        # Connect to server
+        connected = await browser.connect()
+        if not connected:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to connect to OPC-UA server"
+            )
+
+        # Search tags
+        namespace_filter = [request.namespace_index] if request.namespace_index is not None else None
+        matches = await browser.search_tags(request.search_term, namespace_filter=namespace_filter)
+
+        logger.info(f"API: Found {len(matches)} matching tags")
+
+        return {
+            "success": True,
+            "endpoint": request.endpoint,
+            "search_term": request.search_term,
+            "matches": matches,
+            "match_count": len(matches)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"API: Search failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search operation failed: {str(e)}"
+        )
+    finally:
+        await browser.disconnect()
+
+
+@app.get("/api/namespaces/{endpoint:path}")
+async def get_namespaces(endpoint: str):
+    """
+    Get all available namespaces from an OPC-UA server
+
+    Args:
+        endpoint: OPC-UA server endpoint URL
+
+    Returns:
+        List of namespaces
+    """
+    # Decode endpoint (path parameter encoding)
+    endpoint = endpoint.replace("%3A", ":").replace("%2F", "/")
+
+    browser = OPCUABrowser(endpoint)
+
+    try:
+        logger.info(f"API: Getting namespaces from {endpoint}")
+
+        # Connect to server
+        connected = await browser.connect()
+        if not connected:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to connect to OPC-UA server"
+            )
+
+        # Get namespaces
+        namespaces = await browser.get_namespaces()
+
+        logger.info(f"API: Found {len(namespaces)} namespaces")
+
+        return {
+            "success": True,
+            "endpoint": endpoint,
+            "namespaces": namespaces
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"API: Get namespaces failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Get namespaces operation failed: {str(e)}"
+        )
+    finally:
+        await browser.disconnect()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

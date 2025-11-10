@@ -9,7 +9,11 @@ Multi-source data import service for:
 """
 
 import pandas as pd
-import openpyxl
+try:
+    import openpyxl
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 from typing import Dict, Any, List, Optional, BinaryIO
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,10 +25,10 @@ import io
 
 from app.models.external_data import DataSource, DataImport, GBMLogisticsData
 from app.models.operational_data import TruckEntry, ShipLoading
-from app.core.logging import get_logger
+import logging
 from app.services.influxdb import influxdb_service
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class DataImportService:

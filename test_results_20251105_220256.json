@@ -1,0 +1,143 @@
+{
+  "timestamp": "2025-11-05T22:02:56.447596",
+  "summary": {
+    "total": 22,
+    "passed": 19,
+    "failed": 3,
+    "percentage": 86.36363636363636
+  },
+  "tests": [
+    {
+      "test": "Container optiflow-backend",
+      "status": "PASS",
+      "message": "Up 19 seconds (healthy)",
+      "timestamp": "2025-11-05T22:02:56.341507"
+    },
+    {
+      "test": "Container optiflow-frontend",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:02:56.341530"
+    },
+    {
+      "test": "Container optiflow-postgres",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:02:56.341540"
+    },
+    {
+      "test": "Container optiflow-influxdb",
+      "status": "PASS",
+      "message": "Up 5 hours (healthy)",
+      "timestamp": "2025-11-05T22:02:56.341545"
+    },
+    {
+      "test": "Container optiflow-redis",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:02:56.341549"
+    },
+    {
+      "test": "Container optiflow-kafka",
+      "status": "PASS",
+      "message": "Up 5 hours",
+      "timestamp": "2025-11-05T22:02:56.341553"
+    },
+    {
+      "test": "Backend /health endpoint",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:56.346986"
+    },
+    {
+      "test": "Backend /docs (Swagger)",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:56.350083"
+    },
+    {
+      "test": "Backend /api/v1/",
+      "status": "PASS",
+      "message": "Status: 404",
+      "timestamp": "2025-11-05T22:02:56.352930"
+    },
+    {
+      "test": "Status do simulador",
+      "status": "PASS",
+      "message": "Status: 200, Response length: 1321",
+      "timestamp": "2025-11-05T22:02:56.355725"
+    },
+    {
+      "test": "Insights do Autonomous Agent",
+      "status": "PASS",
+      "message": "Status: 403, Response length: 30",
+      "timestamp": "2025-11-05T22:02:56.358057"
+    },
+    {
+      "test": "Lista de tags",
+      "status": "PASS",
+      "message": "Status: 200, Response length: 2",
+      "timestamp": "2025-11-05T22:02:56.363604"
+    },
+    {
+      "test": "Lista de sites",
+      "status": "PASS",
+      "message": "Status: 200, Response length: 2",
+      "timestamp": "2025-11-05T22:02:56.369927"
+    },
+    {
+      "test": "PostgreSQL - Tabela tags",
+      "status": "FAIL",
+      "message": "Cannot query tags",
+      "timestamp": "2025-11-05T22:02:56.427180"
+    },
+    {
+      "test": "InfluxDB /health",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:56.428674"
+    },
+    {
+      "test": "InfluxDB /api/v2/ping",
+      "status": "FAIL",
+      "message": "Status: 401",
+      "timestamp": "2025-11-05T22:02:56.429934"
+    },
+    {
+      "test": "Frontend homepage",
+      "status": "PASS",
+      "message": "Status: 200, Length: 749",
+      "timestamp": "2025-11-05T22:02:56.433007"
+    },
+    {
+      "test": "Frontend React app",
+      "status": "PASS",
+      "message": "React app detected",
+      "timestamp": "2025-11-05T22:02:56.433026"
+    },
+    {
+      "test": "Grafana",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:56.434723"
+    },
+    {
+      "test": "Kafka UI",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:56.443948"
+    },
+    {
+      "test": "Simulador - Status",
+      "status": "PASS",
+      "message": "Status: 200",
+      "timestamp": "2025-11-05T22:02:56.447423"
+    },
+    {
+      "test": "Simulador - Running",
+      "status": "FAIL",
+      "message": "Running: None, Time: N/A",
+      "timestamp": "2025-11-05T22:02:56.447494"
+    }
+  ]
+}

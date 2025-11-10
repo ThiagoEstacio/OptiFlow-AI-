@@ -14,13 +14,20 @@ from typing import Dict, Any, List, Optional
 import os
 import logging
 
-from reportlab.lib.pagesizes import A4, letter
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
-from reportlab.platypus.flowables import HRFlowable
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+logger = logging.getLogger(__name__)
+
+try:
+    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+    from reportlab.platypus.flowables import HRFlowable
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    logger.warning("reportlab not available. Executive PDF generation disabled.")
 
 from app.services.executive_dashboard import ExecutiveDashboard
 from app.services.roi_calculator import ROICalculator

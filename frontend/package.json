@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "dev": "NODE_OPTIONS='--max-old-space-size=4096' vite",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -21,6 +21,7 @@
     "@hookform/resolvers": "^3.3.3",
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
+    "@mui/x-tree-view": "^8.16.0",
     "@reduxjs/toolkit": "^2.9.2",
     "@tanstack/react-table": "^8.11.2",
     "axios": "^1.13.0",

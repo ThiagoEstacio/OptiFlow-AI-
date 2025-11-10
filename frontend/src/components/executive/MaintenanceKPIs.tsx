@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, Grid, Box, LinearProgress, Chip } from '@mui/material';
+import { Card, CardContent, Typography, Box, LinearProgress, Chip } from '@mui/material';
 import { Build, Warning, TrendingUp, TrendingDown, Remove } from '@mui/icons-material';
 
 interface Props {
@@ -23,9 +23,9 @@ const MaintenanceKPIs: React.FC<Props> = ({ data, detailed = false }) => {
           Maintenance & Asset Health
         </Typography>
 
-        <Grid container spacing={2} mt={1}>
-          <Grid item xs={12} sm={6}>
-            <Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
               <Typography variant="body2" color="text.secondary">Average Health Score</Typography>
               <Typography variant="h4" fontWeight="bold">{data.average_health_score || 0}</Typography>
               <LinearProgress
@@ -34,10 +34,8 @@ const MaintenanceKPIs: React.FC<Props> = ({ data, detailed = false }) => {
                 sx={{ mt: 1, height: 8, borderRadius: 1 }}
               />
             </Box>
-          </Grid>
 
-          <Grid item xs={12} sm={6}>
-            <Box>
+            <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
               <Typography variant="body2" color="text.secondary">Health Trend</Typography>
               <Box display="flex" alignItems="center" mt={1}>
                 {getTrendIcon(data.health_trend)}
@@ -46,37 +44,31 @@ const MaintenanceKPIs: React.FC<Props> = ({ data, detailed = false }) => {
                 </Typography>
               </Box>
             </Box>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12}>
+          <Box>
             <Typography variant="body2" color="text.secondary" gutterBottom>Assets by Health</Typography>
-            <Grid container spacing={1}>
-              <Grid item>
-                <Chip label={`Healthy: ${data.assets_by_health?.healthy || 0}`} color="success" size="small" />
-              </Grid>
-              <Grid item>
-                <Chip label={`Warning: ${data.assets_by_health?.warning || 0}`} color="warning" size="small" />
-              </Grid>
-              <Grid item>
-                <Chip label={`Critical: ${data.assets_by_health?.critical || 0}`} color="error" size="small" />
-              </Grid>
-            </Grid>
-          </Grid>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Chip label={`Healthy: ${data.assets_by_health?.healthy || 0}`} color="success" size="small" />
+              <Chip label={`Warning: ${data.assets_by_health?.warning || 0}`} color="warning" size="small" />
+              <Chip label={`Critical: ${data.assets_by_health?.critical || 0}`} color="error" size="small" />
+            </Box>
+          </Box>
 
           {detailed && (
-            <>
-              <Grid item xs={12} sm={6}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
                 <Typography variant="body2" color="text.secondary">Total Alarms</Typography>
                 <Typography variant="h5">{data.alarms?.total || 0}</Typography>
                 <Typography variant="caption">Avg: {data.alarms?.avg_per_day || 0}/day</Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              </Box>
+              <Box sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '200px' }}>
                 <Typography variant="body2" color="text.secondary">Critical Alarms</Typography>
                 <Typography variant="h5" color="error.main">{data.alarms?.critical || 0}</Typography>
-              </Grid>
-            </>
+              </Box>
+            </Box>
           )}
-        </Grid>
+        </Box>
       </CardContent>
     </Card>
   );

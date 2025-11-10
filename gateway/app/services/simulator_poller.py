@@ -100,47 +100,60 @@ class SimulatorPoller:
         points = []
         timestamp = datetime.utcnow()
         
-        # System values
+        # System values (lightweight simulator format)
         system = status.get('system', {})
-        self._add_point(points, 'WAREHOUSE_INVENTORY_PV', system.get('warehouse_inventory_t'), timestamp)
-        self._add_point(points, 'WAREHOUSE_LEVEL_PV', system.get('warehouse_level_pct'), timestamp)
         self._add_point(points, 'SYSTEM_RUNNING_PV', 1.0 if system.get('running') else 0.0, timestamp)
-        self._add_point(points, 'TOTAL_KWH', system.get('total_kWh'), timestamp)
+        self._add_point(points, 'SYSTEM_TIME_S_PV', system.get('time_s'), timestamp)
+        self._add_point(points, 'TOTAL_MASS_T_PV', system.get('total_mass_t'), timestamp)
+        self._add_point(points, 'TOTAL_KWH_PV', system.get('total_kWh'), timestamp)
+        self._add_point(points, 'WAREHOUSE_LEVEL_PCT_PV', system.get('warehouse_level_pct'), timestamp)
+        self._add_point(points, 'KWH_PER_TON_PV', system.get('kWh_per_ton'), timestamp)
+        self._add_point(points, 'COST_BRL_PV', system.get('cost_BRL'), timestamp)
         
-        # Gates
+        # Gates (lightweight simulator returns list with 'name' key)
         for gate in status.get('gates', []):
-            gate_id = gate['id']
-            self._add_point(points, f'ARZ_GATES_GATE{gate_id:02d}_POSICAO_PV', gate.get('open_pct'), timestamp)
-            self._add_point(points, f'ARZ_GATES_GATE{gate_id:02d}_VAZAO_TPH_PV', gate.get('flow_tph'), timestamp)
+            gate_name = gate.get('name', '')
+            # Extract gate number from name (e.g., "GATE_01" -> "01")
+            if '_' in gate_name:
+                gate_num = gate_name.split('_')[-1]
+                self._add_point(points, f'ARZ_GATES_GATE{gate_num}_POSICAO_PV', gate.get('opening_pct'), timestamp)
+                self._add_point(points, f'ARZ_GATES_GATE{gate_num}_VAZAO_TPH_PV', gate.get('flow_tph'), timestamp)
+
+        # Belts (lightweight simulator returns list with 'name' key)
+        for belt in status.get('belts', []):
+            belt_name = belt.get('name', '')
+            self._add_point(points, f'{belt_name}_RUNNING_PV', 1.0 if belt.get('running') else 0.0, timestamp)
+            self._add_point(points, f'{belt_name}_SPEED_MPS_PV', belt.get('speed_mps'), timestamp)
+            self._add_point(points, f'{belt_name}_FLOW_TPH_PV', belt.get('flow_tph'), timestamp)
+            self._add_point(points, f'{belt_name}_LOAD_PCT_PV', belt.get('load_pct'), timestamp)
+            self._add_point(points, f'{belt_name}_CURRENT_A_PV', belt.get('current_a'), timestamp)
+            self._add_point(points, f'{belt_name}_POWER_KW_PV', belt.get('power_kw'), timestamp)
+            self._add_point(points, f'{belt_name}_TEMP_C_PV', belt.get('temp_c'), timestamp)
+            self._add_point(points, f'{belt_name}_MISALIGNMENT_PV', belt.get('misalignment'), timestamp)
         
-        # Belts
-        for belt_id, belt_data in status.get('belts', {}).items():
-            self._add_point(points, f'{belt_id}_RUNNING_PV', 1.0 if belt_data.get('running') else 0.0, timestamp)
-            self._add_point(points, f'{belt_id}_RPM_PV', belt_data.get('rpm'), timestamp)
-            self._add_point(points, f'{belt_id}_FLOW_TPH_PV', belt_data.get('flow_tph'), timestamp)
-            self._add_point(points, f'{belt_id}_LOAD_PCT_PV', belt_data.get('load_pct'), timestamp)
-            self._add_point(points, f'{belt_id}_CURRENT_A_PV', belt_data.get('current_A'), timestamp)
-            self._add_point(points, f'{belt_id}_POWER_KW_PV', belt_data.get('power_kW'), timestamp)
-            self._add_point(points, f'{belt_id}_TEMP_BEARING_C_PV', belt_data.get('temp_bearing_C'), timestamp)
+        # NOTE: Lightweight simulator does not include elevator and balance equipment
+        # These were part of the old DEM-based simulator
+        # Uncomment below if switching back to full simulator:
+
+        # # Elevator
+        # elevator = status.get('elevator', {})
+        # self._add_point(points, 'ELV01_RUNNING_PV', 1.0 if elevator.get('running') else 0.0, timestamp)
+        # self._add_point(points, 'ELV01_FLOW_TPH_PV', elevator.get('flow_tph'), timestamp)
+        # self._add_point(points, 'ELV01_POWER_KW_PV', elevator.get('power_kW'), timestamp)
+        # self._add_point(points, 'ELV01_TEMP_MOTOR_C_PV', elevator.get('temp_motor_C'), timestamp)
+
+        # # Balance
+        # balance = status.get('balance', {})
+        # self._add_point(points, 'BAL01_RUNNING_PV', 1.0 if balance.get('running') else 0.0, timestamp)
+        # self._add_point(points, 'BAL01_WEIGHT_KG_PV', balance.get('weight_kg'), timestamp)
+        # self._add_point(points, 'BAL01_FLOW_TPH_PV', balance.get('avg_flow_tph'), timestamp)
         
-        # Elevator
-        elevator = status.get('elevator', {})
-        self._add_point(points, 'ELV01_RUNNING_PV', 1.0 if elevator.get('running') else 0.0, timestamp)
-        self._add_point(points, 'ELV01_FLOW_TPH_PV', elevator.get('flow_tph'), timestamp)
-        self._add_point(points, 'ELV01_POWER_KW_PV', elevator.get('power_kW'), timestamp)
-        self._add_point(points, 'ELV01_TEMP_MOTOR_C_PV', elevator.get('temp_motor_C'), timestamp)
-        
-        # Balance
-        balance = status.get('balance', {})
-        self._add_point(points, 'BAL01_RUNNING_PV', 1.0 if balance.get('running') else 0.0, timestamp)
-        self._add_point(points, 'BAL01_WEIGHT_KG_PV', balance.get('weight_kg'), timestamp)
-        self._add_point(points, 'BAL01_FLOW_TPH_PV', balance.get('avg_flow_tph'), timestamp)
-        
-        # Shiploader
+        # Shiploader (lightweight simulator format)
         shiploader = status.get('shiploader', {})
-        self._add_point(points, 'SLD01_RUNNING_PV', 1.0 if shiploader.get('running') else 0.0, timestamp)
-        self._add_point(points, 'SLD01_FLOW_TPH_PV', shiploader.get('flow_pv_tph'), timestamp)
-        self._add_point(points, 'SLD01_POWER_KW_PV', shiploader.get('power_kW'), timestamp)
+        self._add_point(points, 'SLD01_SETPOINT_TPH_PV', shiploader.get('setpoint_tph'), timestamp)
+        self._add_point(points, 'SLD01_FLOW_TPH_PV', shiploader.get('flow_tph'), timestamp)
+        self._add_point(points, 'SLD01_POWER_KW_PV', shiploader.get('power_kw'), timestamp)
+        self._add_point(points, 'SLD01_CURRENT_A_PV', shiploader.get('current_a'), timestamp)
         
         return points
     

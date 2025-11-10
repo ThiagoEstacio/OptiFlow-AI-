@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 import os
 
+logger = logging.getLogger(__name__)
+
 try:
     from reportlab.lib.pagesizes import letter, A4
     from reportlab.lib import colors

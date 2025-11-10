@@ -18,8 +18,10 @@ export const Sidebar: React.FC = () => {
     { path: '/chat', label: 'Assistente IA', icon: '💬' },
     { path: '/simulator', label: 'Simulador', icon: '⚙️' },
     { path: '/sites', label: 'Sites', icon: '🏭' },
+    { path: '/gateways', label: 'Gateways', icon: '🌐' },
     { path: '/devices', label: 'Dispositivos', icon: '🔌' },
     { path: '/tags', label: 'Tags', icon: '🏷️' },
+    { path: '/extended-tags', label: 'Tags PI AF', icon: '📐' },
     { path: '/alarms', label: 'Alarmes', icon: '🚨' },
     { path: '/admin', label: 'Admin', icon: '🔧' },
   ];

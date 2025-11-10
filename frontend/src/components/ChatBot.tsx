@@ -28,10 +28,15 @@ const ChatBot: React.FC = () => {
 
   // Load conversations on mount
   useEffect(() => {
-    loadConversations();
+    // Skip loading conversations - using Llama agent without authentication
+    // loadConversations();
   }, []);
 
   const loadConversations = async () => {
+    // Disabled - using Llama agent mode without conversation history
+    return;
+    
+    /* Original code commented out
     try {
       // Check if user is authenticated
       const token = localStorage.getItem('auth_token');
@@ -45,11 +50,12 @@ const ChatBot: React.FC = () => {
     } catch (error) {
       // Silently handle 401 errors (user not authenticated)
       if ((error as any)?.response?.status === 401) {
-        console.log('Not authenticated - using demo mode');
+        console.log('Not authenticated - using Llama agent mode');
       } else {
         console.error('Error loading conversations:', error);
       }
     }
+    */
   };
 
   const loadConversation = async (conversationId: string) => {

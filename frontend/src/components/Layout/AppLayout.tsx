@@ -5,6 +5,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { EnhancedSidebar } from './EnhancedSidebar';
 import { TopBar } from './TopBar';
+import { Breadcrumbs } from '../Breadcrumbs';
 import { useAppSelector } from '../../store';
 import { Box } from '@mui/material';
 
@@ -36,10 +37,15 @@ export const AppLayout: React.FC = () => {
             flex: 1,
             overflow: 'auto',
             bgcolor: 'grey.100',
-            p: 3,
           }}
         >
-          <Outlet />
+          {/* Breadcrumbs */}
+          <Breadcrumbs />
+
+          {/* Page Content with padding */}
+          <Box sx={{ p: 3 }}>
+            <Outlet />
+          </Box>
         </Box>
       </Box>
     </Box>

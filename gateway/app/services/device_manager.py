@@ -14,6 +14,7 @@ from ..protocols.ethernetip_handler import EthernetIPHandler
 from ..protocols.s7_handler import S7Handler
 from .buffer import DataBuffer
 from .backend_client import BackendClient
+from .opcua_browser import OPCUABrowser
 
 
 class DeviceManager:
@@ -326,6 +327,155 @@ class DeviceManager:
             self.get_device_status(device_id)
             for device_id in self.devices.keys()
         ]
+
+    async def discover_opcua_tags(
+        self,
+        endpoint: str,
+        namespace_index: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Discover available tags from an OPC-UA server
+        Similar to KEPServerEX tag discovery
+
+        Args:
+            endpoint: OPC-UA server endpoint
+            namespace_index: Optional namespace index to filter by
+
+        Returns:
+            Dictionary with discovered tags and namespaces
+        """
+        browser = OPCUABrowser(endpoint)
+
+        try:
+            logger.info(f"Starting OPC-UA discovery for {endpoint}")
+
+            # Connect to server
+            connected = await browser.connect()
+            if not connected:
+                return {
+                    "success": False,
+                    "error": "Failed to connect to OPC-UA server"
+                }
+
+            # Get namespaces
+            namespaces = await browser.get_namespaces()
+            logger.info(f"Found {len(namespaces)} namespaces")
+
+            # Discover tags
+            namespace_filter = [namespace_index] if namespace_index is not None else None
+            tags = await browser.discover_all_tags(namespace_filter=namespace_filter)
+
+            logger.info(f"✓ Discovered {len(tags)} tags from {endpoint}")
+
+            return {
+                "success": True,
+                "endpoint": endpoint,
+                "namespaces": namespaces,
+                "tags": tags,
+                "tag_count": len(tags)
+            }
+
+        except Exception as e:
+            logger.error(f"OPC-UA discovery failed: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+        finally:
+            await browser.disconnect()
+
+    async def add_opcua_device_with_discovery(
+        self,
+        device_id: str,
+        endpoint: str,
+        namespace_index: Optional[int] = None,
+        tag_filter: Optional[str] = None,
+        scan_rate: int = 1000
+    ) -> Dict[str, Any]:
+        """
+        Add OPC-UA device with automatic tag discovery
+
+        Args:
+            device_id: Unique device identifier
+            endpoint: OPC-UA server endpoint
+            namespace_index: Optional namespace to filter tags
+            tag_filter: Optional search term to filter tags by name
+            scan_rate: Data collection scan rate in milliseconds
+
+        Returns:
+            Dictionary with results
+        """
+        try:
+            logger.info(f"Adding OPC-UA device {device_id} with discovery...")
+
+            # Discover tags
+            discovery_result = await self.discover_opcua_tags(endpoint, namespace_index)
+
+            if not discovery_result["success"]:
+                return discovery_result
+
+            # Filter tags if requested
+            tags = discovery_result["tags"]
+            if tag_filter:
+                search_lower = tag_filter.lower()
+                tags = [
+                    tag for tag in tags
+                    if search_lower in tag["tag_name"].lower() or
+                       search_lower in tag["display_name"].lower()
+                ]
+                logger.info(f"Filtered to {len(tags)} tags matching '{tag_filter}'")
+
+            if not tags:
+                return {
+                    "success": False,
+                    "error": "No tags found after filtering"
+                }
+
+            # Create device configuration
+            config = {
+                "endpoint": endpoint,
+                "security_mode": "None"
+            }
+
+            # Add device
+            device_added = await self.add_device(device_id, "opc_ua", config)
+
+            if not device_added:
+                return {
+                    "success": False,
+                    "error": "Failed to add device"
+                }
+
+            # Prepare tags for collection
+            collection_tags = []
+            for idx, tag in enumerate(tags):
+                collection_tags.append({
+                    "tag_id": f"{device_id}-tag-{idx}",
+                    "tag_name": tag["tag_name"],
+                    "address": tag["address"]
+                })
+
+            # Start collection
+            await self.start_collection(device_id, collection_tags, scan_rate)
+
+            logger.info(f"✓ OPC-UA device {device_id} added with {len(collection_tags)} tags")
+
+            return {
+                "success": True,
+                "device_id": device_id,
+                "endpoint": endpoint,
+                "tag_count": len(collection_tags),
+                "tags": collection_tags,
+                "namespaces": discovery_result["namespaces"]
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to add OPC-UA device with discovery: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
     async def shutdown(self):
         """Shutdown device manager and disconnect all devices"""

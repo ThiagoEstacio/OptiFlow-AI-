@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, Card, CardContent, Typography, List, ListItem, ListItemText, Chip, Box } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, ListItemText, Chip, Box } from '@mui/material';
 import { Warning, Lightbulb } from '@mui/icons-material';
 
 interface Props {
@@ -9,9 +9,9 @@ interface Props {
 
 const RisksOpportunities: React.FC<Props> = ({ risks, opportunities }) => {
   return (
-    <Grid container spacing={3}>
+    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
       {/* Risks */}
-      <Grid item xs={12} md={6}>
+      <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" mb={2}>
@@ -39,7 +39,7 @@ const RisksOpportunities: React.FC<Props> = ({ risks, opportunities }) => {
                       {risk.potential_impact}
                     </Typography>
                     <Typography variant="caption" color="success.main" fontWeight="medium">
-                      ✓ Mitigation: {risk.mitigation}
+                      Mitigation: {risk.mitigation}
                     </Typography>
                   </ListItem>
                 ))}
@@ -49,10 +49,10 @@ const RisksOpportunities: React.FC<Props> = ({ risks, opportunities }) => {
             )}
           </CardContent>
         </Card>
-      </Grid>
+      </Box>
 
       {/* Opportunities */}
-      <Grid item xs={12} md={6}>
+      <Box sx={{ flex: '1 1 calc(50% - 12px)', minWidth: '300px' }}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" mb={2}>
@@ -74,7 +74,7 @@ const RisksOpportunities: React.FC<Props> = ({ risks, opportunities }) => {
                     </Typography>
                     {opp.recommendation && (
                       <Typography variant="caption" color="primary.main" fontWeight="medium">
-                        → {opp.recommendation}
+                        {opp.recommendation}
                       </Typography>
                     )}
                   </ListItem>
@@ -85,8 +85,8 @@ const RisksOpportunities: React.FC<Props> = ({ risks, opportunities }) => {
             )}
           </CardContent>
         </Card>
-      </Grid>
-    </Grid>
+      </Box>
+    </Box>
   );
 };
 

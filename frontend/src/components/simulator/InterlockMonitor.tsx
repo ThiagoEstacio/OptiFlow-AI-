@@ -5,7 +5,6 @@ import {
   CardContent,
   CardHeader,
   Chip,
-  Grid,
   IconButton,
   List,
   ListItem,
@@ -90,8 +89,8 @@ export default function InterlockMonitor({
   return (
     <Box>
       {/* Summary Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.333% - 11px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -123,9 +122,9 @@ export default function InterlockMonitor({
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={4}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.333% - 11px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -153,9 +152,9 @@ export default function InterlockMonitor({
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} md={4}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.333% - 11px)' } }}>
           <Card>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -183,8 +182,8 @@ export default function InterlockMonitor({
               </Stack>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Active Interlocks List */}
       <Card>

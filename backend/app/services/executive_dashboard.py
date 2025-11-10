@@ -11,8 +11,8 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from app.models.asset import Asset, AssetType
-from app.models.alarm import Alarm, AlarmSeverity
-from app.models.operations import TruckEntry, ShipLoading, Silo, Berth, ProductType
+from app.models.alarm import AlarmDefinition, AlarmSeverity
+from app.models.operational_data import TruckEntry, ShipLoading
 from app.models.organization import Site
 
 logger = logging.getLogger(__name__)
@@ -126,21 +126,21 @@ class ExecutiveDashboard:
         healthy_assets = healthy_result.scalar() or 0
 
         # Alarms in period
-        total_alarms_query = select(func.count(Alarm.id)).where(
+        total_alarms_query = select(func.count(AlarmDefinition.id)).where(
             and_(
-                Alarm.site_id == site_id,
-                Alarm.timestamp >= start_date
+                AlarmDefinition.site_id == site_id,
+                AlarmDefinition.timestamp >= start_date
             )
         )
         total_alarms_result = await self.db.execute(total_alarms_query)
         total_alarms = total_alarms_result.scalar() or 0
 
         # Critical alarms
-        critical_alarms_query = select(func.count(Alarm.id)).where(
+        critical_alarms_query = select(func.count(AlarmDefinition.id)).where(
             and_(
-                Alarm.site_id == site_id,
-                Alarm.timestamp >= start_date,
-                Alarm.severity == AlarmSeverity.CRITICAL
+                AlarmDefinition.site_id == site_id,
+                AlarmDefinition.timestamp >= start_date,
+                AlarmDefinition.severity == AlarmSeverity.CRITICAL
             )
         )
         critical_alarms_result = await self.db.execute(critical_alarms_query)
@@ -277,14 +277,14 @@ class ExecutiveDashboard:
         """Get current critical alerts requiring immediate attention."""
 
         # Critical alarms in last 24 hours
-        query = select(Alarm).where(
+        query = select(AlarmDefinition).where(
             and_(
-                Alarm.site_id == site_id,
-                Alarm.severity == AlarmSeverity.CRITICAL,
-                Alarm.timestamp >= datetime.utcnow() - timedelta(hours=24),
-                Alarm.acknowledged == False
+                AlarmDefinition.site_id == site_id,
+                AlarmDefinition.severity == AlarmSeverity.CRITICAL,
+                AlarmDefinition.timestamp >= datetime.utcnow() - timedelta(hours=24),
+                AlarmDefinition.acknowledged == False
             )
-        ).order_by(Alarm.timestamp.desc()).limit(10)
+        ).order_by(AlarmDefinition.timestamp.desc()).limit(10)
 
         result = await self.db.execute(query)
         alarms = result.scalars().all()
@@ -389,14 +389,14 @@ class ExecutiveDashboard:
         correlations = []
 
         # Find recent critical alarms with associated assets
-        alarm_query = select(Alarm).where(
+        alarm_query = select(AlarmDefinition).where(
             and_(
-                Alarm.site_id == site_id,
-                Alarm.timestamp >= start_date,
-                Alarm.severity.in_([AlarmSeverity.CRITICAL, AlarmSeverity.HIGH]),
-                Alarm.asset_id.isnot(None)
+                AlarmDefinition.site_id == site_id,
+                AlarmDefinition.timestamp >= start_date,
+                AlarmDefinition.severity.in_([AlarmSeverity.CRITICAL, AlarmSeverity.HIGH]),
+                AlarmDefinition.asset_id.isnot(None)
             )
-        ).order_by(Alarm.timestamp.desc())
+        ).order_by(AlarmDefinition.timestamp.desc())
 
         alarm_result = await self.db.execute(alarm_query)
         alarms = alarm_result.scalars().all()
@@ -655,12 +655,9 @@ class ExecutiveDashboard:
     ) -> float:
         """Calculate berth utilization percentage."""
         try:
-            # Get total berths
-            berths_query = select(func.count(Berth.id)).where(
-                and_(Berth.site_id == site_id, Berth.is_active == True)
-            )
-            berths_result = await self.db.execute(berths_query)
-            total_berths = berths_result.scalar() or 1
+            # Get total berths (TODO: Implement Berth model)
+            # For now, assume 4 berths per site
+            total_berths = 4
 
             # Get ships in period
             ships_query = select(func.count(ShipLoading.id)).where(
