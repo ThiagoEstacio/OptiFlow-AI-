@@ -35,7 +35,10 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp):
         super().__init__(app)
         self.metrics = get_metrics()
-        logger.info("Prometheus middleware initialized")
+        if self.metrics is None:
+            logger.error("Failed to get metrics instance - metrics will not be collected!")
+        else:
+            logger.info(f"Prometheus middleware initialized with metrics: {type(self.metrics)}")
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """
@@ -68,8 +71,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
                 self.metrics.track_request(method, endpoint, response.status_code)
                 self.metrics.track_request_duration(method, endpoint, duration)
                 
-                logger.debug(
-                    f"{method} {endpoint} - {response.status_code} "
+                logger.info(
+                    f"✓ Metrics tracked: {method} {endpoint} - {response.status_code} "
                     f"({duration:.3f}s)"
                 )
                 

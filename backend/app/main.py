@@ -345,18 +345,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"🌐 Environment: {settings.ENVIRONMENT}")
     logger.info(f"📊 API Version: {settings.API_V1_PREFIX}")
     
-    # Initialize Prometheus metrics system
-    try:
-        init_metrics(
-            app_name="optiflow",
-            version=settings.APP_VERSION,
-            environment=settings.ENVIRONMENT
-        )
-        logger.info("✅ Prometheus metrics initialized - monitoring enabled")
-    except Exception as e:
-        logger.warning(f"⚠️  Prometheus metrics initialization failed: {e}")
-        logger.warning("⚠️  System will continue without Prometheus metrics")
-    
     # Start system metrics updater in background
     metrics_task = None
     try:
@@ -392,6 +380,20 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Kafka producer cleaned up")
     except Exception as e:
         logger.warning(f"⚠️  Kafka producer cleanup warning: {e}")
+
+
+# ========================================
+# Initialize Prometheus Metrics BEFORE app creation
+# ========================================
+# This must be done before middleware is added to ensure
+# the singleton instance is available when middleware initializes
+logger.info("🔧 Initializing Prometheus metrics system...")
+init_metrics(
+    app_name="optiflow",
+    version=settings.APP_VERSION,
+    environment=settings.ENVIRONMENT
+)
+logger.info("✅ Prometheus metrics system initialized")
 
 
 # Create FastAPI application
