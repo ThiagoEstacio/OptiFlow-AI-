@@ -1,6 +1,64 @@
-# Scripts do SmartPort
+# Scripts Directory
 
-Esta pasta contém scripts utilitários para facilitar o setup, teste e verificação do SmartPort.
+Este diretório contém scripts utilitários para gerenciar e testar o OptiFlow AI Platform.
+
+## 📊 Container Monitoring
+
+### monitor-containers.sh
+Script bash para verificar status de todos os containers do stack.
+
+**Uso:**
+```bash
+./scripts/monitor-containers.sh
+```
+
+**Funcionalidades:**
+- ✅ Status visual de todos os 20 containers
+- 🏥 Health check de cada serviço
+- 🌐 URLs de acesso rápido
+- 📊 Sumário geral (Total/Running/Healthy/Unhealthy)
+- 🎨 Output colorido e organizado por categoria
+
+**Categorias monitoradas:**
+- Core Application (backend, frontend, gateway)
+- Infrastructure (postgres, redis, influxdb)
+- Messaging (kafka, zookeeper, rabbitmq)
+- Background Jobs (celery-worker, celery-beat)
+- Monitoring (prometheus, grafana, exporters)
+- Simulation & ML (opcua-server, mlflow)
+
+---
+
+### monitor-live.py
+Monitor Python com atualização em tempo real e métricas de recursos.
+
+**Uso básico (snapshot):**
+```bash
+python3 scripts/monitor-live.py
+```
+
+**Modo contínuo (atualiza a cada 5s):**
+```bash
+python3 scripts/monitor-live.py --continuous
+```
+
+**Funcionalidades:**
+- 📈 Uso de CPU por container
+- 💾 Consumo de memória
+- 🌐 Tráfego de rede
+- 🔄 Atualização automática em tempo real
+- 🎨 Interface colorida com emojis
+- ⌨️  Ctrl+C para sair
+
+**Exemplo de output:**
+```
+🚀 Core Application
+  ● healthy backend    CPU: 0.75%   MEM: 289.9MiB
+  ● running frontend   CPU: 0.04%   MEM: 56MiB
+  ● healthy gateway    CPU: 0.13%   MEM: 68.32MiB
+```
+
+---
 
 ## Scripts Disponíveis
 
