@@ -270,7 +270,7 @@ async def update_advanced_nodes(server_instance):
         # INTERLOCKS
         # ====================================================================
         active_interlocks = simulator.interlock_manager.get_active_interlocks()
-        await nodes['INTERLOCKS_ACTIVE_COUNT'].write_value(float(len(active_interlocks)))
+        await nodes['INTERLOCKS_ACTIVE_COUNT'].write_value(len(active_interlocks))
         
         # Primeiros 10 interlocks
         for i in range(10):
@@ -288,19 +288,19 @@ async def update_advanced_nodes(server_instance):
         # ALARMES
         # ====================================================================
         alarm_summary = simulator.alarm_manager.get_alarm_summary()
-        await nodes['ALARMS_TOTAL'].write_value(float(alarm_summary['total']))
-        await nodes['ALARMS_CRITICAL'].write_value(float(alarm_summary['critical']))
-        await nodes['ALARMS_HIGH'].write_value(float(alarm_summary['high']))
-        await nodes['ALARMS_MEDIUM'].write_value(float(alarm_summary['medium']))
-        await nodes['ALARMS_UNACK'].write_value(float(alarm_summary['unacknowledged']))
+        await nodes['ALARMS_TOTAL'].write_value(alarm_summary['total'])
+        await nodes['ALARMS_CRITICAL'].write_value(alarm_summary['critical'])
+        await nodes['ALARMS_HIGH'].write_value(alarm_summary['high'])
+        await nodes['ALARMS_MEDIUM'].write_value(alarm_summary['medium'])
+        await nodes['ALARMS_UNACK'].write_value(alarm_summary['unacknowledged'])
         
         # ====================================================================
         # MANUTENÇÃO
         # ====================================================================
         maint_summary = simulator.maintenance_manager.get_maintenance_summary()
-        await nodes['MAINT_AVG_HEALTH'].write_value(float(maint_summary['avg_health_pct']))
-        await nodes['MAINT_NEEDS_ATTENTION'].write_value(float(maint_summary['needs_attention']))
-        await nodes['MAINT_CRITICAL'].write_value(float(maint_summary['critical']))
+        await nodes['MAINT_AVG_HEALTH'].write_value(maint_summary['avg_health_pct'])
+        await nodes['MAINT_NEEDS_ATTENTION'].write_value(maint_summary['needs_attention'])
+        await nodes['MAINT_CRITICAL'].write_value(maint_summary['critical'])
         
         # Por equipamento
         for belt_id in ['CORR01', 'CORR02', 'CORR03']:
