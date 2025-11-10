@@ -275,7 +275,7 @@ class GrainTerminalOPCUAServer:
         )
 
         self.nodes['BAL01_CYCLES'] = await bal01.add_variable(
-            self.idx, "CICLOS.TOT", 0
+            self.idx, "CICLOS.TOT", 0.0
         )
 
         self.nodes['BAL01_TOTAL'] = await bal01.add_variable(
@@ -477,7 +477,7 @@ class GrainTerminalOPCUAServer:
             await self.nodes['BAL01_RUNNING'].write_value(self.simulator.balance.running)
             await self.nodes['BAL01_WEIGHT'].write_value(self.simulator.balance.weight_kg)
             await self.nodes['BAL01_TARGET'].write_value(self.simulator.balance.target_kg)
-            await self.nodes['BAL01_CYCLES'].write_value(self.simulator.balance.cycle_count)
+            await self.nodes['BAL01_CYCLES'].write_value(float(self.simulator.balance.cycle_count))
             await self.nodes['BAL01_TOTAL'].write_value(self.simulator.balance.total_mass_t)
             await self.nodes['BAL01_FLOW'].write_value(self.simulator.balance.avg_flow_tph)
             await self.nodes['BAL01_STATE'].write_value(self.simulator.balance.cycle_state.value)
