@@ -26,7 +26,7 @@ async def create_advanced_nodes(server_instance, teag, idx):
     
     # Contador de interlocks ativos
     nodes['INTERLOCKS_ACTIVE_COUNT'] = await interlocks_folder.add_variable(
-        idx, "ACTIVE.COUNT", 0.0
+        idx, "ACTIVE.COUNT", 0
     )
     
     # Lista simplificada de interlocks ativos (últimos 10)
@@ -48,19 +48,19 @@ async def create_advanced_nodes(server_instance, teag, idx):
     
     # Resumo por severidade
     nodes['ALARMS_TOTAL'] = await alarms_folder.add_variable(
-        idx, "TOTAL.COUNT", 0.0
+        idx, "TOTAL.COUNT", 0
     )
     nodes['ALARMS_CRITICAL'] = await alarms_folder.add_variable(
-        idx, "CRITICAL.COUNT", 0.0
+        idx, "CRITICAL.COUNT", 0
     )
     nodes['ALARMS_HIGH'] = await alarms_folder.add_variable(
-        idx, "HIGH.COUNT", 0.0
+        idx, "HIGH.COUNT", 0
     )
     nodes['ALARMS_MEDIUM'] = await alarms_folder.add_variable(
-        idx, "MEDIUM.COUNT", 0.0
+        idx, "MEDIUM.COUNT", 0
     )
     nodes['ALARMS_UNACK'] = await alarms_folder.add_variable(
-        idx, "UNACKNOWLEDGED.COUNT", 0.0
+        idx, "UNACKNOWLEDGED.COUNT", 0
     )
     
     # ====================================================================
@@ -73,10 +73,10 @@ async def create_advanced_nodes(server_instance, teag, idx):
         idx, "HEALTH_MEDIA.PV", 100.0
     )
     nodes['MAINT_NEEDS_ATTENTION'] = await maintenance_folder.add_variable(
-        idx, "ATENCAO.COUNT", 0.0
+        idx, "ATENCAO.COUNT", 0
     )
     nodes['MAINT_CRITICAL'] = await maintenance_folder.add_variable(
-        idx, "CRITICO.COUNT", 0.0
+        idx, "CRITICO.COUNT", 0
     )
     
     # Por equipamento (Belt samples)
