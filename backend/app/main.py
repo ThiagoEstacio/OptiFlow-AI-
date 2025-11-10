@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import time
 import asyncio
 import async_timeout
+import psutil
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry
@@ -29,6 +30,8 @@ from app.services.kafka_producer import init_kafka_producer, cleanup_kafka_produ
 from app.services.timeseries_consumer import start_timeseries_consumer, stop_timeseries_consumer
 from app.middleware.timeout import TimeoutMiddleware
 from app.middleware.circuit_breaker import CircuitBreakerMiddleware
+from app.middleware.prometheus_middleware import PrometheusMiddleware
+from app.services.prometheus_metrics import init_metrics, get_metrics
 
 # Configure logging
 logging.basicConfig(
@@ -46,19 +49,20 @@ limiter = Limiter(key_func=get_remote_address)
 
 # HTTP Request Metrics
 http_requests_total = Counter(
-    'http_requests_total',
+    'optiflow_http_requests_total',
     'Total HTTP requests',
     ['method', 'endpoint', 'status']
 )
 
 http_request_duration_seconds = Histogram(
-    'http_request_duration_seconds',
+    'optiflow_http_request_duration_seconds',
     'HTTP request latency',
-    ['method', 'endpoint']
+    ['method', 'endpoint'],
+    buckets=(0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0, 10.0)
 )
 
 http_requests_in_progress = Gauge(
-    'http_requests_in_progress',
+    'optiflow_http_requests_in_progress',
     'HTTP requests currently being processed',
     ['method', 'endpoint']
 )
@@ -73,20 +77,33 @@ app_info.info({
 
 # Database Metrics
 db_connections_active = Gauge(
-    'db_connections_active',
-    'Active database connections'
+    'optiflow_db_connections_active',
+    'Active database connections',
+    ['database']
 )
 
 db_queries_total = Counter(
-    'db_queries_total',
+    'optiflow_db_queries_total',
     'Total database queries executed',
     ['operation']
 )
 
 db_query_duration_seconds = Histogram(
-    'db_query_duration_seconds',
+    'optiflow_db_query_duration_seconds',
     'Database query duration',
-    ['operation']
+    ['operation'],
+    buckets=(0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0)
+)
+
+# User & Connection Metrics
+active_users = Gauge(
+    'optiflow_active_users',
+    'Number of active authenticated users'
+)
+
+websocket_connections = Gauge(
+    'optiflow_websocket_connections',
+    'Number of active WebSocket connections'
 )
 
 # Extended Tags Metrics (PI AF)
@@ -100,6 +117,48 @@ extended_tags_archived = Gauge(
     'extended_tags_archived',
     'Number of tags with archiving enabled',
     ['archive_type', 'gateway_id']
+)
+
+# Device & Tag Metrics
+devices_connected = Gauge(
+    'optiflow_devices_connected',
+    'Number of connected devices',
+    ['protocol', 'status']
+)
+
+tags_read_total = Counter(
+    'optiflow_tags_read_total',
+    'Total number of tag reads',
+    ['device', 'protocol']
+)
+
+alarms_active = Gauge(
+    'optiflow_alarms_active',
+    'Number of active alarms',
+    ['severity', 'type']
+)
+
+# InfluxDB Metrics
+influxdb_points_written_total = Counter(
+    'optiflow_influxdb_points_written_total',
+    'Total points written to InfluxDB',
+    ['measurement']
+)
+
+# System Metrics
+system_cpu_usage_percent = Gauge(
+    'optiflow_system_cpu_usage_percent',
+    'System CPU usage percentage'
+)
+
+system_memory_usage_bytes = Gauge(
+    'optiflow_system_memory_usage_bytes',
+    'System memory usage in bytes'
+)
+
+system_memory_available_bytes = Gauge(
+    'optiflow_system_memory_available_bytes',
+    'System available memory in bytes'
 )
 
 tag_formulas_total = Gauge(
@@ -152,6 +211,46 @@ active_alarms_total = Gauge(
     'Total active alarms',
     ['priority', 'gateway_id']
 )
+
+
+# ========================================
+# System Metrics Update Function
+# ========================================
+async def update_system_metrics():
+    """Update system metrics (CPU, memory, etc.)"""
+    try:
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=1)
+        system_cpu_usage_percent.set(cpu_percent)
+        
+        # Memory usage
+        memory = psutil.virtual_memory()
+        system_memory_usage_bytes.set(memory.used)
+        system_memory_available_bytes.set(memory.available)
+        
+        # Initialize database connections metric with default value
+        try:
+            db_connections_active.labels(database='postgres').set(1)
+        except Exception:
+            pass
+        
+        # Set initial values for user/connection metrics
+        active_users.set(0)
+        websocket_connections.set(0)
+        
+    except Exception as e:
+        logger.warning(f"Failed to update system metrics: {e}")
+
+
+async def metrics_updater():
+    """Background task to update metrics periodically"""
+    while True:
+        try:
+            await update_system_metrics()
+            await asyncio.sleep(15)  # Update every 15 seconds
+        except Exception as e:
+            logger.error(f"Error in metrics updater: {e}")
+            await asyncio.sleep(15)
 
 
 @asynccontextmanager
@@ -245,11 +344,40 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"🌐 Environment: {settings.ENVIRONMENT}")
     logger.info(f"📊 API Version: {settings.API_V1_PREFIX}")
+    
+    # Initialize Prometheus metrics system
+    try:
+        init_metrics(
+            app_name="optiflow",
+            version=settings.APP_VERSION,
+            environment=settings.ENVIRONMENT
+        )
+        logger.info("✅ Prometheus metrics initialized - monitoring enabled")
+    except Exception as e:
+        logger.warning(f"⚠️  Prometheus metrics initialization failed: {e}")
+        logger.warning("⚠️  System will continue without Prometheus metrics")
+    
+    # Start system metrics updater in background
+    metrics_task = None
+    try:
+        await update_system_metrics()  # Initial update
+        metrics_task = asyncio.create_task(metrics_updater())
+        logger.info("✅ System metrics updater started")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to start metrics updater: {e}")
 
     yield
 
     # Shutdown
     logger.info("👋 Shutting down OptiFlow AI Platform...")
+    
+    # Stop metrics updater
+    if metrics_task:
+        metrics_task.cancel()
+        try:
+            await metrics_task
+        except asyncio.CancelledError:
+            pass
 
     # Cleanup Kafka consumer
     try:
@@ -314,9 +442,13 @@ app.add_middleware(TimeoutMiddleware, timeout_seconds=settings.REQUEST_TIMEOUT_S
 # Circuit breaker middleware - handle cascading failures
 app.add_middleware(CircuitBreakerMiddleware)
 
-# Prometheus metrics middleware
+# Prometheus metrics middleware - must be added BEFORE routes are registered
+app.add_middleware(PrometheusMiddleware)
+logger.info("✅ Prometheus middleware added to FastAPI")
+
+# Legacy Prometheus metrics middleware (keep for backward compatibility)
 @app.middleware("http")
-async def prometheus_middleware(request: Request, call_next):
+async def legacy_prometheus_middleware(request: Request, call_next):
     """Track HTTP request metrics"""
     # Skip metrics endpoint itself to avoid recursion
     if request.url.path == "/metrics":
@@ -384,6 +516,11 @@ app.include_router(ai_agent_router, prefix="/api/v1/agent", tags=["ai-agent"])
 
 # Include WebSocket router for real-time streaming
 app.include_router(websocket_router, prefix="/api/v1")
+
+# Include metrics endpoint (Prometheus)
+from app.api.v1.endpoints.metrics import router as metrics_router
+app.include_router(metrics_router, tags=["monitoring"])
+logger.info("✅ Metrics endpoint registered at /metrics")
 
 
 @app.get("/")
