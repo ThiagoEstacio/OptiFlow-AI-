@@ -159,9 +159,11 @@ export const DevicesPage: React.FC = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <div className="text-3xl">
-                        {device.protocol === 'modbus' ? '📡' : 
-                         device.protocol === 'opc_ua' ? '🔗' : 
-                         device.protocol === 'mqtt' ? '📨' : '🔌'}
+                        {device.protocol === 'modbus_tcp' || device.protocol === 'modbus_rtu' ? '📡' : 
+                         device.protocol === 'opc_ua' || device.protocol === 'opcua' ? '🔗' : 
+                         device.protocol === 'mqtt' ? '📨' : 
+                         device.protocol === 's7' ? '🏭' :
+                         device.protocol === 'ethernetip' || device.protocol === 'ethernet_ip' ? '🌐' : '🔌'}
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-gray-900">{device.name}</h3>

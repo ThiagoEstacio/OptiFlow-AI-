@@ -65,7 +65,7 @@ export interface Site {
 }
 
 // Device types
-export type DeviceProtocol = "opc_ua" | "modbus" | "mqtt" | "s7" | "ethernet_ip" | "http";
+export type DeviceProtocol = "opcua" | "opc_ua" | "modbus_tcp" | "modbus_rtu" | "mqtt" | "s7" | "ethernet_ip" | "http";
 export type ProtocolType = DeviceProtocol;
 
 export interface Device {
