@@ -264,7 +264,7 @@ class ApiClient {
   }
 
   async getSite(id: string): Promise<Site> {
-    const response = await this.client.get<Site>(`/api/v1/sites/${id}`);
+    const response = await this.client.get<Site>(`/api/v1/sites/${id}/`);
     return response.data;
   }
 
@@ -274,12 +274,12 @@ class ApiClient {
   }
 
   async updateSite(id: string, data: Partial<Site>): Promise<Site> {
-    const response = await this.client.put<Site>(`/api/v1/sites/${id}`, data);
+    const response = await this.client.put<Site>(`/api/v1/sites/${id}/`, data);
     return response.data;
   }
 
   async deleteSite(id: string): Promise<void> {
-    await this.client.delete(`/api/v1/sites/${id}`);
+    await this.client.delete(`/api/v1/sites/${id}/`);
   }
 
   // Device endpoints
@@ -289,7 +289,7 @@ class ApiClient {
   }
 
   async getDevice(id: string): Promise<Device> {
-    const response = await this.client.get<Device>(`/api/v1/devices/${id}`);
+    const response = await this.client.get<Device>(`/api/v1/devices/${id}/`);
     return response.data;
   }
 
@@ -299,40 +299,23 @@ class ApiClient {
   }
 
   async updateDevice(id: string, data: Partial<Device>): Promise<Device> {
-    const response = await this.client.put<Device>(`/api/v1/devices/${id}`, data);
+    const response = await this.client.put<Device>(`/api/v1/devices/${id}/`, data);
     return response.data;
   }
 
   async deleteDevice(id: string): Promise<void> {
-    await this.client.delete(`/api/v1/devices/${id}`);
+    await this.client.delete(`/api/v1/devices/${id}/`);
   }
 
   // Tag endpoints
   async getTags(params?: { device_id?: string }): Promise<Tag[]> {
-    // Use gateway-config/all-tags endpoint to get all gateway tags
-    const response = await this.client.get<any[]>('/api/v1/gateway-config/all-tags', {
-      params: { limit: 10000 }
-    });
-    // Transform gateway tags to Tag format
-    return response.data.map((tag: any) => ({
-      id: tag.id.toString(),
-      name: tag.tag_name,
-      address: tag.address_config?.node_id || JSON.stringify(tag.address_config),
-      device_id: tag.gateway_id.toString(),
-      data_type: tag.data_type.toUpperCase(),
-      unit: tag.unit || '',
-      description: tag.description || '',
-      enabled: tag.enabled,
-      log_enabled: false,
-      scale_factor: tag.scale_factor,
-      offset: tag.offset,
-      created_at: tag.created_at,
-      updated_at: tag.created_at
-    }));
+    // Use the main tags endpoint
+    const response = await this.client.get<Tag[]>('/api/v1/tags/', { params });
+    return response.data;
   }
 
   async getTag(id: string): Promise<Tag> {
-    const response = await this.client.get<Tag>(`/api/v1/tags/${id}`);
+    const response = await this.client.get<Tag>(`/api/v1/tags/${id}/`);
     return response.data;
   }
 
@@ -342,12 +325,12 @@ class ApiClient {
   }
 
   async updateTag(id: string, data: Partial<Tag>): Promise<Tag> {
-    const response = await this.client.put<Tag>(`/api/v1/tags/${id}`, data);
+    const response = await this.client.put<Tag>(`/api/v1/tags/${id}/`, data);
     return response.data;
   }
 
   async deleteTag(id: string): Promise<void> {
-    await this.client.delete(`/api/v1/tags/${id}`);
+    await this.client.delete(`/api/v1/tags/${id}/`);
   }
 
   // Timeseries endpoints
