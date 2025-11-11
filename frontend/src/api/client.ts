@@ -309,9 +309,11 @@ class ApiClient {
 
   // Tag endpoints
   async getTags(params?: { device_id?: string }): Promise<Tag[]> {
-    // Use the main tags endpoint
-    const response = await this.client.get<Tag[]>('/api/v1/tags/', { params });
-    return response.data;
+    // Use the active tags endpoint from InfluxDB to show real-time discovered tags
+    const response = await this.client.get<{ tags: Tag[] }>('/api/v1/timeseries/tags/active', { 
+      params: { lookback_hours: 24 }
+    });
+    return response.data.tags || [];
   }
 
   async getTag(id: string): Promise<Tag> {
