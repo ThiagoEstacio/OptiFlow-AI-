@@ -11,7 +11,6 @@ from app.core.config import settings
 from app.services.backend_client import BackendClient
 from app.services.buffer import DataBuffer
 from app.services.device_manager import DeviceManager
-from app.services.simulator_poller import SimulatorPoller
 from app.services.config_loader import ConfigLoader
 
 
@@ -26,12 +25,10 @@ class Gateway:
         self.backend_client: Optional[BackendClient] = None
         self.buffer: Optional[DataBuffer] = None
         self.device_manager: Optional[DeviceManager] = None
-        self.simulator_poller: Optional[SimulatorPoller] = None
 
         # Tasks
         self._health_check_task: Optional[asyncio.Task] = None
         self._buffer_flush_task: Optional[asyncio.Task] = None
-        self._simulator_poll_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
         """Initialize gateway components"""
@@ -69,14 +66,10 @@ class Gateway:
                 buffer=self.buffer
             )
 
-            # Initialize simulator poller
-            logger.info("Initializing simulator poller...")
-            self.simulator_poller = SimulatorPoller(
-                simulator_url=settings.BACKEND_URL,  # Simulator runs on same host as backend
-                backend_client=self.backend_client,
-                poll_interval_s=1.0  # Poll every second
-            )
-            await self.simulator_poller.initialize()
+            # Note: SimulatorPoller REMOVED
+            # Real industrial architecture: Gateway connects to PLC/SCADA via OPC UA
+            # SimulatorPoller (HTTP REST) was a temporary workaround
+            # Now using proper OPC UA client -> OPC UA server (opcua-server:4840)
 
             logger.info("=" * 60)
             logger.info("  ✅ Gateway initialized successfully")
@@ -297,12 +290,11 @@ class Gateway:
             # Start background tasks
             self._health_check_task = asyncio.create_task(self.health_check_loop())
             self._buffer_flush_task = asyncio.create_task(self.buffer_flush_loop())
-            self._simulator_poll_task = asyncio.create_task(self.simulator_poller.start_polling())
 
             logger.info("")
             logger.info("=" * 60)
             logger.info("  ✅ Gateway is running")
-            logger.info("  📡 Polling simulator → Backend → InfluxDB")
+            logger.info("  � OPC UA Client → opcua-server:4840 → Kafka → InfluxDB")
             logger.info("  Press Ctrl+C to stop")
             logger.info("=" * 60)
             logger.info("")
@@ -311,7 +303,6 @@ class Gateway:
             await asyncio.gather(
                 self._health_check_task,
                 self._buffer_flush_task,
-                self._simulator_poll_task,
                 return_exceptions=True
             )
 
@@ -342,17 +333,6 @@ class Gateway:
                 await self._buffer_flush_task
             except asyncio.CancelledError:
                 pass
-
-        if self._simulator_poll_task:
-            self._simulator_poll_task.cancel()
-            try:
-                await self._simulator_poll_task
-            except asyncio.CancelledError:
-                pass
-
-        # Shutdown simulator poller
-        if self.simulator_poller:
-            await self.simulator_poller.close()
 
         # Shutdown device manager
         if self.device_manager:
