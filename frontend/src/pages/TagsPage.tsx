@@ -426,6 +426,7 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                         <TableCell><strong>Nome</strong></TableCell>
                         <TableCell><strong>Endereço</strong></TableCell>
                         <TableCell><strong>Tipo</strong></TableCell>
+                        <TableCell><strong>Último Valor</strong></TableCell>
                         <TableCell><strong>Unidade</strong></TableCell>
                         <TableCell><strong>Status</strong></TableCell>
                         <TableCell align="right"><strong>Ações</strong></TableCell>
@@ -434,7 +435,7 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                     <TableBody>
                       {filteredTags.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                          <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                             <Typography variant="body2" color="text.secondary">
                               Nenhum tag encontrado
                             </Typography>
@@ -456,6 +457,24 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                             </TableCell>
                             <TableCell>
                               <Chip label={tag.data_type} size="small" color="secondary" variant="outlined" />
+                            </TableCell>
+                            <TableCell>
+                              {tag.last_value !== null && tag.last_value !== undefined ? (
+                                <Box>
+                                  <Typography variant="body2" fontWeight="medium" color="primary">
+                                    {typeof tag.last_value === 'number' 
+                                      ? tag.last_value.toFixed(2) 
+                                      : tag.last_value}
+                                  </Typography>
+                                  {tag.last_timestamp && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      {new Date(tag.last_timestamp).toLocaleTimeString()}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">-</Typography>
+                              )}
                             </TableCell>
                             <TableCell>{tag.unit || '-'}</TableCell>
                             <TableCell>

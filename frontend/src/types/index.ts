@@ -120,6 +120,11 @@ export interface Tag {
   settings?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  // Real-time values from InfluxDB
+  last_value?: number | string | boolean | null;
+  last_quality?: string;
+  last_timestamp?: string;
+  source?: string; // 'influxdb', 'postgresql', etc.
 }
 
 // Timeseries types
@@ -160,7 +165,6 @@ export interface AlarmDefinition {
   enabled: boolean;
   log_enabled?: boolean;
   notification_enabled: boolean;
-  log_enabled?: boolean;
   notification_emails?: string[];
   notification_sms?: string[];
   message_template?: string;
