@@ -21,10 +21,11 @@ from app.core.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.tag import Tag
 from app.services.ai_insights import get_ai_insights_service
-from app.services.influxdb import influxdb_service
+from app.services.optimized_influxdb_service import optimized_influxdb_service as influxdb_service
 from app.services.autonomous_agent import get_autonomous_agent
 from app.services.data_service import DataService
 from app.services.agent_tools import AgentToolkit
+from app.services.cache_service import cached
 from app.schemas.ai_insights import (
     AnomalyDetectionRequest,
     AnomalyDetectionResult,
@@ -90,6 +91,7 @@ async def get_autonomous_insights(
 
 
 @router.get("/insights/autonomous/summary", response_model=dict)
+@cached(ttl=45, key_prefix="autonomous_summary")
 async def get_autonomous_summary(
     current_user: User = Depends(get_current_user)
 ):
@@ -638,6 +640,7 @@ async def update_baseline(
 # ============================================================================
 
 @router.get("/dashboard/summary", response_model=AIDashboardSummary)
+@cached(ttl=60, key_prefix="ai_dashboard")
 async def get_dashboard_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -855,6 +858,7 @@ async def get_dashboard_summary_public(db: AsyncSession = Depends(get_db)):
 # ============================================================================
 
 @router.get("/models", response_model=ModelListResponse)
+@cached(ttl=300, key_prefix="models_list")
 async def list_models(
     model_type: Optional[str] = Query(None, description="Filter by model type"),
     status: Optional[str] = Query(None, description="Filter by status"),

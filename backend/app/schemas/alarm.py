@@ -90,20 +90,19 @@ class AlarmEventBase(BaseModel):
     value: Optional[float] = None
 
 
-class AlarmEventResponse(AlarmEventBase):
+class AlarmEventResponse(BaseModel):
     """Schema for Alarm Event response"""
     id: UUID
-    tag_id: Optional[UUID] = None
-    alarm_definition_id: Optional[UUID] = None
-    status: str  # ACTIVE, ACKNOWLEDGED, RESOLVED
-    triggered_at: datetime
+    definition_id: UUID
+    state: str  # ACTIVE, ACKNOWLEDGED, CLEARED
     trigger_value: Optional[float] = None
+    trigger_timestamp: datetime
     acknowledged_at: Optional[datetime] = None
     acknowledged_by: Optional[UUID] = None
     acknowledgment_comment: Optional[str] = None
     cleared_at: Optional[datetime] = None
     clear_value: Optional[float] = None
-    duration_seconds: Optional[int] = None
+    duration_seconds: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 

@@ -19,6 +19,7 @@ from app.schemas.asset import (
     AssetInstantiateRequest
 )
 from app.services.asset_calculator import AssetAttributeCalculator, FormulaEvaluationError
+from app.services.cache_service import cached
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -868,6 +869,7 @@ async def get_hierarchy_health(
 
 
 @router.get("/health/overview")
+@cached(ttl=240, key_prefix="assets_health_overview")
 async def get_all_assets_health_overview(
     skip: int = 0,
     limit: int = 100,

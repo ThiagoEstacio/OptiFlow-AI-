@@ -1,0 +1,271 @@
+{
+  "dashboard": {
+    "title": "OptiFlow - System Health",
+    "tags": ["optiflow", "infrastructure", "health"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "CPU Usage by Container",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name=~\"optiflow.*\"}[5m]) * 100",
+            "legendFormat": "{{name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "CPU %"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "Memory Usage by Container",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"optiflow.*\"} / 1024 / 1024",
+            "legendFormat": "{{name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "mbytes", "label": "Memory (MB)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Container Status",
+        "targets": [
+          {
+            "expr": "container_up{name=~\"optiflow.*\"}",
+            "legendFormat": "{{name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Status (1=Up, 0=Down)", "max": 1.5, "min": -0.5},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "graph",
+        "title": "Network I/O",
+        "targets": [
+          {
+            "expr": "rate(container_network_receive_bytes_total{name=~\"optiflow.*\"}[5m]) / 1024",
+            "legendFormat": "RX - {{name}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(container_network_transmit_bytes_total{name=~\"optiflow.*\"}[5m]) / 1024",
+            "legendFormat": "TX - {{name}}",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "KBs", "label": "Network KB/s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 16},
+        "type": "stat",
+        "title": "PostgreSQL Connections",
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends{datname=\"optiflow\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 80, "color": "yellow"},
+                {"value": 100, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 16},
+        "type": "stat",
+        "title": "Redis Memory Usage",
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / 1024 / 1024",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "mbytes",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 500, "color": "yellow"},
+                {"value": 1000, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 16},
+        "type": "stat",
+        "title": "Redis Hit Rate",
+        "targets": [
+          {
+            "expr": "(redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total)) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 50, "color": "yellow"},
+                {"value": 75, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 16},
+        "type": "stat",
+        "title": "InfluxDB Write Rate",
+        "targets": [
+          {
+            "expr": "rate(influxdb_writes_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "wps",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "blue"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+        "type": "graph",
+        "title": "Disk I/O",
+        "targets": [
+          {
+            "expr": "rate(container_fs_reads_bytes_total{name=~\"optiflow.*\"}[5m]) / 1024 / 1024",
+            "legendFormat": "Read - {{name}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(container_fs_writes_bytes_total{name=~\"optiflow.*\"}[5m]) / 1024 / 1024",
+            "legendFormat": "Write - {{name}}",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "MBs", "label": "Disk MB/s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+        "type": "graph",
+        "title": "PostgreSQL Query Performance",
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blks_read{datname=\"optiflow\"}[5m])",
+            "legendFormat": "Disk Blocks Read",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pg_stat_database_blks_hit{datname=\"optiflow\"}[5m])",
+            "legendFormat": "Cache Blocks Hit",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Blocks/s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 11,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 30},
+        "type": "table",
+        "title": "Container Resource Usage Summary",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"optiflow.*\"} / 1024 / 1024",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          },
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name=~\"optiflow.*\"}[5m]) * 100",
+            "format": "table",
+            "instant": true,
+            "refId": "B"
+          },
+          {
+            "expr": "container_up{name=~\"optiflow.*\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "C"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true, "id": true, "image": true},
+              "renameByName": {
+                "name": "Container",
+                "Value #A": "Memory (MB)",
+                "Value #B": "CPU %",
+                "Value #C": "Status"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

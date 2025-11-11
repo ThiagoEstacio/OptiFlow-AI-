@@ -1,0 +1,14 @@
+sensor_temp
+sensor_pressure
+sensor_vibration
+sensor_flow
+sensor_voltage
+sensor_temp_roll_mean
+sensor_temp_roll_std
+sensor_temp_diff
+sensor_pressure_roll_mean
+sensor_pressure_roll_std
+sensor_pressure_diff
+sensor_vibration_roll_mean
+sensor_vibration_roll_std
+sensor_vibration_diff

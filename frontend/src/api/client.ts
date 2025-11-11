@@ -410,6 +410,11 @@ class ApiClient {
   }
 
   async getAlarmEvents(params?: { active?: boolean }): Promise<AlarmEvent[]> {
+    // Use /alarms/active endpoint for active alarms (more efficient)
+    if (params?.active === true) {
+      const response = await this.client.get<AlarmEvent[]>('/api/v1/alarms/active');
+      return response.data;
+    }
     const response = await this.client.get<AlarmEvent[]>('/api/v1/alarms/events/', { params });
     return response.data;
   }

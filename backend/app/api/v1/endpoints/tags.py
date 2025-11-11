@@ -13,13 +13,15 @@ from app.db.session import get_db
 from app.models.tag import Tag
 from app.schemas.tag import TagCreate, TagUpdate, TagResponse
 from app.services.opcua_tag_reader import update_tag_values_from_opcua
-from app.services.influxdb import influxdb_service
+from app.services.optimized_influxdb_service import optimized_influxdb_service as influxdb_service
+from app.services.cache_service import cached
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/", response_model=List[TagResponse])
+@cached(ttl=120, key_prefix="tags_list")
 async def list_tags(
     skip: int = 0,
     limit: int = 100,

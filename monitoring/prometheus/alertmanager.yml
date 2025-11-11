@@ -1,121 +1,345 @@
-# SmartPort Alertmanager Configuration
+# OptiFlow AI - Alertmanager Configuration
+# ============================================
+# Production alerting with multiple receivers:
+# - Email (SMTP)
+# - Slack (Webhook)
+# - PagerDuty (for critical)
+# ============================================
 
 global:
   resolve_timeout: 5m
-  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
-  smtp_from: '${SMTP_FROM}'
-  smtp_auth_username: '${SMTP_USER}'
-  smtp_auth_password: '${SMTP_PASSWORD}'
+  
+  # SMTP Configuration
+  smtp_smarthost: '${ALERTMANAGER_SMTP_HOST:-smtp.gmail.com}:${ALERTMANAGER_SMTP_PORT:-587}'
+  smtp_from: '${ALERTMANAGER_SMTP_FROM:-alerts@optiflow.com}'
+  smtp_auth_username: '${ALERTMANAGER_SMTP_USER:-alerts@optiflow.com}'
+  smtp_auth_password: '${ALERTMANAGER_SMTP_PASSWORD}'
+  smtp_require_tls: true
+  
+  # PagerDuty Configuration
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+  
+  # Slack Configuration  
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
 
 # Templates for notifications
 templates:
   - '/etc/alertmanager/templates/*.tmpl'
 
-# Route tree
+# Route tree - Define routing logic
 route:
   receiver: 'default'
-  group_by: ['alertname', 'cluster', 'service']
-  group_wait: 10s
-  group_interval: 10s
-  repeat_interval: 12h
-
+  group_by: ['alertname', 'severity', 'component']
+  group_wait: 10s        # Wait to buffer alerts of the same group
+  group_interval: 5m     # Time to wait before sending notification about new alerts
+  repeat_interval: 4h    # Time to wait before re-sending a notification
+  
   routes:
-    # Critical alerts
+    # ============================================
+    # CRITICAL Alerts - Immediate notification
+    # ============================================
     - match:
         severity: critical
-      receiver: 'critical-alerts'
+      receiver: 'critical-pagerduty'
+      group_wait: 0s              # Send immediately
+      group_interval: 1m
+      repeat_interval: 2h
+      continue: true              # Also send to other receivers
+      
+    - match:
+        severity: critical
+      receiver: 'critical-slack'
       group_wait: 0s
       group_interval: 1m
+      repeat_interval: 2h
+      continue: true
+      
+    - match:
+        severity: critical
+      receiver: 'critical-email'
+      group_wait: 10s
+      group_interval: 5m
       repeat_interval: 4h
-
-    # Warning alerts
+    
+    # ============================================
+    # WARNING Alerts - Buffered notification
+    # ============================================
     - match:
         severity: warning
-      receiver: 'warning-alerts'
+      receiver: 'warning-slack'
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 12h
-
-    # Infrastructure alerts
+      continue: true
+      
+    - match:
+        severity: warning
+      receiver: 'warning-email'
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 12h
+    
+    # ============================================
+    # Component-Specific Routes
+    # ============================================
+    
+    # Infrastructure issues
     - match:
         component: infrastructure
-      receiver: 'infrastructure-alerts'
+      receiver: 'infra-team'
+      group_wait: 30s
+      repeat_interval: 6h
+    
+    # Database issues
+    - match_re:
+        component: (database|postgres|influxdb|redis)
+      receiver: 'dba-team'
+      group_wait: 1m
+      repeat_interval: 4h
+    
+    # Security issues
+    - match:
+        component: security
+      receiver: 'security-team'
+      group_wait: 0s
+      repeat_interval: 1h
+    
+    # Backup failures
+    - match:
+        component: backup
+      receiver: 'ops-team'
+      group_wait: 5m
+      repeat_interval: 24h
+    
+    # ML/AI issues
+    - match_re:
+        component: (ml_inference|ai_agent)
+      receiver: 'ml-team'
+      group_wait: 1m
+      repeat_interval: 8h
 
-    # Database alerts
-    - match:
-        component: postgres
-      receiver: 'database-alerts'
-    - match:
-        component: influxdb
-      receiver: 'database-alerts'
-    - match:
-        component: redis
-      receiver: 'database-alerts'
-
-    # Gateway alerts
-    - match:
-        component: gateway
-      receiver: 'gateway-alerts'
-
-# Receivers
+# ============================================
+# Receivers - Notification endpoints
+# ============================================
 receivers:
+  # Default receiver
   - name: 'default'
     email_configs:
-      - to: '${ALERT_EMAIL_DEFAULT}'
+      - to: '${ALERTMANAGER_SMTP_TO:-ops@optiflow.com}'
         send_resolved: true
         headers:
-          Subject: '[SmartPort] Alert: {{ .GroupLabels.alertname }}'
-
-  - name: 'critical-alerts'
+          Subject: '[OptiFlow] {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          <p><b>Severity:</b> {{ .GroupLabels.severity }}</p>
+          <p><b>Summary:</b> {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}</p>
+          <p><b>Description:</b> {{ range .Alerts }}{{ .Annotations.description }}{{ end }}</p>
+          <p><b>Action:</b> {{ range .Alerts }}{{ .Annotations.action }}{{ end }}</p>
+  
+  # ============================================
+  # Critical Alert Receivers
+  # ============================================
+  
+  - name: 'critical-pagerduty'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        severity: 'critical'
+        description: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        details:
+          summary: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+          description: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+          action: '{{ range .Alerts }}{{ .Annotations.action }}{{ end }}'
+          runbook: '{{ range .Alerts }}{{ .Annotations.runbook }}{{ end }}'
+  
+  - name: 'critical-slack'
+    slack_configs:
+      - channel: '#optiflow-alerts-critical'
+        username: 'OptiFlow Alertmanager'
+        icon_emoji: ':rotating_light:'
+        color: 'danger'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          *Severity:* {{ .GroupLabels.severity | toUpper }}
+          *Component:* {{ .GroupLabels.component }}
+          
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Action:* {{ .Annotations.action }}
+          *Runbook:* {{ .Annotations.runbook }}
+          {{ end }}
+        send_resolved: true
+  
+  - name: 'critical-email'
     email_configs:
-      - to: '${ALERT_EMAIL_CRITICAL}'
+      - to: '${ALERTMANAGER_SMTP_TO:-ops@optiflow.com}'
         send_resolved: true
         headers:
-          Subject: '[SmartPort CRITICAL] {{ .GroupLabels.alertname }}'
-    # Add webhook for Slack/Teams/PagerDuty here
-    # webhook_configs:
-    #   - url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
-
-  - name: 'warning-alerts'
+          Subject: '🚨 [CRITICAL] OptiFlow - {{ .GroupLabels.alertname }}'
+          Priority: 'urgent'
+        html: |
+          <html>
+          <body style="font-family: Arial, sans-serif;">
+            <div style="background-color: #dc3545; color: white; padding: 20px; border-radius: 5px;">
+              <h1>🚨 CRITICAL ALERT</h1>
+              <h2>{{ .GroupLabels.alertname }}</h2>
+            </div>
+            <div style="padding: 20px;">
+              <p><b>Component:</b> {{ .GroupLabels.component }}</p>
+              <p><b>Fired at:</b> {{ range .Alerts }}{{ .StartsAt }}{{ end }}</p>
+              
+              {{ range .Alerts }}
+              <h3>Details:</h3>
+              <p><b>Summary:</b> {{ .Annotations.summary }}</p>
+              <p><b>Description:</b> {{ .Annotations.description }}</p>
+              
+              <h3>Action Required:</h3>
+              <p>{{ .Annotations.action }}</p>
+              
+              <h3>Runbook:</h3>
+              <p><a href="{{ .Annotations.runbook }}">{{ .Annotations.runbook }}</a></p>
+              {{ end }}
+            </div>
+          </body>
+          </html>
+  
+  # ============================================
+  # Warning Alert Receivers
+  # ============================================
+  
+  - name: 'warning-slack'
+    slack_configs:
+      - channel: '#optiflow-alerts'
+        username: 'OptiFlow Alertmanager'
+        icon_emoji: ':warning:'
+        color: 'warning'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          *Severity:* {{ .GroupLabels.severity | toUpper }}
+          *Component:* {{ .GroupLabels.component }}
+          
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+  
+  - name: 'warning-email'
     email_configs:
-      - to: '${ALERT_EMAIL_WARNING}'
+      - to: '${ALERTMANAGER_SMTP_TO:-ops@optiflow.com}'
         send_resolved: true
         headers:
-          Subject: '[SmartPort WARNING] {{ .GroupLabels.alertname }}'
-
-  - name: 'infrastructure-alerts'
+          Subject: '⚠️ [WARNING] OptiFlow - {{ .GroupLabels.alertname }}'
+        html: |
+          <html>
+          <body style="font-family: Arial, sans-serif;">
+            <div style="background-color: #ffc107; color: black; padding: 20px; border-radius: 5px;">
+              <h1>⚠️ WARNING</h1>
+              <h2>{{ .GroupLabels.alertname }}</h2>
+            </div>
+            <div style="padding: 20px;">
+              {{ range .Alerts }}
+              <p><b>Summary:</b> {{ .Annotations.summary }}</p>
+              <p><b>Description:</b> {{ .Annotations.description }}</p>
+              <p><b>Action:</b> {{ .Annotations.action }}</p>
+              {{ end }}
+            </div>
+          </body>
+          </html>
+  
+  # ============================================
+  # Team-Specific Receivers
+  # ============================================
+  
+  - name: 'infra-team'
     email_configs:
-      - to: '${ALERT_EMAIL_INFRA}'
+      - to: 'infra@optiflow.com'
         send_resolved: true
         headers:
-          Subject: '[SmartPort Infrastructure] {{ .GroupLabels.alertname }}'
-
-  - name: 'database-alerts'
+          Subject: '[OptiFlow Infrastructure] {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#team-infrastructure'
+        send_resolved: true
+  
+  - name: 'dba-team'
     email_configs:
-      - to: '${ALERT_EMAIL_DB}'
+      - to: 'dba@optiflow.com'
         send_resolved: true
         headers:
-          Subject: '[SmartPort Database] {{ .GroupLabels.alertname }}'
-
-  - name: 'gateway-alerts'
+          Subject: '[OptiFlow Database] {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#team-database'
+        send_resolved: true
+  
+  - name: 'security-team'
     email_configs:
-      - to: '${ALERT_EMAIL_GATEWAY}'
+      - to: 'security@optiflow.com'
         send_resolved: true
         headers:
-          Subject: '[SmartPort Gateway] {{ .GroupLabels.alertname }}'
+          Subject: '🔒 [OptiFlow Security] {{ .GroupLabels.alertname }}'
+          Priority: 'urgent'
+    slack_configs:
+      - channel: '#team-security'
+        send_resolved: true
+        color: 'danger'
+  
+  - name: 'ops-team'
+    email_configs:
+      - to: 'ops@optiflow.com'
+        send_resolved: true
+        headers:
+          Subject: '[OptiFlow Ops] {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#team-ops'
+        send_resolved: true
+  
+  - name: 'ml-team'
+    email_configs:
+      - to: 'ml@optiflow.com'
+        send_resolved: true
+        headers:
+          Subject: '[OptiFlow ML] {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#team-ml'
+        send_resolved: true
 
-# Inhibition rules
+# ============================================
+# Inhibition Rules - Reduce alert noise
+# ============================================
 inhibit_rules:
-  # Inhibit warning if critical is firing
+  # Don't send warning if critical is already firing
   - source_match:
       severity: 'critical'
     target_match:
       severity: 'warning'
-    equal: ['alertname', 'instance']
-
-  # Inhibit any alert if service is down
+    equal: ['alertname', 'instance', 'component']
+  
+  # Don't send app alerts if service is down
   - source_match:
-      alertname: 'BackendDown'
+      alertname: 'ServiceDown'
     target_match_re:
-      alertname: '.*(Backend|API).*'
+      component: '(application|performance)'
+    equal: ['job', 'instance']
+  
+  # Don't send database alerts if disk is full
+  - source_match:
+      alertname: 'DiskSpaceLow'
+    target_match_re:
+      component: 'database'
     equal: ['instance']
+  
+  # Don't send performance alerts if memory is critical
+  - source_match:
+      alertname: 'HighMemoryUsage'
+    target_match:
+      component: 'performance'
+    equal: ['instance']
+  
+  # Don't send data ingestion alerts if gateway is down
+  - source_match:
+      alertname: 'ServiceDown'
+      job: 'gateway'
+    target_match:
+      component: 'data_pipeline'
+    equal: ['instance']
+

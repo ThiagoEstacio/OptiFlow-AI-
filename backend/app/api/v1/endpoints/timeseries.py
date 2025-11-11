@@ -12,7 +12,7 @@ import hashlib
 import json
 
 from app.db.session import get_db
-from app.services.influxdb import influxdb_service
+from app.services.optimized_influxdb_service import optimized_influxdb_service as influxdb_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

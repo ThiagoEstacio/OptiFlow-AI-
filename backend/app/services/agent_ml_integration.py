@@ -378,6 +378,157 @@ class AgentMLIntegration:
                 logger.error(f"Erro no monitoramento periódico: {e}")
                 await asyncio.sleep(60)  # Aguardar 1 min antes de tentar novamente
 
+    
+    async def query_ml_anomalies(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        tag_id: Optional[str] = None,
+        limit: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Consulta anomalias detectadas pelo modelo ML treinado
+        
+        Args:
+            start_date: Data inicial (YYYY-MM-DD), default: 7 dias atrás
+            end_date: Data final (YYYY-MM-DD), default: hoje
+            tag_id: Filtrar por tag específica
+            limit: Número máximo de pontos a analisar
+            
+        Returns:
+            Dict com anomalias detectadas e estatísticas
+        """
+        try:
+            import httpx
+            from datetime import timedelta
+            
+            # Build query parameters
+            params = {"limit": limit}
+            if start_date:
+                params["start_date"] = start_date
+            if end_date:
+                params["end_date"] = end_date
+            if tag_id:
+                params["tag_id"] = tag_id
+            
+            # Query internal API (same container)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "http://localhost:8000/api/v1/analytics/anomalies",
+                    params=params,
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                return response.json()
+                
+        except Exception as e:
+            logger.error(f"Error querying ML anomalies: {e}")
+            return {
+                "error": str(e),
+                "total_points": 0,
+                "anomalies_detected": 0,
+                "anomalies": []
+            }
+    
+    
+    async def get_ml_model_info(self) -> Dict[str, Any]:
+        """
+        Obtém informações sobre o modelo ML treinado
+        
+        Returns:
+            Dict com tipo de modelo, features, status
+        """
+        try:
+            import httpx
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "http://localhost:8000/api/v1/analytics/model-info",
+                    timeout=5.0
+                )
+                response.raise_for_status()
+                return response.json()
+                
+        except Exception as e:
+            logger.error(f"Error getting ML model info: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    
+    async def get_recent_anomalies_summary(
+        self,
+        hours: int = 24
+    ) -> Dict[str, Any]:
+        """
+        Obtém resumo de anomalias recentes para contexto do Agent
+        
+        Args:
+            hours: Número de horas para analisar
+            
+        Returns:
+            Dict com resumo formatado para o Agent
+        """
+        from datetime import datetime, timedelta
+        
+        end_date = datetime.now()
+        start_date = end_date - timedelta(hours=hours)
+        
+        anomalies_data = await self.query_ml_anomalies(
+            start_date=start_date.strftime("%Y-%m-%d"),
+            end_date=end_date.strftime("%Y-%m-%d"),
+            limit=1000
+        )
+        
+        if "error" in anomalies_data:
+            return {
+                "status": "error",
+                "message": anomalies_data["error"]
+            }
+        
+        # Agrupar anomalias por tag
+        anomalies_by_tag = {}
+        for anomaly in anomalies_data.get("anomalies", []):
+            tag = anomaly.get("tag_id", "unknown")
+            if tag not in anomalies_by_tag:
+                anomalies_by_tag[tag] = {
+                    "count": 0,
+                    "max_score": 0.0,
+                    "anomalies": []
+                }
+            anomalies_by_tag[tag]["count"] += 1
+            anomalies_by_tag[tag]["max_score"] = max(
+                anomalies_by_tag[tag]["max_score"],
+                anomaly.get("anomaly_score", 0.0)
+            )
+            anomalies_by_tag[tag]["anomalies"].append(anomaly)
+        
+        # Tags mais problemáticas (mais anomalias)
+        top_tags = sorted(
+            anomalies_by_tag.items(),
+            key=lambda x: x[1]["count"],
+            reverse=True
+        )[:5]
+        
+        return {
+            "status": "success",
+            "time_range_hours": hours,
+            "total_points_analyzed": anomalies_data.get("total_points", 0),
+            "total_anomalies": anomalies_data.get("anomalies_detected", 0),
+            "anomaly_rate": anomalies_data.get("anomaly_rate", 0.0),
+            "model_used": anomalies_data.get("model_used", "unknown"),
+            "anomalies_by_tag": dict(anomalies_by_tag),
+            "top_problematic_tags": [
+                {
+                    "tag_id": tag,
+                    "anomaly_count": data["count"],
+                    "max_score": data["max_score"]
+                }
+                for tag, data in top_tags
+            ]
+        }
+
 
 # Singleton instance
 agent_ml_integration = AgentMLIntegration()

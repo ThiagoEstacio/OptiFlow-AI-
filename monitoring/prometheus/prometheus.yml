@@ -112,3 +112,29 @@ scrape_configs:
           service: 'cadvisor'
           component: 'containers'
     scrape_interval: 30s        # Menos frequente para containers
+
+  # ======================================================================
+  # OLLAMA (LLM Service)
+  # ======================================================================
+  - job_name: 'ollama'
+    static_configs:
+      - targets: ['ollama:11434']
+        labels:
+          service: 'ollama'
+          component: 'ai'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 5s
+
+  # ======================================================================
+  # MLFLOW (ML Experiment Tracking)
+  # ======================================================================
+  - job_name: 'mlflow'
+    static_configs:
+      - targets: ['mlflow:5000']
+        labels:
+          service: 'mlflow'
+          component: 'ml'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 5s

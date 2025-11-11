@@ -1,0 +1,318 @@
+{
+  "dashboard": {
+    "title": "OptiFlow Pipeline Monitoring",
+    "tags": ["optiflow", "pipeline", "timeseries"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Gateway - Messages Published Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(gateway_messages_published_total{status=\"success\"}[1m])",
+            "legendFormat": "Success",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gateway_messages_published_total{status=\"failed\"}[1m])",
+            "legendFormat": "Failed",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gateway_messages_published_total{status=\"buffered\"}[1m])",
+            "legendFormat": "Buffered",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Gateway - Publish Latency (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(gateway_publish_latency_seconds_bucket[1m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(gateway_publish_latency_seconds_bucket[1m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(gateway_publish_latency_seconds_bucket[1m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Gateway - Circuit Breaker State",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "gateway_circuit_breaker_state",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "background",
+          "textMode": "value_and_name"
+        },
+        "mappings": [
+          {"type": "value", "value": "0", "text": "CLOSED"},
+          {"type": "value", "value": "1", "text": "HALF_OPEN"},
+          {"type": "value", "value": "2", "text": "OPEN"}
+        ],
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            {"value": 0, "color": "green"},
+            {"value": 1, "color": "yellow"},
+            {"value": 2, "color": "red"}
+          ]
+        }
+      },
+      {
+        "id": 4,
+        "title": "Gateway - Buffer Size",
+        "type": "graph",
+        "gridPos": {"x": 6, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "gateway_buffer_size",
+            "legendFormat": "Buffered Messages",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Messages"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Gateway - Tags Discovered",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "gateway_tags_discovered",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 6,
+        "title": "Gateway - Transformations Applied",
+        "type": "graph",
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "rate(gateway_transformations_applied_total[1m])",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Transformations/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Consumer - Messages Consumed Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(consumer_messages_consumed_total[1m])",
+            "legendFormat": "Consumed",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(consumer_messages_written_total{status=\"success\"}[1m])",
+            "legendFormat": "Written (Success)",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(consumer_messages_written_total{status=\"failed\"}[1m])",
+            "legendFormat": "Written (Failed)",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Consumer - Write Latency (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(consumer_write_latency_seconds_bucket[1m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(consumer_write_latency_seconds_bucket[1m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(consumer_write_latency_seconds_bucket[1m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Consumer - Adaptive Batch Size",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 20, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "consumer_batch_size_current",
+            "legendFormat": "Current Batch Size",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Batch Size", "min": 0, "max": 550},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Consumer - Deduplication Hits",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 20, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(consumer_dedup_hits_total[1m])",
+            "legendFormat": "Duplicates Detected",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Duplicates/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Consumer - DLQ Messages Sent",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 20, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(consumer_dlq_messages_total[1m])",
+            "legendFormat": "{{reason}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "DLQ Messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "DLQ Processor - Messages Processed",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 26, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(dlq_messages_processed_total{status=\"success\"}[1m])",
+            "legendFormat": "Success",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(dlq_messages_processed_total{status=\"failed\"}[1m])",
+            "legendFormat": "Failed",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(dlq_messages_processed_total{status=\"abandoned\"}[1m])",
+            "legendFormat": "Abandoned",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 13,
+        "title": "System Health - Error Rates",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 26, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(gateway_messages_published_total{status=\"failed\"}[5m])",
+            "legendFormat": "Gateway Errors",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(consumer_messages_written_total{status=\"failed\"}[5m])",
+            "legendFormat": "Consumer Errors",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(gateway_circuit_breaker_failures_total[5m])",
+            "legendFormat": "Circuit Breaker Failures",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Errors/sec"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [10], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "name": "High Error Rate Alert"
+        }
+      }
+    ]
+  }
+}

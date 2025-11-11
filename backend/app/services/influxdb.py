@@ -753,6 +753,21 @@ class InfluxDBService:
             logger.error(f"Error querying seasonal data: {e}")
             return []
 
+    def health_check(self) -> bool:
+        """
+        Check InfluxDB health by pinging the client
+        
+        Returns:
+            True if InfluxDB is healthy, False otherwise
+        """
+        try:
+            # Try to ping the InfluxDB service
+            health = self.client.ping()
+            return health is True
+        except Exception as e:
+            logger.error(f"InfluxDB health check failed: {e}")
+            return False
+
     def close(self):
         """Close InfluxDB client"""
         self.client.close()

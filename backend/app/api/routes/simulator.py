@@ -12,11 +12,14 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 import sys
 import numpy as np
+import logging
 sys.path.insert(0, 'backend')
 
 from app.services.lightweight_simulator import LightweightGrainTerminalSimulator
 from app.db.session import get_db
 from app.models.tag import Tag
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/simulator", tags=["simulator"])
 

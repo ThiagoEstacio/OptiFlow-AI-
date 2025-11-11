@@ -16,9 +16,10 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const BASE_PATH = '/api/v1/chat';
 
-// Create axios instance with auth token
+// Create axios instance with auth token and increased timeout
 const chatApi = axios.create({
   baseURL: API_URL,
+  timeout: 60000, // 60 seconds for chat requests (LLM can be slow)
   headers: {
     'Content-Type': 'application/json',
   },

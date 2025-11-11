@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -154,22 +152,28 @@ services:
       - optiflow-network
 
   # Ollama - Local LLM for AI Assistant
+  # Note: GPU support is commented by default for CPU-only systems
+  # Uncomment the 'deploy' section below if you have NVIDIA GPU available
+  # Port 11435 used to avoid conflict with host Ollama (if running on 11434)
   ollama:
     image: ollama/ollama:latest
     container_name: optiflow-ollama
     volumes:
       - ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "11435:11434"  # Container Ollama on 11435, host Ollama can use 11434
     networks:
       - optiflow-network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Uncomment for GPU support (requires NVIDIA GPU + nvidia-docker2)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
     restart: unless-stopped
 
   # Backend API
@@ -178,7 +182,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: optiflow-backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
       - ./backend:/app
       - backend_mlflow:/app/mlruns
@@ -367,7 +371,6 @@ services:
     command: npm run dev -- --host --port 3000
     volumes:
       - ./frontend:/app
-      - /app/node_modules
     ports:
       - "3000:3000"
     environment:
@@ -383,7 +386,7 @@ services:
     image: python:3.11-slim
     container_name: optiflow-mlflow
     command: >
-      sh -c "pip install mlflow psycopg2-binary &&
+      sh -c "pip install -q mlflow psycopg2-binary &&
              mlflow server
              --backend-store-uri postgresql://optiflow:optiflow_password@postgres:5432/optiflow
              --default-artifact-root /mlflow/artifacts
@@ -396,7 +399,15 @@ services:
     networks:
       - optiflow-network
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:5000/health\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   # ========================================
   # Monitoring Exporters
@@ -506,9 +517,6 @@ services:
       - "3001:3000"
     networks:
       - optiflow-network
-    depends_on:
-      - prometheus
-      - influxdb
 
 networks:
   optiflow-network:

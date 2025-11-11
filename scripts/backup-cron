@@ -1,0 +1,47 @@
+# OptiFlow AI - Automated Backup Cron Jobs
+# ============================================
+# Add to system crontab with: crontab -e
+# Or use this file: sudo cp backup-cron /etc/cron.d/optiflow-backup
+# ============================================
+
+# Set shell and path
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Environment variables for backup
+BACKUP_KEEP_DAYS=7
+BACKUP_ENABLED=true
+GPG_PASSPHRASE=your-secure-gpg-passphrase-here
+
+# ============================================
+# Daily Full Backup
+# ============================================
+# Runs every day at 2:00 AM (low traffic period)
+0 2 * * * root /home/thiestacio/OptiFlow-AI-/scripts/backup-production.sh >> /backups/cron.log 2>&1
+
+# ============================================
+# Hourly Incremental Backup (PostgreSQL only)
+# ============================================
+# For critical data, backup PostgreSQL every hour
+# Uncomment if needed:
+# 0 * * * * root /home/thiestacio/OptiFlow-AI-/scripts/backup-postgres-incremental.sh >> /backups/cron.log 2>&1
+
+# ============================================
+# Weekly Backup Verification
+# ============================================
+# Test restore process every Sunday at 3:00 AM
+# Uncomment when restore test automation is ready:
+# 0 3 * * 0 root /home/thiestacio/OptiFlow-AI-/scripts/test-backup-restore.sh >> /backups/verify.log 2>&1
+
+# ============================================
+# Backup Log Rotation
+# ============================================
+# Clean old backup logs (keep last 30 days)
+0 4 * * * root find /backups -name "*.log" -mtime +30 -delete
+
+# ============================================
+# Backup Health Check
+# ============================================
+# Check if backup completed successfully and send alert if failed
+# Requires monitoring script:
+# 0 5 * * * root /home/thiestacio/OptiFlow-AI-/scripts/check-backup-health.sh >> /backups/health.log 2>&1

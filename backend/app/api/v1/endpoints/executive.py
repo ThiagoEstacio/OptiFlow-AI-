@@ -18,6 +18,7 @@ from app.models.user import User
 from app.core.deps import get_current_user
 from app.services.executive_dashboard import ExecutiveDashboard
 from app.services.roi_calculator import ROICalculator
+from app.services.cache_service import cached
 # from app.services.executive_report_generator import ExecutiveReportGenerator
 
 router = APIRouter()
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/dashboard360/{site_id}", response_model=Dict[str, Any])
+@cached(ttl=120, key_prefix="exec_dashboard")
 async def get_dashboard_360(
     site_id: int,
     period_days: int = Query(7, ge=1, le=90, description="Analysis period in days"),

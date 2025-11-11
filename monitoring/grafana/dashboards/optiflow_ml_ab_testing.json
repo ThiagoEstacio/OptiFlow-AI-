@@ -1,0 +1,493 @@
+{
+  "title": "OptiFlow - ML A/B Testing & Comparison",
+  "tags": [
+    "optiflow",
+    "ml",
+    "ab-testing",
+    "model-comparison"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 0,
+  "refresh": "1m",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "type": "graph",
+      "title": "Model Prediction Comparison (IF vs Ensemble)",
+      "targets": [
+        {
+          "expr": "ml_prediction_value{model=\"isolation_forest\"}",
+          "legendFormat": "Isolation Forest - {{tag_id}}",
+          "refId": "A"
+        },
+        {
+          "expr": "ml_prediction_value{model=\"ensemble\"}",
+          "legendFormat": "Ensemble - {{tag_id}}",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "label": "Anomaly Score"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "type": "graph",
+      "title": "Model Inference Performance",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ml_inference_duration_seconds_bucket{endpoint=\"/ml/compare\"}[5m])) by (le, model))",
+          "legendFormat": "{{model}} - P95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(ml_inference_duration_seconds_bucket{endpoint=\"/ml/compare\"}[5m])) by (le, model))",
+          "legendFormat": "{{model}} - P50",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ms",
+          "label": "Latency"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "avg": true,
+        "current": true
+      }
+    },
+    {
+      "id": 3,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      },
+      "type": "singlestat",
+      "title": "Isolation Forest - Avg Inference Time",
+      "targets": [
+        {
+          "expr": "avg(rate(ml_inference_duration_seconds_sum{model=\"isolation_forest\"}[5m]) / rate(ml_inference_duration_seconds_count{model=\"isolation_forest\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "format": "ms",
+      "thresholds": "50,100",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": false,
+      "colorValue": true,
+      "valueName": "current",
+      "sparkline": {
+        "show": true,
+        "lineColor": "rgb(31, 120, 193)",
+        "fillColor": "rgba(31, 118, 189, 0.18)"
+      }
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 9
+      },
+      "type": "singlestat",
+      "title": "Ensemble - Avg Inference Time",
+      "targets": [
+        {
+          "expr": "avg(rate(ml_inference_duration_seconds_sum{model=\"ensemble\"}[5m]) / rate(ml_inference_duration_seconds_count{model=\"ensemble\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "format": "ms",
+      "thresholds": "100,200",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": false,
+      "colorValue": true,
+      "valueName": "current",
+      "sparkline": {
+        "show": true,
+        "lineColor": "rgb(31, 120, 193)",
+        "fillColor": "rgba(31, 118, 189, 0.18)"
+      }
+    },
+    {
+      "id": 5,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 9
+      },
+      "type": "singlestat",
+      "title": "Performance Delta (IF vs Ensemble)",
+      "targets": [
+        {
+          "expr": "(avg(rate(ml_inference_duration_seconds_sum{model=\"ensemble\"}[5m]) / rate(ml_inference_duration_seconds_count{model=\"ensemble\"}[5m])) - avg(rate(ml_inference_duration_seconds_sum{model=\"isolation_forest\"}[5m]) / rate(ml_inference_duration_seconds_count{model=\"isolation_forest\"}[5m]))) * 1000",
+          "refId": "A"
+        }
+      ],
+      "format": "ms",
+      "thresholds": "50,100",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": true,
+      "colorValue": false,
+      "valueName": "current",
+      "postfix": " slower",
+      "sparkline": {
+        "show": false
+      }
+    },
+    {
+      "id": 6,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "type": "graph",
+      "title": "Agreement Rate (Both Models Detect Anomaly)",
+      "targets": [
+        {
+          "expr": "(sum(ml_prediction_agreement{agreement=\"both_anomaly\"}) / sum(ml_prediction_total)) * 100",
+          "legendFormat": "Agreement Rate %",
+          "refId": "A"
+        },
+        {
+          "expr": "(sum(ml_prediction_agreement{agreement=\"both_normal\"}) / sum(ml_prediction_total)) * 100",
+          "legendFormat": "Both Normal %",
+          "refId": "B"
+        },
+        {
+          "expr": "(sum(ml_prediction_agreement{agreement=\"disagree\"}) / sum(ml_prediction_total)) * 100",
+          "legendFormat": "Disagree %",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percent",
+          "label": "Rate",
+          "max": 100,
+          "min": 0
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "current": true,
+        "avg": true
+      },
+      "stack": true
+    },
+    {
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "type": "graph",
+      "title": "Model Accuracy Over Time",
+      "targets": [
+        {
+          "expr": "ml_model_f1_score{model=\"isolation_forest\"}",
+          "legendFormat": "IF - F1 Score",
+          "refId": "A"
+        },
+        {
+          "expr": "ml_model_f1_score{model=\"ensemble\"}",
+          "legendFormat": "Ensemble - F1 Score",
+          "refId": "B"
+        },
+        {
+          "expr": "ml_model_precision{model=\"isolation_forest\"}",
+          "legendFormat": "IF - Precision",
+          "refId": "C"
+        },
+        {
+          "expr": "ml_model_precision{model=\"ensemble\"}",
+          "legendFormat": "Ensemble - Precision",
+          "refId": "D"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percentunit",
+          "label": "Score",
+          "max": 1,
+          "min": 0
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "current": true,
+        "avg": true,
+        "max": true
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "type": "table",
+      "title": "A/B Test Results - Model Comparison",
+      "targets": [
+        {
+          "expr": "ml_model_size_bytes",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "ml_model_f1_score",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "avg(rate(ml_inference_duration_seconds_sum[5m]) / rate(ml_inference_duration_seconds_count[5m])) by (model)",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(ml_predictions_total[5m])) by (model)",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        }
+      ],
+      "styles": [
+        {
+          "pattern": "Time",
+          "type": "hidden"
+        },
+        {
+          "pattern": "model",
+          "type": "string",
+          "alias": "Model Name"
+        },
+        {
+          "pattern": "Value #A",
+          "type": "number",
+          "alias": "Model Size (MB)",
+          "decimals": 2,
+          "unit": "decmbytes"
+        },
+        {
+          "pattern": "Value #B",
+          "type": "number",
+          "alias": "F1-Score",
+          "decimals": 4,
+          "colorMode": "value",
+          "colors": [
+            "#E02F44",
+            "#EAB839",
+            "#299c46"
+          ],
+          "thresholds": [
+            "0.7",
+            "0.85"
+          ]
+        },
+        {
+          "pattern": "Value #C",
+          "type": "number",
+          "alias": "Avg Inference Time (ms)",
+          "decimals": 2,
+          "unit": "ms",
+          "colorMode": "cell",
+          "colors": [
+            "#299c46",
+            "#EAB839",
+            "#E02F44"
+          ],
+          "thresholds": [
+            "50",
+            "100"
+          ]
+        },
+        {
+          "pattern": "Value #D",
+          "type": "number",
+          "alias": "Predictions/sec",
+          "decimals": 2
+        }
+      ],
+      "transform": "table"
+    },
+    {
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "type": "graph",
+      "title": "Cache Hit Rate (ML Endpoints)",
+      "targets": [
+        {
+          "expr": "(sum(rate(cache_hits_total{endpoint=~\"/ml/.*\"}[5m])) / (sum(rate(cache_hits_total{endpoint=~\"/ml/.*\"}[5m])) + sum(rate(cache_misses_total{endpoint=~\"/ml/.*\"}[5m])))) * 100",
+          "legendFormat": "ML Endpoints - Hit Rate %",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percent",
+          "label": "Hit Rate",
+          "max": 100,
+          "min": 0
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "current": true,
+        "avg": true
+      },
+      "thresholds": [
+        {
+          "value": 40,
+          "colorMode": "critical",
+          "op": "lt",
+          "fill": true,
+          "line": true
+        },
+        {
+          "value": 70,
+          "colorMode": "custom",
+          "fillColor": "rgba(234, 112, 112, 0.12)",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "type": "graph",
+      "title": "Model Load Time",
+      "targets": [
+        {
+          "expr": "ml_model_load_duration_seconds{model=\"isolation_forest\"}",
+          "legendFormat": "Isolation Forest - Load Time",
+          "refId": "A"
+        },
+        {
+          "expr": "ml_model_load_duration_seconds{model=\"ensemble\"}",
+          "legendFormat": "Ensemble - Load Time",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Load Duration"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "current": true
+      }
+    }
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "query": "label_values(ml_model_f1_score, model)",
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "datasource": "Prometheus",
+        "enable": true,
+        "expr": "ALERTS{alertname=\"HighModelInferenceTime\"}",
+        "iconColor": "red",
+        "name": "ML Alerts",
+        "tagKeys": "model,severity"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "created_at": "2025-11-11T15:46:11.636759",
+  "sample_size": 50000,
+  "n_features": 14,
+  "contamination": 0.05,
+  "if_estimators": 100,
+  "lof_neighbors": 20,
+  "voting_threshold": 0.5,
+  "metrics": {
+    "f1_score": 0.013939595087952205,
+    "precision": 0.04093567251461988,
+    "recall": 0.0084
+  },
+  "anomalies_detected": 513,
+  "agreement_rate": 1.0
+}

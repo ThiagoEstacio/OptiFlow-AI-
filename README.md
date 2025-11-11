@@ -9,7 +9,9 @@ OptiFlow AI is an **Industrial IoT (IIoT) platform with artificial intelligence*
 - **Real-time Data Collection**: Connect to PLCs, RTUs, and sensors using industrial protocols (OPC UA, Modbus, MQTT, S7)
 - **Time Series Storage**: Optimized storage with InfluxDB for high-frequency industrial data
 - **Interactive Dashboards**: Real-time visualization with WebSocket updates
-- **Machine Learning**: Predictive maintenance, anomaly detection, and demand forecasting
+- **Machine Learning**: ✅ **Trained ML models for anomaly detection** (Isolation Forest, F1=0.4546) with real-time API endpoints
+- **Autonomous Agent**: LLM-powered assistant with ML insights for predictive maintenance recommendations
+- **Alarm Management**: Comprehensive alarm system with statistics, filtering, and real-time updates
 - **Multi-tenant Architecture**: Support for multiple organizations and sites
 - **Vertical Solutions**: SmartPort, SmartMine, SmartSteel
 
@@ -136,11 +138,28 @@ optiflow-platform/
    ```
 
 4. **Access the application**
-   - Frontend: http://localhost:5173
+   - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
+   - **ML Anomaly Detection**: http://localhost:8000/api/v1/analytics/anomalies
+   - **Model Info**: http://localhost:8000/api/v1/analytics/model-info
    - InfluxDB UI: http://localhost:8086
    - RabbitMQ Management: http://localhost:15672
+   - MLflow UI: http://localhost:5000
+
+5. **Generate historical data (for ML training)**
+   ```bash
+   docker compose exec backend python scripts/generate_historical_data_simple.py
+   ```
+
+6. **Train ML models**
+   ```bash
+   # Fast training (Isolation Forest, ~30 seconds)
+   docker compose exec backend python scripts/train_isolation_fast.py
+   
+   # Full training (Isolation Forest + LSTM, ~30-60 minutes)
+   docker compose exec backend python scripts/train_anomaly_models.py
+   ```
 
 ### Running Tests
 
@@ -157,9 +176,12 @@ npm test
 ## Documentation
 
 - [Architecture Documentation](docs/architecture/)
+- [**ML API Guide** - Anomaly Detection Endpoints](docs/ML_API_GUIDE.md) ✨ **NEW**
 - [API Documentation](docs/api/)
 - [Deployment Guide](docs/deployment/)
 - [Development Guide](docs/development/)
+- [Frontend Implementation Status](docs/FRONTEND_COMPLETE.md)
+- [Alarm System Guide](docs/ALARM_SYSTEM.md)
 
 ## Roadmap
 

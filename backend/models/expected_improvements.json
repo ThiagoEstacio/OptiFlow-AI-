@@ -1,0 +1,123 @@
+{
+  "generated_at": "2025-11-11T12:59:52.245484",
+  "improvements": {
+    "baseline": {
+      "name": "Isolation Forest (Atual)",
+      "f1_score": 0.1032,
+      "precision": 0.0597,
+      "recall": 0.378,
+      "features": 10,
+      "description": "Modelo atual em produ\u00e7\u00e3o - apenas features originais"
+    },
+    "feature_engineering": {
+      "name": "Com Feature Engineering",
+      "f1_score": 0.28,
+      "precision": 0.18,
+      "recall": 0.55,
+      "features": 93,
+      "improvements": [
+        "Rolling statistics (mean, std, min, max) com janelas de 5, 10, 20 min",
+        "Rate of change (diff e pct_change) para cada tag",
+        "Cross-tag correlations (motor current vs speed, temp sensors, pressures)",
+        "Temporal features (hora do dia, dia da semana)",
+        "Lag features (t-1, t-5, t-15)"
+      ],
+      "expected_gain": "+171%"
+    },
+    "ensemble": {
+      "name": "Ensemble (IF + One-Class SVM)",
+      "f1_score": 0.35,
+      "precision": 0.25,
+      "recall": 0.58,
+      "features": 93,
+      "method": "Voting: anomalia se ambos os modelos concordarem",
+      "expected_gain": "+239%"
+    },
+    "hyperparameter_tuning": {
+      "name": "Com Hyperparameter Tuning",
+      "f1_score": 0.32,
+      "precision": 0.22,
+      "recall": 0.52,
+      "features": 93,
+      "parameters_tested": {
+        "n_estimators": [
+          100,
+          200,
+          300
+        ],
+        "max_samples": [
+          "auto",
+          512,
+          1024
+        ],
+        "contamination": [
+          0.01,
+          0.015,
+          0.02,
+          0.025
+        ],
+        "max_features": [
+          1.0,
+          0.8,
+          0.5
+        ]
+      },
+      "expected_gain": "+210%"
+    },
+    "all_combined": {
+      "name": "Todas as Otimiza\u00e7\u00f5es Combinadas",
+      "f1_score": 0.42,
+      "precision": 0.32,
+      "recall": 0.62,
+      "features": 93,
+      "description": "Feature Engineering + Ensemble + Tuning + Incremental Learning",
+      "expected_gain": "+307%"
+    }
+  },
+  "roadmap": [
+    {
+      "phase": "Fase 1: Feature Engineering",
+      "duration": "2-3 horas",
+      "tasks": [
+        "Implementar rolling statistics",
+        "Adicionar rate of change",
+        "Criar cross-tag correlations",
+        "Testar com dados reais"
+      ],
+      "expected_f1": 0.28
+    },
+    {
+      "phase": "Fase 2: Ensemble Methods",
+      "duration": "1-2 horas",
+      "tasks": [
+        "Treinar One-Class SVM",
+        "Treinar Local Outlier Factor",
+        "Implementar voting mechanism",
+        "Validar performance"
+      ],
+      "expected_f1": 0.35
+    },
+    {
+      "phase": "Fase 3: Hyperparameter Tuning",
+      "duration": "2-3 horas",
+      "tasks": [
+        "Setup Optuna/GridSearch",
+        "Definir search space",
+        "Executar optimization",
+        "Selecionar melhor configura\u00e7\u00e3o"
+      ],
+      "expected_f1": 0.32
+    },
+    {
+      "phase": "Fase 4: Pipeline Otimizado",
+      "duration": "3-4 horas",
+      "tasks": [
+        "Implementar streaming ingestion",
+        "Adicionar Parquet cache",
+        "Configurar incremental learning",
+        "Setup parallel processing"
+      ],
+      "expected_f1": 0.42
+    }
+  ]
+}

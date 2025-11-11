@@ -15,7 +15,7 @@ import random
 
 from app.db.session import get_db
 from app.models.tag import Tag
-from app.services.influxdb import influxdb_service
+from app.services.optimized_influxdb_service import optimized_influxdb_service as influxdb_service
 from app.models.user import User
 from app.core.deps import get_current_user
 

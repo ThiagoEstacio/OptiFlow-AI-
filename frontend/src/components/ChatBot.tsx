@@ -273,17 +273,20 @@ const ChatBot: React.FC = () => {
                 <Loader2 size={18} className="animate-spin" />
               </div>
               <div className="flex-1">
-                <div className="inline-block px-4 py-2 bg-gray-100 rounded-lg rounded-tl-none border border-gray-200">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
-                    <span
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '0.1s' }}
-                    ></span>
-                    <span
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '0.2s' }}
-                    ></span>
+                <div className="inline-block px-4 py-3 bg-gray-100 rounded-lg rounded-tl-none border border-gray-200">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></span>
+                      <span
+                        className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                        style={{ animationDelay: '0.1s' }}
+                      ></span>
+                      <span
+                        className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                        style={{ animationDelay: '0.2s' }}
+                      ></span>
+                    </div>
+                    <span className="ml-2 text-xs">Processando com IA...</span>
                   </div>
                 </div>
               </div>

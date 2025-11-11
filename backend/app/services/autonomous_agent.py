@@ -661,6 +661,70 @@ class AutonomousAgent:
                 db=db,
                 organization_id=organization_id
             )
+            
+            # ✨ NOVO: Obter resumo de anomalias detectadas pelo modelo ML treinado
+            anomalies_summary = await agent_ml_integration.get_recent_anomalies_summary(hours=24)
+            
+            if anomalies_summary.get("status") == "success" and anomalies_summary.get("total_anomalies", 0) > 0:
+                # Criar insight de anomalias ML
+                total_anomalies = anomalies_summary["total_anomalies"]
+                anomaly_rate = anomalies_summary["anomaly_rate"]
+                model_used = anomalies_summary["model_used"]
+                top_tags = anomalies_summary.get("top_problematic_tags", [])
+                
+                # Determinar severidade baseado na taxa de anomalias
+                if anomaly_rate > 0.05:  # >5% de anomalias
+                    severity = "high"
+                elif anomaly_rate > 0.02:  # >2% de anomalias
+                    severity = "medium"
+                else:
+                    severity = "low"
+                
+                # Construir descrição com top tags problemáticas
+                top_tags_desc = ""
+                if top_tags:
+                    top_tags_desc = " Tags mais afetadas: " + ", ".join([
+                        f"{t['tag_id']} ({t['anomaly_count']} anomalias, score máx: {t['max_score']:.2f})"
+                        for t in top_tags[:3]
+                    ])
+                
+                recommendations = [
+                    f"Investigar {total_anomalies} anomalias detectadas pelo modelo {model_used}",
+                    "Verificar condições operacionais durante os picos de anomalia",
+                    "Analisar correlação com alarmes e eventos de manutenção"
+                ]
+                
+                if top_tags:
+                    recommendations.append(f"Priorizar investigação em: {', '.join([t['tag_id'] for t in top_tags[:3]])}")
+                
+                anomaly_insight = AutonomousInsight(
+                    insight_id=f"ml_anomalies_{datetime.now().timestamp()}",
+                    title=f"🤖 Anomalias ML Detectadas: {total_anomalies} pontos anormais (últimas 24h)",
+                    description=f"Modelo {model_used} detectou {total_anomalies} anomalias em {anomalies_summary['total_points_analyzed']} pontos analisados (taxa: {anomaly_rate*100:.2f}%).{top_tags_desc}",
+                    category="anomaly",
+                    severity=severity,
+                    tags=['ml', 'anomaly_detection', model_used],
+                    metrics={
+                        "total_anomalies": total_anomalies,
+                        "anomaly_rate": anomaly_rate,
+                        "model_used": model_used,
+                        "points_analyzed": anomalies_summary["total_points_analyzed"],
+                        "time_range_hours": anomalies_summary["time_range_hours"]
+                    },
+                    recommendations=recommendations,
+                    timestamp=datetime.now(),
+                    data={
+                        "anomalies_by_tag": anomalies_summary.get("anomalies_by_tag", {}),
+                        "top_problematic_tags": top_tags
+                    }
+                )
+                
+                insights.append(anomaly_insight)
+                
+                logger.info(
+                    f"🤖 ML Anomaly Detection: {total_anomalies} anomalies found "
+                    f"({anomaly_rate*100:.2f}% rate) using {model_used}"
+                )
 
             # Gerar insights para cada alerta crítico
             for alert in critical_alerts:

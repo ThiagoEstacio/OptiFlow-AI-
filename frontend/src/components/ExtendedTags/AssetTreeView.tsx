@@ -20,8 +20,8 @@ import {
   CircularProgress,
   Tooltip
 } from '@mui/material';
-import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
-import { TreeItem } from '@mui/x-tree-view/TreeItem';
+import { SimpleTreeView } from '@mui/x-tree-view';
+import { TreeItem } from '@mui/x-tree-view';
 import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
@@ -320,10 +320,16 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
             aria-label="asset navigator"
             defaultCollapseIcon={<ExpandMoreIcon />}
             defaultExpandIcon={<ChevronRightIcon />}
-            expanded={expanded}
-            selected={selectedAssetId || ''}
-            onNodeToggle={handleToggle}
-            onNodeSelect={handleSelect}
+            expandedItems={expanded}
+            selectedItems={selectedAssetId || ''}
+            onExpandedItemsChange={(event, itemIds) => setExpanded(itemIds as string[])}
+            onSelectedItemsChange={(event, itemId) => {
+              if (itemId) {
+                const assetId = typeof itemId === 'string' ? itemId : itemId[0];
+                setSelectedAssetId(assetId);
+                onAssetSelect?.(assetId);
+              }
+            }}
             sx={{
               flexGrow: 1,
               overflowY: 'auto',

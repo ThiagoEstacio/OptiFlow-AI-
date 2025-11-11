@@ -22,6 +22,7 @@ from app.monitoring.system_monitor import SystemMonitor
 from app.monitoring.docker_monitor import DockerMonitor
 from app.monitoring.database_monitor import DatabaseMonitor
 from app.monitoring.tag_monitor import TagMonitor
+from app.services.cache_service import cached
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/system", response_model=Dict[str, Any])
+@cached(ttl=30, key_prefix="monitoring_system")
 async def get_system_metrics(
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:

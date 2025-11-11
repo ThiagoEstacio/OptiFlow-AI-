@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.db.session import get_db
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceUpdate, DeviceResponse
+from app.services.cache_service import cached
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -78,23 +79,44 @@ async def create_simple_device(
     return device
 
 
-@router.get("/", response_model=List[DeviceResponse])
+@router.get("/")
 async def list_devices(
     skip: int = 0,
     limit: int = 100,
     site_id: UUID = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """List all devices"""
-    stmt = select(Device)
+    """List all devices (simplified to fix serialization issues)"""
+    try:
+        stmt = select(Device)
 
-    if site_id:
-        stmt = stmt.where(Device.site_id == site_id)
+        if site_id:
+            stmt = stmt.where(Device.site_id == site_id)
 
-    stmt = stmt.offset(skip).limit(limit)
-    result = await db.execute(stmt)
-    devices = result.scalars().all()
-    return devices
+        stmt = stmt.offset(skip).limit(limit)
+        result = await db.execute(stmt)
+        devices = result.scalars().all()
+        
+        # Manual serialization to avoid Pydantic issues
+        return [{
+            "id": str(d.id),
+            "site_id": str(d.site_id) if d.site_id else None,
+            "name": d.name,
+            "description": d.description,
+            "protocol": d.protocol,
+            "enabled": d.is_active,  # Model uses is_active
+            "status": d.status,
+            "last_seen": d.last_seen.isoformat() if d.last_seen else None,
+            "total_tags": d.total_tags,
+            "data_points_collected": d.data_points_collected,
+            "created_at": d.created_at.isoformat(),
+            "updated_at": d.updated_at.isoformat()
+        } for d in devices]
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error listing devices: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
@@ -143,6 +165,7 @@ async def create_device(
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)
+@cached(ttl=180, key_prefix="device_detail")
 async def get_device(
     device_id: UUID,
     db: AsyncSession = Depends(get_db)

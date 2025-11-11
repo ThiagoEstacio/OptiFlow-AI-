@@ -47,6 +47,7 @@ export default defineConfig({
       'prop-types',
       '@mui/material',
       '@mui/system',
+      '@mui/x-tree-view',
       '@emotion/react',
       '@emotion/styled'
     ],

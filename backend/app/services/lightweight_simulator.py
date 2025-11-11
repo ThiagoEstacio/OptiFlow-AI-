@@ -17,7 +17,7 @@ import logging
 import random
 import math
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import asyncio
 
@@ -174,6 +174,7 @@ class LightweightGrainTerminalSimulator:
     def __init__(self):
         self.time_s = 0.0
         self.running = False
+        self._simulation_task = None  # Task para loop automático
 
         # Equipamentos
         self.gates = [Gate(name=f"GATE_{i+1:02d}") for i in range(7)]
@@ -195,14 +196,10 @@ class LightweightGrainTerminalSimulator:
         self.failure_events = []
         self._schedule_random_failures()
 
-        # Kafka producer (lazy initialization)
-        self.kafka_producer = None
-        self._kafka_init_attempted = False
-
         # Test counter for frontend real-time visualization (0-10, auto-reset)
         self.test_counter = 0
 
-        logger.info("✅ Lightweight simulator initialized (NO DEM)")
+        logger.info("✅ Lightweight simulator initialized (PLC Virtual)")
 
     def _schedule_random_failures(self):
         """Agenda falhas aleatórias para treinar ML"""
@@ -248,29 +245,8 @@ class LightweightGrainTerminalSimulator:
 
         logger.info("🔄 Simulator reset")
 
-    async def _ensure_kafka_producer(self):
-        """Inicializa Kafka producer se ainda não foi inicializado"""
-        if self.kafka_producer is None and not self._kafka_init_attempted:
-            self._kafka_init_attempted = True
-            try:
-                from app.services.kafka_producer import get_kafka_producer
-                self.kafka_producer = get_kafka_producer()
-
-                # Inicializa se ainda não foi
-                if self.kafka_producer and not self.kafka_producer.producer:
-                    await self.kafka_producer.start()
-
-                if self.kafka_producer and self.kafka_producer.enabled:
-                    logger.info("✅ Kafka producer connected to simulator")
-                else:
-                    logger.warning("⚠️  Kafka producer not available (simulator will work without it)")
-                    self.kafka_producer = None
-            except Exception as e:
-                logger.warning(f"⚠️  Could not initialize Kafka producer: {e}")
-                self.kafka_producer = None
-
     def start(self):
-        """Inicia simulação"""
+        """Inicia simulação com loop automático"""
         self.running = True
 
         # Liga correias
@@ -280,11 +256,22 @@ class LightweightGrainTerminalSimulator:
         # Define setpoints iniciais
         self.shiploader.setpoint_tph = 1500.0
 
-        logger.info("▶️  Simulator started")
+        # Inicia loop automático se ainda não está rodando
+        if self._simulation_task is None or self._simulation_task.done():
+            import asyncio
+            self._simulation_task = asyncio.create_task(self._auto_simulation_loop())
+            logger.info("▶️  Simulator started with auto-update loop")
+        else:
+            logger.info("▶️  Simulator started")
 
     def stop(self):
-        """Para simulação"""
+        """Para simulação e cancela loop automático"""
         self.running = False
+
+        # Cancela task de simulação automática
+        if self._simulation_task and not self._simulation_task.done():
+            self._simulation_task.cancel()
+            logger.info("⏹️  Auto-simulation loop cancelled")
 
         for gate in self.gates:
             gate.setpoint_pct = 0.0
@@ -294,7 +281,29 @@ class LightweightGrainTerminalSimulator:
 
         self.shiploader.setpoint_tph = 0.0
 
-        logger.info("⏸️  Simulator stopped")
+        logger.info("⏹️  Simulator stopped")
+    
+    async def _auto_simulation_loop(self):
+        """Loop automático que avança a simulação a cada segundo"""
+        import asyncio
+        logger.info("🔄 Auto-simulation loop started (1 step/second)")
+        
+        try:
+            while self.running:
+                # Avança simulação em 1 segundo
+                await self.step_async(1.0)
+                
+                # Aguarda 1 segundo antes do próximo step
+                await asyncio.sleep(1.0)
+        
+        except asyncio.CancelledError:
+            logger.info("🔄 Auto-simulation loop cancelled")
+        
+        except Exception as e:
+            logger.error(f"❌ Error in auto-simulation loop: {e}", exc_info=True)
+        
+        finally:
+            logger.info("🔄 Auto-simulation loop stopped")
 
     async def step_async(self, dt_s: float = 1.0):
         """
@@ -348,8 +357,10 @@ class LightweightGrainTerminalSimulator:
         if self.test_counter > 10:
             self.test_counter = 0
 
-        # 7. Publica estado no Kafka (não bloqueante)
-        await self._publish_to_kafka()
+        # Simulador atualiza estado interno apenas
+        # Gateway é responsável por ler os valores e publicar no Kafka
+
+
 
     def step(self, dt_s: float = 1.0):
         """
@@ -402,202 +413,6 @@ class LightweightGrainTerminalSimulator:
         self.test_counter += 1
         if self.test_counter > 10:
             self.test_counter = 0
-
-    async def _publish_to_kafka(self):
-        """
-        Publica estado do simulador no Kafka (event-driven architecture)
-
-        Extrai todas as tags e publica no tópico 'raw_tags' para consumo por:
-        - InfluxDB consumer (timeseries storage)
-        - Frontend consumer (real-time dashboard)
-        - Analytics consumer (ML/AI processing)
-        """
-        # Garante que o Kafka producer está inicializado
-        await self._ensure_kafka_producer()
-
-        if not self.kafka_producer or not self.kafka_producer.enabled:
-            return
-
-        timestamp = datetime.utcnow().isoformat()
-
-        # Extrai todas as tags do estado
-        tags = []
-
-        # System tags
-        tags.append({
-            'tag_name': 'SYSTEM_RUNNING_PV',
-            'value': 1.0 if self.running else 0.0,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'SYSTEM_TIME_S_PV',
-            'value': self.time_s,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'TOTAL_MASS_T_PV',
-            'value': self.total_mass_t,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'TOTAL_KWH_PV',
-            'value': self.total_kwh,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'WAREHOUSE_LEVEL_PCT_PV',
-            'value': self.warehouse_level_pct,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'TEST_COUNTER_PV',
-            'value': float(self.test_counter),
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        # Gates tags
-        for gate in self.gates:
-            gate_num = gate.name.split('_')[-1]
-
-            tags.append({
-                'tag_name': f'ARZ_GATES_GATE{gate_num}_POSICAO_PV',
-                'value': gate.opening_pct,
-                'quality': 'good' if not gate.failure else 'bad',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'ARZ_GATES_GATE{gate_num}_VAZAO_TPH_PV',
-                'value': gate.flow_tph,
-                'quality': 'good' if not gate.failure else 'bad',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-        # Belts tags
-        for belt in self.belts.values():
-            tags.append({
-                'tag_name': f'{belt.name}_RUNNING_PV',
-                'value': 1.0 if belt.running else 0.0,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_SPEED_MPS_PV',
-                'value': belt.speed_mps,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_FLOW_TPH_PV',
-                'value': belt.flow_tph,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_LOAD_PCT_PV',
-                'value': belt.load_pct,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_POWER_KW_PV',
-                'value': belt.motor_power_kw,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_CURRENT_A_PV',
-                'value': belt.motor_current_a,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_TEMP_C_PV',
-                'value': belt.motor_temp_c,
-                'quality': 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-            tags.append({
-                'tag_name': f'{belt.name}_MISALIGNMENT_PV',
-                'value': belt.misalignment,
-                'quality': 'bad' if belt.misalignment > 0.2 else 'good',
-                'timestamp': timestamp,
-                'source': 'simulator'
-            })
-
-        # Shiploader tags
-        tags.append({
-            'tag_name': 'SLD01_SETPOINT_TPH_PV',
-            'value': self.shiploader.setpoint_tph,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'SLD01_FLOW_TPH_PV',
-            'value': self.shiploader.flow_tph,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'SLD01_POWER_KW_PV',
-            'value': self.shiploader.power_kw,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        tags.append({
-            'tag_name': 'SLD01_CURRENT_A_PV',
-            'value': self.shiploader.current_a,
-            'quality': 'good',
-            'timestamp': timestamp,
-            'source': 'simulator'
-        })
-
-        # Publica em batch no Kafka (non-blocking)
-        try:
-            success_count = await self.kafka_producer.publish_bulk(tags)
-            if success_count > 0:
-                logger.debug(f"📤 Published {success_count} tags to Kafka")
-        except Exception as e:
-            logger.error(f"❌ Error publishing to Kafka: {e}")
 
     def _process_failures(self):
         """Processa falhas programadas"""
@@ -671,6 +486,48 @@ class LightweightGrainTerminalSimulator:
         for gate in self.gates:
             gate.setpoint_pct = max(0, min(100, setpoint_pct))
 
+    def get_all_tags(self) -> Dict[str, Any]:
+        """
+        Retorna todas as tags do PLC virtual para leitura pelo Gateway.
+        
+        O Gateway deve chamar este método periodicamente e publicar no Kafka.
+        Simula descoberta de tags OPC UA / Modbus.
+        """
+        tags = {}
+        
+        # System tags
+        tags['SYSTEM_RUNNING_PV'] = 1.0 if self.running else 0.0
+        tags['SYSTEM_TIME_S_PV'] = self.time_s
+        tags['TOTAL_MASS_T_PV'] = self.total_mass_t
+        tags['TOTAL_KWH_PV'] = self.total_kwh
+        tags['WAREHOUSE_LEVEL_PCT_PV'] = self.warehouse_level_pct
+        tags['TEST_COUNTER_PV'] = float(self.test_counter)
+        
+        # Gates tags
+        for gate in self.gates:
+            gate_num = gate.name.split('_')[-1]
+            tags[f'ARZ_GATES_GATE{gate_num}_POSICAO_PV'] = gate.opening_pct
+            tags[f'ARZ_GATES_GATE{gate_num}_VAZAO_TPH_PV'] = gate.flow_tph
+        
+        # Belts tags
+        for belt in self.belts.values():
+            tags[f'{belt.name}_RUNNING_PV'] = 1.0 if belt.running else 0.0
+            tags[f'{belt.name}_SPEED_MPS_PV'] = belt.speed_mps
+            tags[f'{belt.name}_FLOW_TPH_PV'] = belt.flow_tph
+            tags[f'{belt.name}_LOAD_PCT_PV'] = belt.load_pct
+            tags[f'{belt.name}_POWER_KW_PV'] = belt.motor_power_kw
+            tags[f'{belt.name}_CURRENT_A_PV'] = belt.motor_current_a
+            tags[f'{belt.name}_TEMP_C_PV'] = belt.motor_temp_c
+            tags[f'{belt.name}_MISALIGNMENT_PV'] = belt.misalignment
+        
+        # Shiploader tags
+        tags['SLD01_SETPOINT_TPH_PV'] = self.shiploader.setpoint_tph
+        tags['SLD01_FLOW_TPH_PV'] = self.shiploader.flow_tph
+        tags['SLD01_POWER_KW_PV'] = self.shiploader.power_kw
+        tags['SLD01_CURRENT_A_PV'] = self.shiploader.current_a
+        
+        return tags
+
 
 # Singleton global
 _simulator_instance: Optional[LightweightGrainTerminalSimulator] = None
@@ -682,3 +539,4 @@ def get_simulator() -> LightweightGrainTerminalSimulator:
     if _simulator_instance is None:
         _simulator_instance = LightweightGrainTerminalSimulator()
     return _simulator_instance
+

@@ -45,7 +45,7 @@ export const extendedTagsApi = {
    */
   async list(filters?: ExtendedTagFilters): Promise<GatewayTagExtended[]> {
     const response = await client.get<GatewayTagExtended[]>(
-      `/api/v1/extended-tags/tags-extended`,
+      `/api/v1/tags`,
       { params: filters }
     );
     return response.data;
@@ -56,7 +56,7 @@ export const extendedTagsApi = {
    */
   async get(tagId: number): Promise<GatewayTagExtended> {
     const response = await client.get<GatewayTagExtended>(
-      `/api/v1/extended-tags/tags-extended/${tagId}`
+      `/api/v1/tags/${tagId}`
     );
     return response.data;
   },
@@ -66,7 +66,7 @@ export const extendedTagsApi = {
    */
   async create(tagData: GatewayTagExtendedCreate): Promise<GatewayTagExtended> {
     const response = await client.post<GatewayTagExtended>(
-      `/api/v1/extended-tags/tags-extended`,
+      `/api/v1/tags`,
       tagData
     );
     return response.data;
@@ -80,7 +80,7 @@ export const extendedTagsApi = {
     tagData: GatewayTagExtendedUpdate
   ): Promise<GatewayTagExtended> {
     const response = await client.put<GatewayTagExtended>(
-      `/api/v1/extended-tags/tags-extended/${tagId}`,
+      `/api/v1/tags/${tagId}`,
       tagData
     );
     return response.data;
@@ -90,7 +90,7 @@ export const extendedTagsApi = {
    * Delete extended tag
    */
   async delete(tagId: number): Promise<void> {
-    await client.delete(`/api/v1/extended-tags/tags-extended/${tagId}`);
+    await client.delete(`/api/v1/tags/${tagId}`);
   },
 
   /**
@@ -98,7 +98,7 @@ export const extendedTagsApi = {
    */
   async bulkOperation(operation: BulkTagOperation): Promise<{ message: string }> {
     const response = await client.post<{ message: string }>(
-      `/api/v1/extended-tags/tags-extended/bulk`,
+      `/api/v1/tags/bulk`,
       operation
     );
     return response.data;

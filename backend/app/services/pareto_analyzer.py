@@ -13,7 +13,7 @@ from sqlalchemy import select, and_, func, text
 from collections import Counter
 
 from app.models.asset import Asset
-from app.models.alarm import AlarmDefinition
+from app.models.alarm import AlarmDefinition, AlarmEvent
 
 logger = logging.getLogger(__name__)
 
@@ -160,31 +160,35 @@ class ParetoAnalyzer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
 
-            query = select(AlarmDefinition).where(
+            query = select(AlarmEvent).where(
                 and_(
-                    AlarmDefinition.triggered_at >= start_date,
-                    AlarmDefinition.severity.in_(["critical", "high", "medium"])
+                    AlarmEvent.trigger_timestamp >= start_date,
+                    AlarmEvent.state == "active"
                 )
             )
 
+            # Join with alarm_definitions to get severity
+            query = query.join(AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id)
+            
             if asset_id:
-                query = query.where(AlarmDefinition.asset_id == asset_id)
+                # Filter by asset through tag
+                query = query.join(AlarmDefinition).where(AlarmDefinition.asset_id == asset_id)
 
             if site_id:
                 # Join with assets to filter by site
-                query = query.join(Asset).where(Asset.site_id == site_id)
+                query = query.join(Asset, Asset.id == AlarmDefinition.asset_id).where(Asset.site_id == site_id)
 
             result = await self.db.execute(query)
-            alarms = result.scalars().all()
+            events = result.scalars().all()
 
             return [
                 {
-                    "alarm_type": alarm.alarm_type,
-                    "severity": alarm.severity,
-                    "triggered_at": alarm.triggered_at.isoformat() if alarm.triggered_at else None,
-                    "asset_id": alarm.asset_id,
+                    "alarm_type": event.definition.alarm_type if event.definition else "unknown",
+                    "severity": event.definition.severity if event.definition else "low",
+                    "triggered_at": event.trigger_timestamp.isoformat() if event.trigger_timestamp else None,
+                    "asset_id": event.definition.asset_id if event.definition else None,
                 }
-                for alarm in alarms
+                for event in events
             ]
 
         except Exception as e:
@@ -362,13 +366,16 @@ class ParetoAnalyzer:
             previous_end = datetime.utcnow() - timedelta(days=start_offset)
 
             # Get failures for previous period
-            query = select(AlarmDefinition).where(
+            query = select(AlarmEvent).where(
                 and_(
-                    AlarmDefinition.triggered_at >= previous_start,
-                    AlarmDefinition.triggered_at <= previous_end,
-                    AlarmDefinition.severity.in_(["critical", "high", "medium"])
+                    AlarmEvent.trigger_timestamp >= previous_start,
+                    AlarmEvent.trigger_timestamp <= previous_end,
+                    AlarmEvent.state == "active"
                 )
             )
+
+            # Join with alarm_definitions
+            query = query.join(AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id)
 
             if asset_id:
                 query = query.where(AlarmDefinition.asset_id == asset_id)

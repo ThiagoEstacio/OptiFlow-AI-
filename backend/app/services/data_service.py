@@ -39,7 +39,7 @@ class DataService:
                 SELECT 
                     t.id,
                     t.name,
-                    t.tag_address,
+                    t.address,
                     t.data_type,
                     t.description,
                     t.unit,
@@ -48,7 +48,7 @@ class DataService:
                     t.current_value,
                     t.updated_at
                 FROM tags t
-                WHERE t.name = :tag_id OR t.tag_address = :tag_id OR CAST(t.id AS TEXT) = :tag_id
+                WHERE t.name = :tag_id OR t.address = :tag_id OR CAST(t.id AS TEXT) = :tag_id
                 LIMIT 1
             """)
             
@@ -284,7 +284,7 @@ class DataService:
                 SELECT 
                     t.id,
                     t.name,
-                    t.tag_address,
+                    t.address,
                     t.description,
                     t.unit,
                     t.data_type,
@@ -294,7 +294,7 @@ class DataService:
                 WHERE 
                     LOWER(t.name) LIKE LOWER(:query) 
                     OR LOWER(t.description) LIKE LOWER(:query)
-                    OR LOWER(t.tag_address) LIKE LOWER(:query)
+                    OR LOWER(t.address) LIKE LOWER(:query)
                 ORDER BY 
                     CASE 
                         WHEN LOWER(t.name) = LOWER(:exact_query) THEN 1

@@ -23,11 +23,12 @@ class Settings(BaseSettings):
 
     # Database - PostgreSQL
     DATABASE_URL: str = "postgresql+asyncpg://optiflow:optiflow_password@localhost:5432/optiflow"
-    DATABASE_POOL_SIZE: int = 20  # Increased from 10 for better concurrency
-    DATABASE_MAX_OVERFLOW: int = 40  # Increased from 20 for burst handling
+    DATABASE_POOL_SIZE: int = 50  # ✅ Increased from 20 for 250+ concurrent users
+    DATABASE_MAX_OVERFLOW: int = 100  # ✅ Increased from 40 for burst handling
     DATABASE_POOL_TIMEOUT: int = 30  # Connection pool timeout in seconds
     DATABASE_POOL_RECYCLE: int = 3600  # Recycle connections after 1 hour
     DATABASE_POOL_PRE_PING: bool = True  # Test connections before using
+    DATABASE_ECHO_POOL: bool = True  # ✅ Monitor pool usage in logs
     DATABASE_CONNECT_TIMEOUT: int = 10  # Connection timeout in seconds
     DATABASE_COMMAND_TIMEOUT: int = 30  # Query execution timeout in seconds
 
@@ -124,6 +125,50 @@ class Settings(BaseSettings):
     AGGREGATIONS_RETENTION_DAYS: int = 1825
     DOWNSAMPLED_RETENTION_DAYS: int = 3650
     ALARM_HISTORY_RETENTION_DAYS: int = 730
+
+    # ========================================
+    # Gateway Service Configuration
+    # ========================================
+    GATEWAY_ENABLED: bool = True
+    GATEWAY_POLL_INTERVAL_S: float = 1.0
+    GATEWAY_SOURCE_NAME: str = "optiflow-gateway"
+    GATEWAY_MAX_BUFFER_SIZE: int = 10000
+    
+    # Circuit Breaker
+    GATEWAY_CIRCUIT_BREAKER_THRESHOLD: int = 5
+    GATEWAY_CIRCUIT_BREAKER_TIMEOUT_S: int = 30
+    
+    # Retry Configuration
+    GATEWAY_MAX_RETRY_ATTEMPTS: int = 3
+    GATEWAY_RETRY_BACKOFF_FACTOR: float = 2.0
+    
+    # Rate Limiting
+    GATEWAY_RATE_LIMIT_MSGS_PER_SEC: Optional[int] = None
+    
+    # Tag Discovery
+    GATEWAY_TAG_DISCOVERY_INTERVAL_S: int = 60
+    
+    # Buffer Flush
+    GATEWAY_BUFFER_FLUSH_INTERVAL_S: int = 5
+    
+    # ========================================
+    # Consumer Service Configuration
+    # ========================================
+    CONSUMER_ENABLED: bool = True
+    CONSUMER_TOPIC: str = "raw_tags"
+    CONSUMER_GROUP_ID: str = "timeseries-writers"
+    
+    # Batch Configuration
+    CONSUMER_MIN_BATCH_SIZE: int = 50
+    CONSUMER_MAX_BATCH_SIZE: int = 500
+    CONSUMER_BATCH_TIMEOUT_S: float = 5.0
+    
+    # Deduplication
+    CONSUMER_DEDUP_CACHE_SIZE: int = 10000
+    
+    # Kafka Configuration
+    KAFKA_BOOTSTRAP_SERVERS: str = "kafka:9092"
+    KAFKA_DLQ_TOPIC: str = "raw_tags_dlq"
 
     class Config:
         env_file = ".env"

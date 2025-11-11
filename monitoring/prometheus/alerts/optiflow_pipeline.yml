@@ -1,0 +1,118 @@
+# OptiFlow Pipeline Alerts
+groups:
+  - name: optiflow_pipeline
+    interval: 30s
+    rules:
+      # Gateway Alerts
+      - alert: GatewayCircuitBreakerOpen
+        expr: gateway_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: critical
+          component: gateway
+        annotations:
+          summary: "Gateway circuit breaker is OPEN"
+          description: "The gateway circuit breaker has been open for more than 1 minute, blocking all publishes to Kafka."
+      
+      - alert: GatewayHighErrorRate
+        expr: rate(gateway_messages_published_total{status="failed"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          component: gateway
+        annotations:
+          summary: "Gateway high error rate detected"
+          description: "Gateway is experiencing more than 10 failed publishes per second for the last 2 minutes."
+      
+      - alert: GatewayBufferGrowing
+        expr: gateway_buffer_size > 5000
+        for: 5m
+        labels:
+          severity: warning
+          component: gateway
+        annotations:
+          summary: "Gateway buffer is growing"
+          description: "Gateway local buffer has more than 5000 messages (50% of capacity), indicating Kafka connectivity issues."
+      
+      - alert: GatewayHighLatency
+        expr: histogram_quantile(0.95, rate(gateway_publish_latency_seconds_bucket[5m])) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          component: gateway
+        annotations:
+          summary: "Gateway publish latency is high"
+          description: "95th percentile of gateway publish latency is above 500ms for the last 3 minutes."
+      
+      # Consumer Alerts
+      - alert: ConsumerHighWriteLatency
+        expr: histogram_quantile(0.95, rate(consumer_write_latency_seconds_bucket[5m])) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          component: consumer
+        annotations:
+          summary: "Consumer write latency is high"
+          description: "95th percentile of InfluxDB write latency is above 1 second for the last 3 minutes."
+      
+      - alert: ConsumerHighFailureRate
+        expr: rate(consumer_messages_written_total{status="failed"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: consumer
+        annotations:
+          summary: "Consumer high failure rate"
+          description: "Consumer is failing to write more than 5 batches per second to InfluxDB."
+      
+      - alert: ConsumerDLQGrowing
+        expr: rate(consumer_dlq_messages_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: consumer
+        annotations:
+          summary: "Dead Letter Queue is growing"
+          description: "More than 10 messages per second are being sent to DLQ, indicating persistent processing failures."
+      
+      - alert: ConsumerHighDedupRate
+        expr: rate(consumer_dedup_hits_total[5m]) / rate(consumer_messages_consumed_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: info
+          component: consumer
+        annotations:
+          summary: "High deduplication rate detected"
+          description: "More than 10% of messages are duplicates, may indicate upstream issues or message replay."
+      
+      # DLQ Processor Alerts
+      - alert: DLQProcessorHighAbandonRate
+        expr: rate(dlq_messages_processed_total{status="abandoned"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: dlq_processor
+        annotations:
+          summary: "DLQ processor abandoning messages"
+          description: "More than 1 message per second is being abandoned after max retries. Manual intervention required."
+      
+      # System Health Alerts
+      - alert: PipelineTotalErrorRate
+        expr: sum(rate(gateway_messages_published_total{status="failed"}[5m])) + sum(rate(consumer_messages_written_total{status="failed"}[5m])) > 20
+        for: 3m
+        labels:
+          severity: critical
+          component: pipeline
+        annotations:
+          summary: "Pipeline experiencing high overall error rate"
+          description: "Combined error rate across gateway and consumer exceeds 20 errors/sec."
+      
+      - alert: PipelineDataFlowStalled
+        expr: rate(consumer_messages_written_total{status="success"}[5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: pipeline
+        annotations:
+          summary: "Pipeline data flow has stalled"
+          description: "No successful writes to InfluxDB in the last 2 minutes. Check Kafka, Consumer, and InfluxDB health."

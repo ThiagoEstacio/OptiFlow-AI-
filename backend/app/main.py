@@ -23,15 +23,26 @@ from app.api.v1.api import api_router
 from app.api.routes.simulator import router as simulator_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.ai_agent import router as ai_agent_router
+from app.api.routes.health import router as health_router
 from app.api.v1.endpoints.websocket import router as websocket_router
 from app.db.session import init_db, get_db, check_db_health
 from app.services.autonomous_agent import init_autonomous_agent
 from app.services.kafka_producer import init_kafka_producer, cleanup_kafka_producer
 from app.services.timeseries_consumer import start_timeseries_consumer, stop_timeseries_consumer
+from app.services.dlq_processor import start_dlq_processor, stop_dlq_processor
+from app.services.gateway_service import get_gateway
+from app.services.cache_service import cache_service
+
+# Import service modules to register their Prometheus metrics
+import app.services.gateway_service
+import app.services.timeseries_consumer
+import app.services.dlq_processor
 from app.middleware.timeout import TimeoutMiddleware
 from app.middleware.circuit_breaker import CircuitBreakerMiddleware
 from app.middleware.prometheus_middleware import PrometheusMiddleware
 from app.services.prometheus_metrics import init_metrics, get_metrics
+from app.core.security_layer import init_security, audit_logger
+from app.services.mat_view_refresher import start_mat_view_refresher, stop_mat_view_refresher
 
 # Configure logging
 logging.basicConfig(
@@ -42,6 +53,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
+
+# Security: Admin API Key (will be generated on startup)
+ADMIN_API_KEY = None
 
 # ========================================
 # Prometheus Metrics Configuration
@@ -247,10 +261,56 @@ async def metrics_updater():
     while True:
         try:
             await update_system_metrics()
+            await update_ml_agent_metrics()
             await asyncio.sleep(15)  # Update every 15 seconds
         except Exception as e:
-            logger.error(f"Error in metrics updater: {e}")
+            logger.warning(f"Metrics updater error: {e}")
             await asyncio.sleep(15)
+
+
+async def update_ml_agent_metrics():
+    """Update ML/AI specific metrics"""
+    try:
+        import httpx
+        
+        # Check Ollama health
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.get("http://ollama:11434/api/tags")
+                if response.status_code == 200:
+                    optiflow_ollama_health.set(1)
+                else:
+                    optiflow_ollama_health.set(0)
+        except Exception:
+            optiflow_ollama_health.set(0)
+        
+        # Check Agent health
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.get("http://localhost:8000/api/v1/agent/health")
+                if response.status_code == 200:
+                    data = response.json()
+                    optiflow_agent_status.set(1 if data.get("status") == "healthy" else 0)
+                else:
+                    optiflow_agent_status.set(0)
+        except Exception:
+            optiflow_agent_status.set(0)
+        
+        # Check MLflow experiments (if accessible)
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                # Try to get experiment count from MLflow
+                response = await client.get("http://mlflow:5000/api/2.0/mlflow/experiments/search")
+                if response.status_code == 200:
+                    data = response.json()
+                    experiments = data.get("experiments", [])
+                    optiflow_mlflow_experiments.set(len(experiments))
+        except Exception:
+            # MLflow not accessible or no experiments
+            pass
+            
+    except Exception as e:
+        logger.debug(f"ML/Agent metrics update error: {e}")
 
 
 @asynccontextmanager
@@ -325,6 +385,26 @@ async def lifespan(app: FastAPI):
         logger.warning("⚠️  System will continue without autonomous monitoring")
         # Don't raise - agent is optional, system works without it
 
+    # Initialize Cache Service (Redis)
+    try:
+        await cache_service.connect()
+        logger.info("✅ Cache service initialized and connected to Redis")
+    except Exception as e:
+        logger.warning(f"⚠️  Cache service initialization failed: {e}")
+        logger.warning("⚠️  System will continue without caching")
+
+    # Initialize Security Layer (API Keys, Rate Limiting, Audit)
+    global ADMIN_API_KEY
+    try:
+        ADMIN_API_KEY = init_security()
+        logger.info("✅ Security layer initialized")
+        logger.info(f"🔑 Admin API Key: {ADMIN_API_KEY}")
+        logger.info("⚠️  IMPORTANT: Store this key securely! It will not be shown again.")
+        audit_logger.log_security_event('system_startup', 'Security layer initialized')
+    except Exception as e:
+        logger.warning(f"⚠️  Security layer initialization failed: {e}")
+        logger.warning("⚠️  System will continue without advanced security features")
+
     # Initialize Kafka producer for real-time streaming (event-driven architecture)
     try:
         await init_kafka_producer()
@@ -340,6 +420,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Kafka consumer initialization failed: {e}")
         logger.warning("⚠️  System will continue without Kafka consuming")
+    
+    # Initialize DLQ processor for failed messages
+    try:
+        await start_dlq_processor()
+        logger.info("✅ DLQ processor initialized - handling failed messages")
+    except Exception as e:
+        logger.warning(f"⚠️  DLQ processor initialization failed: {e}")
+        logger.warning("⚠️  System will continue without DLQ processing")
     #     # Don't raise - Kafka is optional, system works without it
 
     logger.info(f"🌐 Environment: {settings.ENVIRONMENT}")
@@ -354,10 +442,63 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Failed to start metrics updater: {e}")
 
+    # Start materialized view auto-refresher
+    mat_view_task = None
+    try:
+        mat_view_task = asyncio.create_task(start_mat_view_refresher())
+        logger.info("✅ Materialized view auto-refresher started")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to start mat view refresher: {e}")
+
+    # Auto-start simulator for demo/development
+    logger.info("🔧 Attempting to auto-start simulator...")
+    try:
+        from app.services.lightweight_simulator import get_simulator
+        simulator = get_simulator()
+        logger.info(f"🔧 Simulator instance obtained, running={simulator.running}")
+        if not simulator.running:
+            simulator.start()
+            logger.info("✅ Simulator auto-started for demo mode")
+        else:
+            logger.info("ℹ️  Simulator already running")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to auto-start simulator: {e}", exc_info=True)
+
+    # Auto-start Gateway Service for PLC → Kafka bridge
+    logger.info("🔧 Attempting to auto-start Gateway Service...")
+    try:
+        from app.services.gateway_service import get_gateway
+        gateway = get_gateway()
+        logger.info(f"🔧 Gateway instance obtained, running={gateway.running}")
+        if not gateway.running:
+            await gateway.start()
+            logger.info("✅ Gateway Service auto-started (PLC → Kafka bridge)")
+        else:
+            logger.info("ℹ️  Gateway Service already running")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to auto-start Gateway Service: {e}", exc_info=True)
+
     yield
 
     # Shutdown
     logger.info("👋 Shutting down OptiFlow AI Platform...")
+    
+    # Stop Gateway Service
+    try:
+        from app.services.gateway_service import get_gateway
+        gateway = get_gateway()
+        if gateway.running:
+            await gateway.stop()
+            logger.info("✅ Gateway Service stopped")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to stop Gateway Service: {e}")
+    
+    # Stop mat view refresher
+    if mat_view_task:
+        try:
+            await stop_mat_view_refresher()
+        except Exception as e:
+            logger.warning(f"⚠️  Mat view refresher cleanup warning: {e}")
     
     # Stop metrics updater
     if metrics_task:
@@ -373,6 +514,13 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Kafka consumer cleaned up")
     except Exception as e:
         logger.warning(f"⚠️  Kafka consumer cleanup warning: {e}")
+    
+    # Cleanup DLQ processor
+    try:
+        await stop_dlq_processor()
+        logger.info("✅ DLQ processor cleaned up")
+    except Exception as e:
+        logger.warning(f"⚠️  DLQ processor cleanup warning: {e}")
 
     # Cleanup Kafka producer
     try:
@@ -394,6 +542,71 @@ init_metrics(
     environment=settings.ENVIRONMENT
 )
 logger.info("✅ Prometheus metrics system initialized")
+
+# Add ML/AI specific metrics to the Prometheus registry
+logger.info("🤖 Adding ML/AI metrics...")
+
+# Get the prometheus metrics singleton and its registry
+_metrics = get_metrics()
+_registry = _metrics.registry
+
+# Register ML/AI metrics in module scope for access by updater
+optiflow_ollama_health = Gauge(
+    'optiflow_ollama_health',
+    'Ollama service health status (1=healthy, 0=unhealthy)',
+    registry=_registry
+)
+optiflow_agent_status = Gauge(
+    'optiflow_agent_status',
+    'Autonomous agent status (1=healthy, 0=unhealthy)',
+    registry=_registry
+)
+optiflow_agent_insights_total = Counter(
+    'optiflow_agent_insights_total',
+    'Total number of insights generated by autonomous agent',
+    registry=_registry
+)
+optiflow_agent_cycle_duration = Histogram(
+    'optiflow_agent_cycle_duration_seconds',
+    'Duration of autonomous agent monitoring cycles',
+    buckets=[1, 5, 10, 30, 60, 120, 300],
+    registry=_registry
+)
+
+# MLflow metrics
+optiflow_mlflow_experiments = Gauge(
+    'optiflow_mlflow_experiments_total',
+    'Total number of MLflow experiments',
+    registry=_registry
+)
+optiflow_mlflow_runs = Gauge(
+    'optiflow_mlflow_runs_total',
+    'Total number of MLflow runs',
+    registry=_registry
+)
+
+# ML Model metrics
+optiflow_ml_predictions_total = Counter(
+    'optiflow_ml_predictions_total',
+    'Total number of ML predictions made',
+    ['model_type', 'status'],
+    registry=_registry
+)
+optiflow_ml_training_duration = Histogram(
+    'optiflow_ml_training_duration_seconds',
+    'Duration of ML model training',
+    ['model_type'],
+    buckets=[1, 10, 30, 60, 300, 600, 1800, 3600],
+    registry=_registry
+)
+optiflow_ml_model_accuracy = Gauge(
+    'optiflow_ml_model_accuracy',
+    'ML model accuracy score',
+    ['model_type', 'metric'],
+    registry=_registry
+)
+
+logger.info("✅ ML/AI metrics registered")
 
 
 # Create FastAPI application
@@ -463,6 +676,15 @@ app.include_router(ai_agent_router, prefix="/api/v1/agent", tags=["ai-agent"])
 # Include WebSocket router for real-time streaming
 app.include_router(websocket_router, prefix="/api/v1")
 
+# Include Gateway router for industrial protocol bridge
+from app.api.routes.gateway import router as gateway_router
+app.include_router(gateway_router, prefix="/api/v1")
+logger.info("✅ Gateway endpoint registered at /api/v1/gateway")
+
+# Include health check router
+app.include_router(health_router)
+logger.info("✅ Health endpoints registered at /api/health and /api/readiness")
+
 # Include metrics endpoint (Prometheus)
 from app.api.v1.endpoints.metrics import router as metrics_router
 app.include_router(metrics_router, tags=["monitoring"])
@@ -524,6 +746,164 @@ async def health_check():
     return JSONResponse(status_code=200, content=response_data)
 
 
+@app.get("/health/deep")
+async def deep_health_check():
+    """
+    Comprehensive health check for all system dependencies
+    
+    Returns detailed status of:
+    - PostgreSQL database
+    - Redis cache
+    - InfluxDB (time-series data)
+    - Kafka (event streaming)
+    - Materialized views freshness
+    
+    Returns 503 if any critical service is down
+    """
+    from datetime import datetime, timedelta
+    from app.services.influxdb import influxdb_service
+    from sqlalchemy import text
+    
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": settings.APP_VERSION,
+        "services": {}
+    }
+    
+    all_healthy = True
+    warnings = []
+    
+    # 1. PostgreSQL Check
+    try:
+        db_healthy = await check_db_health()
+        health_status["services"]["postgresql"] = {
+            "status": "healthy" if db_healthy else "unhealthy",
+            "details": "Connected" if db_healthy else "Connection failed"
+        }
+        if not db_healthy:
+            all_healthy = False
+    except Exception as e:
+        health_status["services"]["postgresql"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        all_healthy = False
+    
+    # 2. Redis Cache Check
+    try:
+        from app.services.redis_cache import redis_cache_service
+        
+        if redis_cache_service and redis_cache_service.available:
+            # Try ping
+            redis_cache_service.client.ping()
+            health_status["services"]["redis"] = {
+                "status": "healthy",
+                "details": "Connected"
+            }
+        else:
+            health_status["services"]["redis"] = {
+                "status": "degraded",
+                "details": "Cache disabled"
+            }
+            warnings.append("Redis cache is disabled")
+    except Exception as e:
+        health_status["services"]["redis"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        warnings.append("Redis unavailable - caching disabled")
+    
+    # 3. InfluxDB Check
+    try:
+        from app.services.influxdb import influxdb_service
+        
+        # Try a simple operation to verify InfluxDB
+        if influxdb_service and influxdb_service.client:
+            health_status["services"]["influxdb"] = {
+                "status": "healthy",
+                "details": "Client initialized"
+            }
+        else:
+            health_status["services"]["influxdb"] = {
+                "status": "degraded",
+                "details": "Client not initialized"
+            }
+            warnings.append("InfluxDB client not initialized")
+    except Exception as e:
+        health_status["services"]["influxdb"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        warnings.append("InfluxDB check failed")
+    
+    # 4. Kafka Check (non-blocking)
+    try:
+        from app.services.kafka_producer import get_kafka_producer
+        kafka_prod = get_kafka_producer()
+        kafka_status = "healthy" if kafka_prod and kafka_prod._producer else "degraded"
+        health_status["services"]["kafka"] = {
+            "status": kafka_status,
+            "details": "Producer active" if kafka_status == "healthy" else "Producer not initialized"
+        }
+        if kafka_status != "healthy":
+            warnings.append("Kafka unavailable - event streaming disabled")
+    except Exception as e:
+        health_status["services"]["kafka"] = {
+            "status": "degraded",
+            "details": "Producer not available"
+        }
+        warnings.append("Kafka unavailable - event streaming disabled")
+    
+    # 5. Materialized Views Freshness Check
+    try:
+        from app.services.mat_view_refresher import REFRESH_SCHEDULES
+        from app.db.session import AsyncSessionLocal
+        
+        mat_views_status = {}
+        now = datetime.now()
+        
+        async with AsyncSessionLocal() as session:
+            for view_name, interval in REFRESH_SCHEDULES.items():
+                # Check last refresh time from pg_stat_statements or estimate
+                # For now, we'll mark as healthy if view exists
+                result = await session.execute(
+                    text(f"SELECT COUNT(*) FROM {view_name}")
+                )
+                row_count = result.scalar()
+                
+                mat_views_status[view_name] = {
+                    "status": "healthy",
+                    "row_count": row_count,
+                    "refresh_interval": f"{interval}s"
+                }
+        
+        health_status["services"]["materialized_views"] = {
+            "status": "healthy",
+            "views": mat_views_status
+        }
+        
+    except Exception as e:
+        health_status["services"]["materialized_views"] = {
+            "status": "degraded",
+            "error": str(e)
+        }
+        warnings.append("Materialized views check failed")
+    
+    # Add warnings if any
+    if warnings:
+        health_status["warnings"] = warnings
+    
+    # Set overall status
+    if not all_healthy:
+        health_status["status"] = "degraded"
+    
+    # Return 503 if critical services are down, otherwise 200
+    status_code = 503 if not all_healthy else 200
+    
+    return JSONResponse(status_code=status_code, content=health_status)
+
+
 @app.get("/metrics")
 async def metrics(request: Request):
     """
@@ -534,6 +914,33 @@ async def metrics(request: Request):
     AI agent interactions, and custom OptiFlow metrics.
     """
     try:
+        # Ensure Gateway, Consumer, and DLQ metrics are registered
+        # by importing the metric variables (triggers module execution)
+        try:
+            from app.services.gateway_service import (
+                gateway_messages_published_total,
+                gateway_publish_latency_seconds,
+                gateway_buffer_size,
+                gateway_circuit_breaker_state,
+                gateway_tags_discovered,
+                gateway_transformations_applied
+            )
+            from app.services.timeseries_consumer import (
+                consumer_messages_consumed_total,
+                consumer_messages_written_total,
+                consumer_batch_size,
+                consumer_write_latency_seconds,
+                consumer_dedup_hits_total,
+                consumer_dlq_sent_total
+            )
+            from app.services.dlq_processor import (
+                dlq_messages_processed_total,
+                dlq_retry_attempts_total,
+                dlq_queue_size
+            )
+        except Exception as e:
+            logger.warning(f"Could not import service metrics: {e}")
+        
         # Update database connection metrics
         from app.db.session import engine
         if hasattr(engine, 'pool'):

@@ -1,0 +1,304 @@
+groups:
+  # ========================================
+  # Materialized Views Alerts
+  # ========================================
+
+  - name: optiflow_materialized_views
+    interval: 1m
+    rules:
+      # Mat View Refresh Failed
+      - alert: MatViewRefreshFailed
+        expr: increase(optiflow_mat_view_refresh_errors_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: database
+          category: materialized_views
+        annotations:
+          summary: "Materialized view refresh failed"
+          description: "View {{ $labels.view_name }} failed to refresh {{ $value }} times in the last 5 minutes."
+          runbook_url: "https://docs.optiflow.ai/runbooks/mat-view-refresh-failure"
+
+      # Mat View High Error Rate
+      - alert: MatViewHighErrorRate
+        expr: |
+          (
+            sum(rate(optiflow_mat_view_refresh_errors_total[5m])) by (view_name)
+            / 
+            (
+              sum(rate(optiflow_mat_view_refresh_success_total[5m])) by (view_name) 
+              + sum(rate(optiflow_mat_view_refresh_errors_total[5m])) by (view_name)
+            )
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          category: materialized_views
+        annotations:
+          summary: "High error rate for materialized view refresh"
+          description: "View {{ $labels.view_name }} has {{ $value | humanize }}% error rate."
+          runbook_url: "https://docs.optiflow.ai/runbooks/mat-view-high-error-rate"
+
+      # Mat View Stale Data (alarm_statistics - 1 hour schedule)
+      - alert: MatViewStaleData_AlarmStats
+        expr: (time() - optiflow_mat_view_last_refresh_timestamp{view_name="mv_alarm_statistics"}) > 7200
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          category: materialized_views
+        annotations:
+          summary: "Materialized view has stale data"
+          description: "mv_alarm_statistics last refreshed {{ $value | humanizeDuration }} ago (expected: 1h)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/mat-view-stale"
+
+      # Mat View Stale Data (tag_performance - 2 minute schedule)
+      - alert: MatViewStaleData_TagPerf
+        expr: (time() - optiflow_mat_view_last_refresh_timestamp{view_name="mv_tag_performance"}) > 360
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+          category: materialized_views
+        annotations:
+          summary: "Critical: mv_tag_performance has stale data"
+          description: "mv_tag_performance last refreshed {{ $value | humanizeDuration }} ago (expected: 2min)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/mat-view-stale"
+
+      # Mat View Stale Data (asset_health - 5 minute schedule)
+      - alert: MatViewStaleData_AssetHealth
+        expr: (time() - optiflow_mat_view_last_refresh_timestamp{view_name="mv_asset_health_overview"}) > 900
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          category: materialized_views
+        annotations:
+          summary: "Materialized view has stale data"
+          description: "mv_asset_health_overview last refreshed {{ $value | humanizeDuration }} ago (expected: 5min)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/mat-view-stale"
+
+      # Mat View Slow Refresh
+      - alert: MatViewSlowRefresh
+        expr: histogram_quantile(0.95, sum(rate(optiflow_mat_view_refresh_duration_seconds_bucket[5m])) by (le, view_name)) > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          category: materialized_views
+        annotations:
+          summary: "Materialized view refresh is slow"
+          description: "View {{ $labels.view_name }} P95 refresh time is {{ $value | humanizeDuration }} (threshold: 30s)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/mat-view-slow-refresh"
+
+  # ========================================
+  # Cache Performance Alerts
+  # ========================================
+
+  - name: optiflow_cache_performance
+    interval: 1m
+    rules:
+      # Low Cache Hit Rate
+      - alert: LowCacheHitRate
+        expr: |
+          (
+            sum(rate(cache_hits_total[5m]))
+            /
+            (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))
+          ) * 100 < 40
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+          category: performance
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is {{ $value | humanize }}% (threshold: 40%). Consider reviewing cache TTL or cache keys."
+          runbook_url: "https://docs.optiflow.ai/runbooks/low-cache-hit-rate"
+
+      # Cache Disabled
+      - alert: CacheDisabled
+        expr: redis_available == 0
+        for: 5m
+        labels:
+          severity: info
+          component: cache
+        annotations:
+          summary: "Redis cache is disabled"
+          description: "Application is running without cache. Performance may be degraded."
+          runbook_url: "https://docs.optiflow.ai/runbooks/cache-disabled"
+
+      # ML Endpoint Low Cache Hit
+      - alert: MLEndpointLowCacheHit
+        expr: |
+          (
+            sum(rate(cache_hits_total{endpoint=~"/ml/.*"}[5m]))
+            /
+            (sum(rate(cache_hits_total{endpoint=~"/ml/.*"}[5m])) + sum(rate(cache_misses_total{endpoint=~"/ml/.*"}[5m])))
+          ) * 100 < 60
+        for: 10m
+        labels:
+          severity: info
+          component: cache
+          category: ml
+        annotations:
+          summary: "ML endpoints have low cache hit rate"
+          description: "ML endpoint cache hit rate is {{ $value | humanize }}% (expected: >60%)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/ml-cache-optimization"
+
+  # ========================================
+  # ML Model Performance Alerts
+  # ========================================
+
+  - name: optiflow_ml_performance
+    interval: 1m
+    rules:
+      # High ML Inference Latency
+      - alert: HighMLInferenceLatency
+        expr: histogram_quantile(0.95, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: ml
+          category: performance
+        annotations:
+          summary: "High ML inference latency"
+          description: "Model {{ $labels.model }} P95 inference time is {{ $value }}s (threshold: 500ms)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/high-ml-latency"
+
+      # ML Model Low Accuracy
+      - alert: MLModelLowAccuracy
+        expr: ml_model_f1_score < 0.70
+        for: 10m
+        labels:
+          severity: warning
+          component: ml
+          category: accuracy
+        annotations:
+          summary: "ML model accuracy dropped"
+          description: "Model {{ $labels.model }} F1-score is {{ $value | humanize }} (threshold: 0.70). Consider retraining."
+          runbook_url: "https://docs.optiflow.ai/runbooks/model-low-accuracy"
+
+      # ML Models Disagree Too Often
+      - alert: MLModelsHighDisagreement
+        expr: |
+          (
+            sum(ml_prediction_agreement{agreement="disagree"})
+            /
+            sum(ml_prediction_total)
+          ) * 100 > 30
+        for: 15m
+        labels:
+          severity: info
+          component: ml
+          category: ab_testing
+        annotations:
+          summary: "ML models disagree frequently"
+          description: "Models disagree {{ $value | humanize }}% of the time (threshold: 30%). Review A/B test results."
+          runbook_url: "https://docs.optiflow.ai/runbooks/model-disagreement"
+
+      # ML Model Not Loaded
+      - alert: MLModelNotLoaded
+        expr: ml_model_loaded == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: ml
+        annotations:
+          summary: "ML model failed to load"
+          description: "Model {{ $labels.model }} is not loaded. ML predictions unavailable."
+          runbook_url: "https://docs.optiflow.ai/runbooks/model-not-loaded"
+
+  # ========================================
+  # API Performance Alerts
+  # ========================================
+
+  - name: optiflow_api_performance
+    interval: 30s
+    rules:
+      # High API Latency (P95 > 500ms)
+      - alert: HighAPILatencyP95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          category: performance
+        annotations:
+          summary: "High API latency detected"
+          description: "Endpoint {{ $labels.endpoint }} P95 latency is {{ $value }}s (threshold: 500ms)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/high-api-latency"
+
+      # High Error Rate (> 5%)
+      - alert: HighAPIErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (endpoint)
+            /
+            sum(rate(http_requests_total[5m])) by (endpoint)
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+          category: reliability
+        annotations:
+          summary: "High API error rate"
+          description: "Endpoint {{ $labels.endpoint }} error rate is {{ $value | humanize }}% (threshold: 5%)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/high-error-rate"
+
+      # Health Check Failing
+      - alert: HealthCheckFailing
+        expr: probe_success{job="health_check"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Health check is failing"
+          description: "Health check endpoint {{ $labels.endpoint }} has been failing for 2 minutes."
+          runbook_url: "https://docs.optiflow.ai/runbooks/health-check-failure"
+
+  # ========================================
+  # System Resource Alerts
+  # ========================================
+
+  - name: optiflow_system_resources
+    interval: 1m
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanize }}% (threshold: 80%)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/high-cpu"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / process_virtual_memory_max_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}% (threshold: 85%)."
+          runbook_url: "https://docs.optiflow.ai/runbooks/high-memory"
+
+      # Database Connection Pool Exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connections_active / db_connections_max > 0.90
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Using {{ $value | humanizePercentage }} of available DB connections."
+          runbook_url: "https://docs.optiflow.ai/runbooks/db-connection-pool"

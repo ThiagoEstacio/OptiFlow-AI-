@@ -1,0 +1,392 @@
+{
+  "title": "OptiFlow - Materialized Views",
+  "tags": [
+    "optiflow",
+    "database",
+    "materialized-views",
+    "performance"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 0,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "type": "graph",
+      "title": "Mat View Refresh Duration",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(optiflow_mat_view_refresh_duration_seconds_bucket[5m])) by (le, view_name))",
+          "legendFormat": "{{view_name}} - P95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(optiflow_mat_view_refresh_duration_seconds_bucket[5m])) by (le, view_name))",
+          "legendFormat": "{{view_name}} - P50",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Duration",
+          "logBase": 1
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "avg": true,
+        "max": true,
+        "current": true
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "type": "graph",
+      "title": "Mat View Refresh Success/Error Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(optiflow_mat_view_refresh_success_total[5m])) by (view_name)",
+          "legendFormat": "{{view_name}} - Success/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(optiflow_mat_view_refresh_errors_total[5m])) by (view_name)",
+          "legendFormat": "{{view_name}} - Errors/s",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "ops",
+          "label": "Rate"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "current": true
+      },
+      "seriesOverrides": [
+        {
+          "alias": "/.*Errors.*/",
+          "color": "#E02F44"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "type": "singlestat",
+      "title": "mv_alarm_statistics - Last Refresh",
+      "targets": [
+        {
+          "expr": "time() - optiflow_mat_view_last_refresh_timestamp{view_name=\"mv_alarm_statistics\"}",
+          "refId": "A"
+        }
+      ],
+      "format": "s",
+      "thresholds": "3600,7200",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": true,
+      "prefix": "Age: ",
+      "postfix": " ago",
+      "valueName": "current"
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "type": "singlestat",
+      "title": "mv_tag_performance - Last Refresh",
+      "targets": [
+        {
+          "expr": "time() - optiflow_mat_view_last_refresh_timestamp{view_name=\"mv_tag_performance\"}",
+          "refId": "A"
+        }
+      ],
+      "format": "s",
+      "thresholds": "120,240",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": true,
+      "prefix": "Age: ",
+      "postfix": " ago",
+      "valueName": "current"
+    },
+    {
+      "id": 5,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      },
+      "type": "singlestat",
+      "title": "mv_asset_health_overview - Last Refresh",
+      "targets": [
+        {
+          "expr": "time() - optiflow_mat_view_last_refresh_timestamp{view_name=\"mv_asset_health_overview\"}",
+          "refId": "A"
+        }
+      ],
+      "format": "s",
+      "thresholds": "300,600",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": true,
+      "prefix": "Age: ",
+      "postfix": " ago",
+      "valueName": "current"
+    },
+    {
+      "id": 6,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 8
+      },
+      "type": "singlestat",
+      "title": "mv_daily_operations_summary - Last Refresh",
+      "targets": [
+        {
+          "expr": "time() - optiflow_mat_view_last_refresh_timestamp{view_name=\"mv_daily_operations_summary\"}",
+          "refId": "A"
+        }
+      ],
+      "format": "s",
+      "thresholds": "3600,7200",
+      "colors": [
+        "#299c46",
+        "#EAB839",
+        "#E02F44"
+      ],
+      "colorBackground": true,
+      "prefix": "Age: ",
+      "postfix": " ago",
+      "valueName": "current"
+    },
+    {
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "type": "table",
+      "title": "Mat Views - Summary Stats",
+      "targets": [
+        {
+          "expr": "optiflow_mat_view_refresh_success_total",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "optiflow_mat_view_refresh_errors_total",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "time() - optiflow_mat_view_last_refresh_timestamp",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        }
+      ],
+      "styles": [
+        {
+          "pattern": "Time",
+          "type": "hidden"
+        },
+        {
+          "pattern": "view_name",
+          "type": "string",
+          "alias": "View Name"
+        },
+        {
+          "pattern": "Value #A",
+          "type": "number",
+          "alias": "Total Successful Refreshes",
+          "decimals": 0
+        },
+        {
+          "pattern": "Value #B",
+          "type": "number",
+          "alias": "Total Errors",
+          "decimals": 0,
+          "colorMode": "cell",
+          "colors": [
+            "#299c46",
+            "#EAB839",
+            "#E02F44"
+          ],
+          "thresholds": [
+            "1",
+            "5"
+          ]
+        },
+        {
+          "pattern": "Value #C",
+          "type": "number",
+          "alias": "Last Refresh (seconds ago)",
+          "decimals": 0,
+          "unit": "s"
+        }
+      ],
+      "transform": "table"
+    },
+    {
+      "id": 8,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "type": "graph",
+      "title": "Total Refresh Operations",
+      "targets": [
+        {
+          "expr": "sum(optiflow_mat_view_refresh_success_total)",
+          "legendFormat": "Total Successful Refreshes",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(optiflow_mat_view_refresh_errors_total)",
+          "legendFormat": "Total Errors",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "label": "Count"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "current": true,
+        "total": true
+      }
+    },
+    {
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "type": "graph",
+      "title": "Error Rate by View",
+      "targets": [
+        {
+          "expr": "(sum(rate(optiflow_mat_view_refresh_errors_total[5m])) by (view_name) / (sum(rate(optiflow_mat_view_refresh_success_total[5m])) by (view_name) + sum(rate(optiflow_mat_view_refresh_errors_total[5m])) by (view_name))) * 100",
+          "legendFormat": "{{view_name}} - Error Rate %",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percent",
+          "label": "Error Rate %",
+          "max": 100
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "legend": {
+        "show": true,
+        "alignAsTable": true,
+        "current": true,
+        "avg": true,
+        "max": true
+      },
+      "alert": {
+        "name": "Mat View High Error Rate",
+        "conditions": [
+          {
+            "evaluator": {
+              "type": "gt",
+              "params": [
+                5
+              ]
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "frequency": "1m",
+        "handler": 1,
+        "message": "Materialized view refresh error rate exceeded 5%",
+        "noDataState": "no_data",
+        "notifications": []
+      }
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  }
+}

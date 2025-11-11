@@ -19,6 +19,7 @@ from app.db.session import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.operational_data import TruckEntry, ShipLoading, DailyOperations
+from app.services.cache_service import cached
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -452,6 +453,7 @@ async def create_daily_operations(
 
 
 @router.get("/daily", response_model=Dict[str, Any])
+@cached(ttl=300, key_prefix="operations_daily")
 async def get_daily_operations(
     site_id: Optional[int] = None,
     start_date: Optional[date] = None,

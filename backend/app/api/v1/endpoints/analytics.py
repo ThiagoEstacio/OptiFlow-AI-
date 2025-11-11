@@ -8,13 +8,21 @@ Advanced analytics and query endpoints:
 - GET /saved/{id}: Get saved query
 - PUT /saved/{id}: Update saved query
 - DELETE /saved/{id}: Delete saved query
+- GET /anomalies: ML-based anomaly detection
+- GET /model-info: ML model information
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timedelta
+from pydantic import BaseModel
+import joblib
+import numpy as np
+import os
+import logging
 
 from app.core.deps import get_db, get_current_user
 from app.models.user import User
@@ -27,11 +35,71 @@ from app.schemas.analytics import (
     SavedQueryResponse,
 )
 from app.services.analytics import AnalyticsService
+from app.services.cache_service import cached
+from app.services.optimized_influxdb_service import optimized_influxdb_service
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from influxdb_client import InfluxDBClient
+import pandas as pd
+
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
+
+# ========================================
+# 📊 ML MODELS & CONFIG
+# ========================================
+
+MODEL_DIR = "/app/models"
+ISOLATION_FOREST_PATH = os.path.join(MODEL_DIR, "isolation_forest_fast.joblib")
+SCALER_PATH = os.path.join(MODEL_DIR, "scaler_fast.joblib")
+
+INFLUX_URL = os.getenv("INFLUXDB_URL", "http://influxdb:8086")
+INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "my-super-secret-influxdb-token")
+INFLUX_ORG = os.getenv("INFLUXDB_ORG", "optiflow")
+INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET", "timeseries")
+
+TAG_NAME_MAPPING = {
+    "Motor 01 - Corrente": "MOTOR_01_CURRENT",
+    "Motor 01 - Velocidade": "MOTOR_01_SPEED",
+    "Motor 01 - Vibração": "MOTOR_01_VIBRATION",
+    "Temperatura - Área Produção": "TEMP_SENSOR_01",
+    "Temperatura - Caldeira": "TEMP_SENSOR_02",
+    "Pressão - Linha Principal": "PRESSURE_01",
+    "Pressão - Caldeira": "PRESSURE_02",
+    "Nível - Tanque Água": "LEVEL_TANK_01",
+    "Consumo Energético Total": "POWER_CONSUMPTION",
+    "Taxa de Produção": "PRODUCTION_RATE",
+}
+
+TAGS_ORDER = [
+    "MOTOR_01_CURRENT", "MOTOR_01_SPEED", "MOTOR_01_VIBRATION",
+    "TEMP_SENSOR_01", "TEMP_SENSOR_02", "PRESSURE_01", "PRESSURE_02",
+    "LEVEL_TANK_01", "POWER_CONSUMPTION", "PRODUCTION_RATE",
+]
+
+
+# ========================================
+# 📦 ML RESPONSE MODELS
+# ========================================
+
+class AnomalyPoint(BaseModel):
+    timestamp: datetime
+    tag_id: str
+    value: float
+    anomaly_score: float
+    is_anomaly: bool
+    anomaly_type: Optional[str] = None
+
+
+class AnomalyDetectionResponse(BaseModel):
+    total_points: int
+    anomalies_detected: int
+    anomaly_rate: float
+    model_used: str
+    time_range: dict
+    anomalies: List[AnomalyPoint]
 
 
 @router.post("/query", response_model=AnalyticsQueryResponse)
@@ -358,65 +426,140 @@ async def get_query_examples(request: Request):
                 "tags": ["temp_sensor_01", "pressure_sensor_01"],
                 "start": "2025-10-27T00:00:00Z",
                 "end": "2025-10-28T00:00:00Z",
-                "filters": [
-                    {"field": "quality", "operator": "eq", "value": "good"}
-                ],
                 "aggregations": [
-                    {
-                        "function": "correlation",
-                        "field": "value",
-                        "params": {"target_tag": "pressure_sensor_01"}
-                    }
+                    {"function": "mean", "field": "value", "window": "15m"}
                 ]
-            }
-        },
-        "anomaly_detection": {
-            "name": "Anomaly Detection (Z-Score)",
-            "description": "Detect anomalous behavior in sensor data",
-            "query": {
-                "tags": ["vibration_sensor_01"],
-                "start": "2025-10-27T00:00:00Z",
-                "end": "2025-10-28T00:00:00Z",
-                "aggregations": [
-                    {
-                        "function": "outlier_detection",
-                        "field": "value",
-                        "params": {"method": "zscore", "threshold": 3.0}
-                    }
-                ]
-            }
-        },
-        "trending": {
-            "name": "Exponential Moving Average",
-            "description": "Smooth trending data with EMA",
-            "query": {
-                "tags": ["energy_consumption"],
-                "start": "2025-10-20T00:00:00Z",
-                "end": "2025-10-28T00:00:00Z",
-                "aggregations": [
-                    {
-                        "function": "moving_average",
-                        "field": "value",
-                        "params": {"type": "exponential", "window_size": 24}
-                    }
-                ]
-            }
-        },
-        "energy_analysis": {
-            "name": "Daily Energy Consumption",
-            "description": "Calculate total energy consumption per day",
-            "query": {
-                "tags": ["power_meter_01", "power_meter_02"],
-                "start": "2025-10-01T00:00:00Z",
-                "end": "2025-10-31T00:00:00Z",
-                "aggregations": [
-                    {
-                        "function": "sum",
-                        "field": "value",
-                        "window": "1d"
-                    }
-                ],
-                "group_by": ["device_id"]
             }
         }
     }
+
+
+# ========================================
+# 🤖 ML ANOMALY DETECTION ENDPOINTS
+# ========================================
+
+@router.get("/anomalies", response_model=AnomalyDetectionResponse)
+@cached(ttl=180, key_prefix="analytics_anomalies")
+async def detect_anomalies(
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    tag_id: Optional[str] = Query(None, description="Filter by specific tag"),
+    model_type: str = Query("isolation_forest", description="Model type"),
+    limit: int = Query(1000, description="Max points", ge=1, le=100000)
+):
+    """Detect anomalies using ML models"""
+    # Parse dates
+    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00')) if end_date else datetime.utcnow()
+    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00')) if start_date else end_dt - timedelta(days=7)
+    
+    # Load model
+    if not os.path.exists(ISOLATION_FOREST_PATH):
+        raise HTTPException(status_code=503, detail="Model not trained yet")
+    
+    model = joblib.load(ISOLATION_FOREST_PATH)
+    scaler = joblib.load(SCALER_PATH)
+    
+    # Query usando OptimizedInfluxDB (auto-seleciona bucket baseado em time range)
+    # Para ML, sempre usamos dados brutos para máxima precisão
+    start_str = start_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    end_str = end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    
+    # Coletar dados de todos os tags necessários
+    all_data = []
+    for tag_name in TAGS_ORDER:
+        try:
+            # Usando OptimizedInfluxDB com auto-bucket selection
+            data = await optimized_influxdb_service.query_tag_data(
+                tag_name=tag_name,
+                start_time=start_str,
+                end_time=end_str,
+                limit=limit
+            )
+            if data:
+                all_data.extend(data)
+        except Exception as e:
+            logger.warning(f"Failed to query tag {tag_name}: {e}")
+            continue
+    
+    if not all_data:
+        return AnomalyDetectionResponse(
+            total_points=0, anomalies_detected=0, anomaly_rate=0.0,
+            model_used=model_type, time_range={"start": start_dt.isoformat(), "end": end_dt.isoformat()},
+            anomalies=[]
+        )
+    
+    # Converter para DataFrame
+    df = pd.DataFrame(all_data)
+    
+    # Pivot para ter um tag por coluna
+    df_pivot = df.pivot_table(
+        index='timestamp', 
+        columns='tag_name', 
+        values='value',
+        aggfunc='mean'
+    ).reset_index()
+    
+    # Rename colunas usando mapping
+    df_pivot = df_pivot.rename(columns=TAG_NAME_MAPPING)
+    feature_cols = [col for col in TAGS_ORDER if col in df_pivot.columns]
+    
+    if len(df_pivot) > limit:
+        df_pivot = df_pivot.sample(n=limit, random_state=42)
+    
+    X = df_pivot[feature_cols].fillna(0).values
+    timestamps = df_pivot['timestamp'].values
+    
+    # Predict
+    X_scaled = scaler.transform(X)
+    predictions = model.predict(X_scaled)
+    scores = model.score_samples(X_scaled)
+    is_anomaly_arr = (predictions == -1)
+    
+    # Build response
+    anomalies = []
+    for i in range(len(df_pivot)):
+        if is_anomaly_arr[i]:
+            tag_val = tag_id if tag_id else feature_cols[0]
+            
+            # Handle NaN/Inf values
+            raw_value = df_pivot[feature_cols[0]].iloc[i] if feature_cols else 0.0
+            value = float(raw_value) if np.isfinite(raw_value) else 0.0
+            
+            score_val = float(-scores[i])
+            if not np.isfinite(score_val):
+                score_val = 0.0
+            
+            anomalies.append(AnomalyPoint(
+                timestamp=pd.Timestamp(timestamps[i]).to_pydatetime(),
+                tag_id=tag_val,
+                value=value,
+                anomaly_score=score_val,
+                is_anomaly=True,
+                anomaly_type="outlier"
+            ))
+    
+    return AnomalyDetectionResponse(
+        total_points=len(df),
+        anomalies_detected=len(anomalies),
+        anomaly_rate=len(anomalies) / len(df) if len(df) > 0 else 0.0,
+        model_used=model_type,
+        time_range={"start": start_dt.isoformat(), "end": end_dt.isoformat()},
+        anomalies=anomalies[:500]
+    )
+
+
+@router.get("/model-info")
+async def get_model_info():
+    """Get ML model information"""
+    if not os.path.exists(ISOLATION_FOREST_PATH):
+        return {"status": "not_ready", "message": "Model not trained"}
+    
+    model = joblib.load(ISOLATION_FOREST_PATH)
+    return {
+        "model_type": "Isolation Forest",
+        "n_estimators": model.n_estimators,
+        "contamination": model.contamination,
+        "features": TAGS_ORDER,
+        "status": "ready"
+    }
+
