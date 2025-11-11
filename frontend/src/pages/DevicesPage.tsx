@@ -127,69 +127,109 @@ export const DevicesPage: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredDevices.length === 0 ? (
-          <div className="col-span-full text-center py-12 bg-white rounded-lg shadow">
-            <p className="text-gray-500">
-              {searchQuery ? 'No devices found matching your search.' : 'No devices found. Click "Add Device" to create one.'}
-            </p>
+          <div className="col-span-full text-center py-16 bg-white rounded-lg shadow-md">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="text-6xl">🔌</div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                  {searchQuery ? 'No devices found' : 'No devices configured'}
+                </h3>
+                <p className="text-gray-500 mb-6">
+                  {searchQuery 
+                    ? 'Try adjusting your search criteria.' 
+                    : 'Get started by adding your first industrial device or PLC.'}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium inline-flex items-center space-x-2"
+                  >
+                    <span>➕</span>
+                    <span>Add Your First Device</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           filteredDevices.map((device) => (
-            <div key={device.id} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900">{device.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">{device.description || device.device_type}</p>
-                </div>
-                <span
-                  className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                    device.status === 'connected' ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                  title={device.status === 'connected' ? 'Connected' : 'Disconnected'}
-                ></span>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Protocol:</span>
-                  <span className="font-medium text-gray-900">{device.protocol.toUpperCase()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">IP Address:</span>
-                  <span className="font-medium text-gray-900">{device.ip_address || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Port:</span>
-                  <span className="font-medium text-gray-900">{device.port || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Status:</span>
-                  <span className={`font-medium ${device.enabled ? 'text-green-600' : 'text-gray-400'}`}>
-                    {device.enabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                </div>
-                {device.last_seen && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Last Seen:</span>
-                    <span className="font-medium text-gray-900">
-                      {new Date(device.last_seen).toLocaleTimeString()}
-                    </span>
+            <div key={device.id} className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden border border-gray-100">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="text-3xl">
+                        {device.protocol === 'modbus' ? '📡' : 
+                         device.protocol === 'opc_ua' ? '🔗' : 
+                         device.protocol === 'mqtt' ? '📨' : '🔌'}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">{device.name}</h3>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">{device.device_type}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">{device.description || 'No description'}</p>
                   </div>
-                )}
-              </div>
+                  <div className="flex flex-col items-end space-y-2">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        device.status === 'connected' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full mr-1.5 ${
+                        device.status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                      }`}></span>
+                      {device.status === 'connected' ? 'Online' : 'Offline'}
+                    </span>
+                    {device.enabled && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        ✓ Enabled
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between">
-                <button
-                  onClick={() => openEditModal(device)}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => openDeleteDialog(device)}
-                  className="text-red-600 hover:text-red-800 text-sm font-medium"
-                >
-                  Delete
-                </button>
+                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-500 block text-xs mb-1">Protocol</span>
+                      <span className="font-semibold text-gray-900 uppercase">{device.protocol}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs mb-1">IP Address</span>
+                      <span className="font-medium text-gray-900">{device.ip_address || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-xs mb-1">Port</span>
+                      <span className="font-medium text-gray-900">{device.port || 'N/A'}</span>
+                    </div>
+                    {device.last_seen && (
+                      <div>
+                        <span className="text-gray-500 block text-xs mb-1">Last Seen</span>
+                        <span className="font-medium text-gray-900 text-xs">
+                          {new Date(device.last_seen).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end space-x-3">
+                  <button
+                    onClick={() => openEditModal(device)}
+                    className="px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => openDeleteDialog(device)}
+                    className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))

@@ -112,10 +112,14 @@ export const SimplifiedSidebar: React.FC = () => {
   };
 
   const isGroupExpanded = (groupPath: string): boolean => {
-    return expandedGroups.includes(groupPath) || 
-           navItems.find(item => item.path === groupPath)?.children?.some(
-             child => location.pathname.startsWith(child.path)
-           ) || false;
+    // Only expand groups when explicitly toggled or when a child route is active
+    if (expandedGroups.includes(groupPath)) return true;
+    
+    const item = navItems.find(i => i.path === groupPath);
+    if (item?.children) {
+      return item.children.some(child => location.pathname === child.path);
+    }
+    return false;
   };
 
   return (

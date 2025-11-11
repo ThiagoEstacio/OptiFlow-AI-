@@ -1,21 +1,68 @@
 /**
- * Top Bar with User Menu
+ * Top Bar with User Menu and System Status
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppSelector } from '../../store';
 
 export const TopBar: React.FC = () => {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const activeAlarms = useAppSelector((state) => state.alarms.activeAlarms);
+
+  // Check backend health
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/health');
+        if (response.ok) {
+          setBackendStatus('online');
+        } else {
+          setBackendStatus('offline');
+        }
+      } catch (error) {
+        setBackendStatus('offline');
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="flex items-center justify-between px-6 py-4">
-        {/* Left side - could add breadcrumbs here */}
-        <div className="flex items-center space-x-4">
-          <h2 className="text-xl font-semibold text-gray-800">SmartPort Platform</h2>
+        {/* Left side - Brand and Status */}
+        <div className="flex items-center space-x-6">
+          <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            OptiFlow AI
+          </h2>
+          
+          {/* System Status Badge */}
+          <div className="flex items-center space-x-2">
+            <span
+              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                backendStatus === 'online'
+                  ? 'bg-green-100 text-green-800'
+                  : backendStatus === 'offline'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full mr-1.5 ${
+                  backendStatus === 'online'
+                    ? 'bg-green-500 animate-pulse'
+                    : backendStatus === 'offline'
+                    ? 'bg-red-500'
+                    : 'bg-gray-400 animate-pulse'
+                }`}
+              ></span>
+              {backendStatus === 'online' ? 'System Online' : backendStatus === 'offline' ? 'System Offline' : 'Checking...'}
+            </span>
+          </div>
         </div>
 
         {/* Right side */}
