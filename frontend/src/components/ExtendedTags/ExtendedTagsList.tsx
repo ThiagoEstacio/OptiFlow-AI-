@@ -157,6 +157,10 @@ export const ExtendedTagsList: React.FC<ExtendedTagsListProps> = ({
       [TagType.AGGREGATED]: { label: 'Agregado', color: 'warning' as const, icon: <FormulaIcon /> }
     };
     const c = config[tagType];
+    // Fallback se o tag_type não estiver definido no config
+    if (!c) {
+      return <Chip size="small" label={tagType || 'Desconhecido'} color="default" />;
+    }
     return <Chip size="small" label={c.label} color={c.color} icon={c.icon} />;
   };
 
