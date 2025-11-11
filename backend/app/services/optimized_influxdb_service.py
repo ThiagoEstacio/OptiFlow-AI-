@@ -443,6 +443,68 @@ class OptimizedInfluxDBService:
             "status": "active"
         }
     
+    def get_active_tags(self, lookback_hours: int = 1) -> List[Dict[str, Any]]:
+        """
+        Get list of all active tags with data in the specified lookback period.
+        
+        Args:
+            lookback_hours: Hours to look back for active tags (default: 1)
+            
+        Returns:
+            List of dictionaries with tag information including last value
+        """
+        try:
+            # Use the primary bucket (timeseries/optiflow)
+            bucket = settings.INFLUXDB_BUCKET
+            
+            query = f'''
+                from(bucket: "{bucket}")
+                    |> range(start: -{lookback_hours}h)
+                    |> filter(fn: (r) => r._measurement == "tag_data")
+                    |> group(columns: ["tag_id"])
+                    |> last()
+                    |> yield(name: "last")
+            '''
+            
+            tables = self.query_api.query(query, org=settings.INFLUXDB_ORG)
+            
+            tags = []
+            seen_tags = set()
+            
+            for table in tables:
+                for record in table.records:
+                    tag_id = record.values.get("tag_id") or record.values.get("tag_name")
+                    
+                    if not tag_id:
+                        continue
+                        
+                    # Skip duplicates
+                    if tag_id in seen_tags:
+                        continue
+                    seen_tags.add(tag_id)
+                    
+                    tags.append({
+                        "id": tag_id,
+                        "name": tag_id,
+                        "address": tag_id,
+                        "data_type": "FLOAT",
+                        "last_value": record.get_value(),
+                        "last_quality": record.values.get("quality", "Good"),
+                        "last_timestamp": record.get_time().isoformat() if record.get_time() else None,
+                        "enabled": True,
+                        "source": "influxdb",
+                        "unit": record.values.get("unit", ""),
+                        "description": f"Active tag from InfluxDB (last {lookback_hours}h)",
+                        "device_id": record.values.get("device_id", "unknown")
+                    })
+            
+            logger.info(f"✅ Found {len(tags)} active tags in last {lookback_hours}h from bucket '{bucket}'")
+            return tags
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting active tags: {e}", exc_info=True)
+            return []
+    
     def close(self):
         """Close InfluxDB client"""
         self.client.close()

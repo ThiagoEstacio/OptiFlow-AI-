@@ -22,6 +22,35 @@ _latest_value_cache: Dict[str, tuple] = {}  # {tag_id: (value, timestamp)}
 _cache_ttl = 1.0  # seconds
 
 
+@router.get("/tags/active")
+async def get_active_tags(
+    lookback_hours: int = 1,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get list of all active tags with recent data from InfluxDB.
+    This endpoint discovers tags that are actively publishing data,
+    regardless of PostgreSQL configuration.
+    
+    Args:
+        lookback_hours: Hours to look back for active tags (default: 1)
+        
+    Returns:
+        List of active tags with their latest values
+    """
+    try:
+        tags = influxdb_service.get_active_tags(lookback_hours=lookback_hours)
+        return {
+            "status": "success",
+            "count": len(tags),
+            "lookback_hours": lookback_hours,
+            "tags": tags
+        }
+    except Exception as e:
+        logger.error(f"Error getting active tags: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/batch")
 async def write_batch(
     points: List[Dict[str, Any]] = Body(...),
