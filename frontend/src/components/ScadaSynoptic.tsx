@@ -19,6 +19,7 @@ import {
   Thermostat,
   Timeline,
 } from '@mui/icons-material';
+import apiClient from '../api/client';
 
 interface ScadaSynopticProps {
   status: any;
@@ -39,6 +40,8 @@ export const ScadaSynoptic: React.FC<ScadaSynopticProps> = ({ status, onCommand 
   const animationFrameRef = useRef<number>();
   const particlesRef = useRef<Particle[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
+  const [shipLoadPct, setShipLoadPct] = useState<number>(0);
+  const [totalMassLoaded, setTotalMassLoaded] = useState<number>(0);
 
   // Dimensões do canvas
   const CANVAS_WIDTH = 1400;
@@ -83,6 +86,26 @@ export const ScadaSynoptic: React.FC<ScadaSynopticProps> = ({ status, onCommand 
   // Inicializa partículas de fluxo
   const initParticles = () => {
     particlesRef.current = [];
+  };
+
+  // Fetch real-time data from tags
+  const fetchRealTimeData = async () => {
+    try {
+      const tags = await apiClient.getTags();
+      
+      // Find TOTAL_MASS_T_PV tag for ship load
+      const totalMassTag = tags.find(t => t.name === 'TOTAL_MASS_T_PV');
+      if (totalMassTag && typeof totalMassTag.last_value === 'number') {
+        setTotalMassLoaded(totalMassTag.last_value);
+        
+        // Calculate percentage (assuming 65,000t capacity)
+        const shipCapacity = 65000;
+        const loadPct = Math.min((totalMassTag.last_value / shipCapacity) * 100, 100);
+        setShipLoadPct(loadPct / 100); // Normalize to 0-1
+      }
+    } catch (error) {
+      console.error('Error fetching real-time data:', error);
+    }
   };
 
   // Spawna novas partículas baseado no fluxo
@@ -451,19 +474,25 @@ export const ScadaSynoptic: React.FC<ScadaSynopticProps> = ({ status, onCommand 
       ctx.lineWidth = 1;
       ctx.strokeRect(holdX, ship.y + 30, 50, 150);
       
-      // Nível de carga
-      const loadedPct = 0.3; // TODO: conectar com dados reais
+      // Nível de carga - usando dados reais do TOTAL_MASS_T_PV
+      const loadedPct = shipLoadPct; // Connected to real-time data
       ctx.fillStyle = COLORS.material;
       const holdFill = 150 * loadedPct;
       ctx.fillRect(holdX, ship.y + 180 - holdFill, 50, holdFill);
     }
 
-    // Label
+    // Label - usando massa real carregada
     ctx.fillStyle = COLORS.text;
     ctx.font = 'bold 14px monospace';
     ctx.fillText('MV PACIFIC GLORY', ship.x + 50, ship.y + 15);
     ctx.font = '11px monospace';
-    ctx.fillText('DWT: 65,000t | Loaded: 19,500t (30%)', ship.x + 20, ship.y + 220);
+    const loadedTons = Math.round(totalMassLoaded);
+    const loadPctDisplay = (shipLoadPct * 100).toFixed(1);
+    ctx.fillText(
+      `DWT: 65,000t | Loaded: ${loadedTons.toLocaleString()}t (${loadPctDisplay}%)`,
+      ship.x + 20,
+      ship.y + 220
+    );
 
     // ========== PARTÍCULAS DE FLUXO ==========
     updateParticles();
@@ -566,7 +595,16 @@ export const ScadaSynoptic: React.FC<ScadaSynopticProps> = ({ status, onCommand 
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [status]);
+  }, [status, shipLoadPct, totalMassLoaded]);
+
+  // Fetch real-time data periodically
+  useEffect(() => {
+    fetchRealTimeData(); // Initial fetch
+    
+    const interval = setInterval(fetchRealTimeData, 5000); // Update every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <Box sx={{ width: '100%', height: '100%', bgcolor: '#0f172a', p: 2 }}>

@@ -35,6 +35,7 @@ import {
   RotateRight,
   OpenInFull,
 } from '@mui/icons-material';
+import apiClient from '../api/client';
 
 interface ScadaProcessViewProps {
   status: any;
@@ -80,9 +81,30 @@ export const ScadaProcessView: React.FC<ScadaProcessViewProps> = ({
   const animationFrameRef = useRef<number>();
   const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
   const [motorAngles, setMotorAngles] = useState<{ [key: string]: number }>({});
+  const [warehouseLevel, setWarehouseLevel] = useState<number>(100); // Warehouse level percentage
 
   const CANVAS_WIDTH = 1600;
   const CANVAS_HEIGHT = 900;
+
+  // Fetch real-time warehouse level
+  const fetchWarehouseLevel = async () => {
+    try {
+      const tags = await apiClient.getTags();
+      const levelTag = tags.find(t => t.name === 'WAREHOUSE_LEVEL_PCT_PV');
+      if (levelTag && typeof levelTag.last_value === 'number') {
+        setWarehouseLevel(levelTag.last_value);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouse level:', error);
+    }
+  };
+
+  // Fetch warehouse level periodically
+  useEffect(() => {
+    fetchWarehouseLevel();
+    const interval = setInterval(fetchWarehouseLevel, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Atualiza ângulos dos motores
   useEffect(() => {
@@ -394,8 +416,8 @@ export const ScadaProcessView: React.FC<ScadaProcessViewProps> = ({
     ctx.lineWidth = 3;
     ctx.strokeRect(siloX, siloY, siloWidth, siloHeight);
 
-    // Nível de material
-    const fillLevel = (status?.warehouse_inventory_t || 0) / 10000;
+    // Nível de material - usando dado real do WAREHOUSE_LEVEL_PCT_PV
+    const fillLevel = warehouseLevel / 100; // Convert percentage to 0-1
     const fillHeight = siloHeight * Math.min(fillLevel, 1);
     ctx.fillStyle = COLORS.material;
     ctx.fillRect(siloX, siloY + siloHeight - fillHeight, siloWidth, fillHeight);
@@ -405,7 +427,9 @@ export const ScadaProcessView: React.FC<ScadaProcessViewProps> = ({
     ctx.font = 'bold 16px monospace';
     ctx.fillText('WAREHOUSE', siloX + 10, siloY - 10);
     ctx.font = '14px monospace';
-    ctx.fillText(`${(status?.warehouse_inventory_t || 0).toFixed(0)} t`, siloX + 20, siloY + 30);
+    // Estimate tons based on percentage (assuming 10,000t capacity)
+    const estimatedTons = (warehouseLevel / 100) * 10000;
+    ctx.fillText(`${estimatedTons.toFixed(0)} t (${warehouseLevel.toFixed(1)}%)`, siloX + 10, siloY + 30);
 
     // Sensor de nível
     drawSensor(ctx, siloX + siloWidth + 20, siloY + 50, 'level', `${(fillLevel * 100).toFixed(0)}%`, fillLevel > 0.9);
@@ -625,8 +649,8 @@ export const ScadaProcessView: React.FC<ScadaProcessViewProps> = ({
       ctx.lineWidth = 2;
       ctx.strokeRect(holdX, shipY + 20, 70, 90);
       
-      // Material carregado
-      const loadPct = 0.35; // TODO: conectar com dados reais
+      // Material carregado - usando dado real do warehouse (100% - nivel_warehouse = carga_navio aproximada)
+      const loadPct = Math.max(0, Math.min((100 - warehouseLevel) / 100, 1));
       ctx.fillStyle = COLORS.material;
       ctx.fillRect(holdX, shipY + 110 - loadPct * 90, 70, loadPct * 90);
     }
