@@ -50,7 +50,8 @@ import {
   Storage as DataIcon,
   Settings as SettingsIcon,
   TrendingUp as TrendingUpIcon,
-  Code as CodeIcon
+  Code as CodeIcon,
+  ContentCopy as ContentCopyIcon
 } from '@mui/icons-material';
 import { AssetTreeView } from '../components/ExtendedTags/AssetTreeView';
 import { TagBulkImport } from '../components/ExtendedTags/TagBulkImport';
@@ -99,6 +100,8 @@ export const TagsPage: React.FC = () => {
   const [filterDevice, setFilterDevice] = useState<string>('');
   const [filterDataType, setFilterDataType] = useState<string>('');
   const [filterEnabled, setFilterEnabled] = useState<string>('all');
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Formulas state (mock data for now)
   const [formulas, setFormulas] = useState<any[]>([
@@ -182,6 +185,64 @@ export const TagsPage: React.FC = () => {
     }
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await dispatch(fetchTags()).unwrap();
+      setLastRefresh(new Date());
+      showToast.success('Tags atualizados!');
+    } catch (error) {
+      showToast.error('Erro ao atualizar tags');
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
+  const handleExportFiltered = () => {
+    const filtered = filteredTags;
+    if (filtered.length === 0) {
+      showToast.error('Nenhum tag para exportar');
+      return;
+    }
+
+    const csvHeaders = ['ID', 'Name', 'Device', 'Data Type', 'Unit', 'Last Value', 'Last Update', 'Enabled'];
+    const csvRows = filtered.map(tag => [
+      tag.id,
+      tag.name,
+      tag.device_id,
+      tag.data_type,
+      tag.unit || '',
+      tag.last_value ?? 'N/A',
+      tag.last_timestamp ? new Date(tag.last_timestamp).toISOString() : 'N/A',
+      tag.enabled ? 'Yes' : 'No'
+    ]);
+
+    const csv = [csvHeaders, ...csvRows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tags_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast.success(`${filtered.length} tags exportados!`);
+  };
+
+  const handleCopyTagId = (tagId: string) => {
+    navigator.clipboard.writeText(tagId);
+    showToast.success('Tag ID copiado!');
+  };
+
+  const getTagsWithRecentData = () => {
+    return tags.filter(tag => {
+      if (!tag.last_timestamp) return false;
+      const lastUpdate = new Date(tag.last_timestamp);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+      return diffMinutes < 5; // Data from last 5 minutes
+    }).length;
+  };
+
   const handleDownloadTemplate = () => {
     const template = `name,address,device_id,data_type,unit,description,enabled,log_enabled
 TEMP_01,ns=2;s=Temperature,${devices[0]?.id || ''},FLOAT,°C,Temperature sensor,true,true
@@ -243,9 +304,19 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
-            <Tooltip title="Atualizar">
-              <IconButton onClick={() => dispatch(fetchTags())} color="primary" size="large">
-                <RefreshIcon />
+            <Tooltip title={`Última atualização: ${lastRefresh.toLocaleTimeString()}`}>
+              <IconButton 
+                onClick={handleRefresh} 
+                color="primary" 
+                size="large"
+                disabled={isRefreshing}
+              >
+                <RefreshIcon className={isRefreshing ? 'animate-spin' : ''} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Exportar tags filtrados">
+              <IconButton onClick={handleExportFiltered} color="primary" size="large">
+                <DownloadIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Hierarquia de Assets">
@@ -272,6 +343,13 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
               <Typography variant="caption" color="text.secondary">Ativos</Typography>
             </CardContent>
           </Card>
+          <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#e3f2fd' }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <TrendingUpIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold" color="info.main">{getTagsWithRecentData()}</Typography>
+              <Typography variant="caption" color="text.secondary">Com Dados Recentes</Typography>
+            </CardContent>
+          </Card>
           <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#fff3e0' }}>
             <CardContent sx={{ textAlign: 'center', py: 2 }}>
               <SettingsIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
@@ -279,18 +357,11 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
               <Typography variant="caption" color="text.secondary">Inativos</Typography>
             </CardContent>
           </Card>
-          <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#e3f2fd' }}>
-            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <ArchiveIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
-              <Typography variant="h4" fontWeight="bold" color="info.main">{stats.logging}</Typography>
-              <Typography variant="caption" color="text.secondary">Com Histórico</Typography>
-            </CardContent>
-          </Card>
           <Card elevation={2} sx={{ minWidth: 200, flex: 1, bgcolor: '#f3e5f5' }}>
             <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <FormulaIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
-              <Typography variant="h4" fontWeight="bold" color="secondary.main">{stats.formulas}</Typography>
-              <Typography variant="caption" color="text.secondary">Fórmulas</Typography>
+              <ArchiveIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
+              <Typography variant="h4" fontWeight="bold" color="secondary.main">{stats.logging}</Typography>
+              <Typography variant="caption" color="text.secondary">Com Histórico</Typography>
             </CardContent>
           </Card>
         </Stack>
@@ -490,6 +561,11 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                               </Stack>
                             </TableCell>
                             <TableCell align="right">
+                              <Tooltip title="Copiar ID">
+                                <IconButton size="small" onClick={() => handleCopyTagId(tag.id)}>
+                                  <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
                               <IconButton size="small" color="primary" onClick={() => openEditModal(tag)}>
                                 <EditIcon fontSize="small" />
                               </IconButton>
