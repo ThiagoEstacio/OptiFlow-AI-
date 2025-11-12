@@ -46,6 +46,8 @@ import DashboardBuilder from './pages/DashboardBuilder';
 import SimulatorPage from './pages/SimulatorPage';
 import DashboardBuilderPage from './pages/DashboardBuilderPage';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
+import { AIMonitoringDashboard } from './pages/AIMonitoringDashboard';
+import { TagConfiguration } from './pages/TagConfiguration';
 
 function App() {
   // 🚀 Start simulator on app initialization
@@ -119,6 +121,7 @@ function App() {
                       ======================================== */}
                   <Route path="analytics" element={<AnalyticsHub />} />
                   <Route path="analytics/ml-insights" element={<AnalyticsHub />} />
+                  <Route path="analytics/ai-monitoring" element={<AIMonitoringDashboard />} />
                   <Route path="analytics/chat" element={<ChatPage />} />
 
                   {/* ========================================
@@ -127,6 +130,7 @@ function App() {
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="settings/devices" element={<DevicesPage />} />
                   <Route path="settings/tags" element={<TagsPage />} />
+                  <Route path="settings/tag-configuration" element={<TagConfiguration />} />
                   <Route path="settings/gateways" element={<GatewayManagementPage />} />
                   <Route path="settings/users" element={<SettingsPage />} />
 

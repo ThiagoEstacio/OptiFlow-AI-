@@ -465,11 +465,11 @@ async def health_check():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            
+
             if response.status_code == 200:
                 models = response.json().get("models", [])
                 model_loaded = any(m.get("name") == MODEL_NAME for m in models)
-                
+
                 return {
                     "status": "healthy",
                     "ollama_available": True,
@@ -488,4 +488,45 @@ async def health_check():
             "ollama_available": False,
             "model_loaded": False,
             "message": "Ollama is not running. Start it with: ollama serve"
+        }
+
+
+@router.post("/tools/test")
+async def test_agent_tools(
+    tool_name: str,
+    arguments: Optional[Dict[str, Any]] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Test agent tools directly
+
+    Available tools:
+    - get_all_tags: List all tags
+    - get_active_alarms: List active alarms
+    - search_tags: Search for tags
+    - get_realtime_value: Get current tag value
+    - calculate_statistics: Calculate stats for a tag
+    """
+    try:
+        data_service = DataService(db)
+        toolkit = AgentToolkit(data_service)
+
+        if arguments is None:
+            arguments = {}
+
+        result = await toolkit.execute_tool(tool_name, arguments)
+
+        return {
+            "tool": tool_name,
+            "success": result.success,
+            "data": result.data,
+            "error": result.error
+        }
+
+    except Exception as e:
+        logger.error(f"Error testing tool {tool_name}: {e}")
+        return {
+            "tool": tool_name,
+            "success": False,
+            "error": str(e)
         }

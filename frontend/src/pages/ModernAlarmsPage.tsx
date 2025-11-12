@@ -216,9 +216,6 @@ export const ModernAlarmsPage: React.FC = () => {
                   Message
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Tag ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Trigger Time
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -249,9 +246,9 @@ export const ModernAlarmsPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">{alarm.message}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
-                    {alarm.tag_id}
+                    {alarm.description && alarm.description !== alarm.message && (
+                      <div className="text-xs text-gray-500 mt-1">{alarm.description}</div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
@@ -422,7 +419,12 @@ export const ModernAlarmsPage: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{alarm.message}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-gray-900">{alarm.message}</div>
+                      {alarm.description && alarm.description !== alarm.message && (
+                        <div className="text-xs text-gray-500 mt-1">{alarm.description}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                       {format(new Date(alarm.trigger_timestamp), 'MMM d, HH:mm:ss')}
                     </td>

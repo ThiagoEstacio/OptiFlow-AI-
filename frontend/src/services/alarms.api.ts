@@ -34,7 +34,7 @@ export interface AlarmEvent {
   tag_id: string;
   state: 'active' | 'acknowledged' | 'cleared';
   severity: 'critical' | 'high' | 'medium' | 'low';
-  message: string;
+  message: string; // ⚠️ Deprecated: use alarm_name for display
   trigger_value?: number;
   trigger_timestamp: string;
   acknowledged_at?: string;
@@ -42,6 +42,13 @@ export interface AlarmEvent {
   cleared_at?: string;
   clear_value?: number;
   duration_seconds?: number;
+
+  // ✨ NEW: Enriched fields from backend
+  alarm_name?: string;      // Real alarm name from definition
+  alarm_type?: string;      // Alarm type (HIGH_LIMIT, LOW_LIMIT, etc)
+  description?: string;     // Real description from definition
+  high_limit?: number;      // High threshold
+  low_limit?: number;       // Low threshold
 }
 
 export interface AlarmStatistics {
@@ -121,8 +128,12 @@ export const alarmsApi = {
     tag_id?: string;
     limit?: number;
   }) => {
-    const response = await axios.get<AlarmEvent[]>(`${ALARMS_API}/active`, { params });
-    return response.data;
+    const response = await axios.get<any[]>(`${ALARMS_API}/active`, { params });
+    // ✨ Map enriched backend response to AlarmEvent interface
+    return response.data.map((alarm: any) => ({
+      ...alarm,
+      message: alarm.alarm_name || alarm.description || 'No message', // Map alarm_name to message for compatibility
+    }));
   },
 
   // Get alarm history with filters
@@ -135,8 +146,12 @@ export const alarmsApi = {
     skip?: number;
     limit?: number;
   }) => {
-    const response = await axios.get<AlarmEvent[]>(`${ALARMS_API}/history`, { params });
-    return response.data;
+    const response = await axios.get<any[]>(`${ALARMS_API}/history`, { params });
+    // ✨ Map enriched backend response to AlarmEvent interface
+    return response.data.map((alarm: any) => ({
+      ...alarm,
+      message: alarm.alarm_name || alarm.description || 'No message', // Map alarm_name to message for compatibility
+    }));
   },
 
   // Get specific alarm event
@@ -185,6 +200,9 @@ export const alarmsApi = {
 // ========================================
 
 export const getSeverityColor = (severity: string) => {
+  // ✅ FIXED: Check if severity is defined before calling toLowerCase
+  if (!severity) return 'bg-gray-100 text-gray-800 border-gray-200';
+
   switch (severity.toLowerCase()) {
     case 'critical':
       return 'bg-red-100 text-red-800 border-red-200';
@@ -200,6 +218,9 @@ export const getSeverityColor = (severity: string) => {
 };
 
 export const getSeverityIcon = (severity: string) => {
+  // ✅ FIXED: Check if severity is defined before calling toLowerCase
+  if (!severity) return '⚪';
+
   switch (severity.toLowerCase()) {
     case 'critical':
       return '🔴';
@@ -215,12 +236,17 @@ export const getSeverityIcon = (severity: string) => {
 };
 
 export const getStateColor = (state: string) => {
+  // ✅ FIXED: Check if state is defined before calling toLowerCase
+  if (!state) return 'bg-gray-100 text-gray-800';
+
   switch (state.toLowerCase()) {
     case 'active':
       return 'bg-red-100 text-red-800';
     case 'acknowledged':
       return 'bg-yellow-100 text-yellow-800';
     case 'cleared':
+      return 'bg-green-100 text-green-800';
+    case 'resolved':
       return 'bg-green-100 text-green-800';
     default:
       return 'bg-gray-100 text-gray-800';

@@ -110,6 +110,28 @@ class AlarmEventResponse(BaseModel):
         from_attributes = True
 
 
+class AlarmEventEnrichedResponse(AlarmEventResponse):
+    """
+    ✨ Enriched Alarm Event response with data from AlarmDefinition
+
+    This schema includes additional fields from the alarm definition:
+    - severity: The severity level (CRITICAL, HIGH, MEDIUM, LOW)
+    - alarm_name: The name of the alarm definition
+    - alarm_type: The type of alarm (HIGH_LIMIT, LOW_LIMIT, etc)
+    - tag_id: The associated tag ID
+    """
+    # Fields from AlarmDefinition
+    severity: str = Field(..., description="Severity from definition: CRITICAL, HIGH, MEDIUM, LOW")
+    alarm_name: str = Field(..., description="Name of the alarm definition")
+    alarm_type: str = Field(..., description="Type of alarm from definition")
+    tag_id: UUID = Field(..., description="Associated tag ID from definition")
+
+    # Optional definition fields
+    description: Optional[str] = Field(None, description="Description from definition")
+    high_limit: Optional[float] = Field(None, description="High limit threshold")
+    low_limit: Optional[float] = Field(None, description="Low limit threshold")
+
+
 class AlarmAcknowledgeRequest(BaseModel):
     """Schema for acknowledging an alarm"""
     comment: Optional[str] = Field(None, max_length=500)

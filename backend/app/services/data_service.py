@@ -334,3 +334,64 @@ class DataService:
         except Exception as e:
             logger.error(f"Error searching tags for '{query}': {str(e)}")
             return []
+
+    async def get_all_tags(self, limit: int = 50, active_only: bool = True) -> List[Dict[str, Any]]:
+        """
+        Get list of all available tags in the system
+
+        Args:
+            limit: Maximum number of tags to return
+            active_only: Return only active tags (default: True)
+
+        Returns:
+            List of tag dictionaries
+        """
+        try:
+            sql_query = text("""
+                SELECT
+                    t.id,
+                    t.name,
+                    t.address,
+                    t.description,
+                    t.unit,
+                    t.data_type,
+                    t.min_value,
+                    t.max_value,
+                    t.current_value as last_value,
+                    t.is_active
+                FROM tags t
+                WHERE 1=1
+                    AND (:active_only = FALSE OR t.is_active = TRUE)
+                ORDER BY t.name
+                LIMIT :limit
+            """)
+
+            result = await self.db.execute(
+                sql_query,
+                {
+                    "active_only": active_only,
+                    "limit": limit
+                }
+            )
+            rows = result.fetchall()
+
+            tags = []
+            for row in rows:
+                tags.append({
+                    "id": row[0],
+                    "name": row[1],
+                    "address": row[2],
+                    "description": row[3],
+                    "unit": row[4],
+                    "data_type": row[5],
+                    "min_value": float(row[6]) if row[6] is not None else 0,
+                    "max_value": float(row[7]) if row[7] is not None else 100,
+                    "last_value": row[8],
+                    "is_active": row[9]
+                })
+
+            return tags
+
+        except Exception as e:
+            logger.error(f"Error getting all tags: {str(e)}")
+            return []

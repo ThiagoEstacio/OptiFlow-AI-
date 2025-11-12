@@ -23,7 +23,8 @@ from app.schemas.alarm import (
     AlarmDefinitionCreate,
     AlarmDefinitionUpdate,
     AlarmDefinitionResponse,
-    AlarmEventResponse
+    AlarmEventResponse,
+    AlarmEventEnrichedResponse  # ✨ New enriched schema
 )
 from app.services.cache_service import cached
 from pydantic import BaseModel
@@ -234,7 +235,7 @@ async def delete_alarm_definition(
 # 🚨 ALARM EVENTS (Eventos e Histórico)
 # ========================================
 
-@router.get("/active", response_model=List[AlarmEventResponse])
+@router.get("/active", response_model=List[AlarmEventEnrichedResponse])
 @cached(ttl=15, key_prefix="alarms_active")
 async def list_active_alarms(
     severity: Optional[str] = None,
@@ -243,36 +244,83 @@ async def list_active_alarms(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Lista alarmes ativos (não acknowledgados e não cleared)
-    
+    ✨ Lista alarmes ativos com dados enriquecidos (JOIN com AlarmDefinition)
+
+    Retorna alarmes ativos incluindo:
+    - severity, alarm_name, alarm_type da definição
+    - tag_id associado
+    - Todos os campos do AlarmEvent
+
     Endpoint otimizado para dashboard e real-time views
     """
-    stmt = select(AlarmEvent).where(AlarmEvent.state == AlarmState.ACTIVE)
-    
+    # ✨ SELECT com JOIN para pegar dados da definição
+    stmt = select(
+        AlarmEvent,
+        AlarmDefinition.severity,
+        AlarmDefinition.name.label('alarm_name'),
+        AlarmDefinition.alarm_type,
+        AlarmDefinition.tag_id,
+        AlarmDefinition.description,
+        AlarmDefinition.high_limit,
+        AlarmDefinition.low_limit
+    ).join(
+        AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id
+    ).where(
+        AlarmEvent.state == AlarmState.ACTIVE
+    )
+
+    # Aplicar filtros
     if tag_id:
-        # Join com definition para filtrar por tag
-        stmt = stmt.join(AlarmDefinition).where(AlarmDefinition.tag_id == tag_id)
-    
+        stmt = stmt.where(AlarmDefinition.tag_id == tag_id)
+
     if severity:
         try:
-            stmt = stmt.join(AlarmDefinition).where(
-                AlarmDefinition.severity == AlarmSeverity[severity.upper()]
-            )
+            stmt = stmt.where(AlarmDefinition.severity == AlarmSeverity[severity.upper()])
         except KeyError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid severity: {severity}"
+                detail=f"Invalid severity: {severity}. Must be one of: CRITICAL, HIGH, MEDIUM, LOW"
             )
-    
+
     stmt = stmt.order_by(AlarmEvent.trigger_timestamp.desc()).limit(limit)
-    
+
     result = await db.execute(stmt)
-    alarms = result.scalars().all()
-    
-    return alarms
+    rows = result.all()
+
+    # ✨ Construir resposta enriquecida
+    enriched_alarms = []
+    for row in rows:
+        alarm_event = row[0]
+        enriched_alarm = AlarmEventEnrichedResponse(
+            # Campos do AlarmEvent
+            id=alarm_event.id,
+            definition_id=alarm_event.definition_id,
+            state=alarm_event.state.value,
+            trigger_value=alarm_event.trigger_value,
+            trigger_timestamp=alarm_event.trigger_timestamp,
+            acknowledged_at=alarm_event.acknowledged_at,
+            acknowledged_by=alarm_event.acknowledged_by,
+            acknowledgment_comment=alarm_event.acknowledgment_comment,
+            cleared_at=alarm_event.cleared_at,
+            clear_value=alarm_event.clear_value,
+            duration_seconds=alarm_event.duration_seconds,
+            created_at=alarm_event.created_at,
+            updated_at=alarm_event.updated_at,
+            # ✨ Campos enriquecidos da AlarmDefinition
+            severity=row[1].value,  # AlarmSeverity enum
+            alarm_name=row[2],
+            alarm_type=row[3].value,  # AlarmType enum
+            tag_id=row[4],
+            description=row[5],
+            high_limit=row[6],
+            low_limit=row[7]
+        )
+        enriched_alarms.append(enriched_alarm)
+
+    return enriched_alarms
 
 
-@router.get("/history", response_model=List[AlarmEventResponse])
+@router.get("/history", response_model=List[AlarmEventEnrichedResponse])
 async def get_alarm_history(
     start_date: Optional[datetime] = Query(None, description="Data início (ISO format)"),
     end_date: Optional[datetime] = Query(None, description="Data fim (ISO format)"),
@@ -284,8 +332,10 @@ async def get_alarm_history(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Histórico de eventos de alarmes com filtros avançados
-    
+    ✨ Histórico de eventos de alarmes com dados enriquecidos
+
+    Retorna histórico com JOIN para incluir severity, alarm_name, etc.
+
     Parâmetros:
     - start_date: Data início (default: 30 dias atrás)
     - end_date: Data fim (default: agora)
@@ -298,14 +348,26 @@ async def get_alarm_history(
         start_date = datetime.utcnow() - timedelta(days=30)
     if not end_date:
         end_date = datetime.utcnow()
-    
-    stmt = select(AlarmEvent).where(
+
+    # ✨ SELECT com JOIN para pegar dados da definição
+    stmt = select(
+        AlarmEvent,
+        AlarmDefinition.severity,
+        AlarmDefinition.name.label('alarm_name'),
+        AlarmDefinition.alarm_type,
+        AlarmDefinition.tag_id,
+        AlarmDefinition.description,
+        AlarmDefinition.high_limit,
+        AlarmDefinition.low_limit
+    ).join(
+        AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id
+    ).where(
         and_(
             AlarmEvent.trigger_timestamp >= start_date,
             AlarmEvent.trigger_timestamp <= end_date
         )
     )
-    
+
     # Filtros
     if state:
         try:
@@ -315,28 +377,55 @@ async def get_alarm_history(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid state: {state}. Must be: ACTIVE, ACKNOWLEDGED, CLEARED"
             )
-    
-    if severity or tag_id:
-        stmt = stmt.join(AlarmDefinition)
-        
-        if severity:
-            try:
-                stmt = stmt.where(AlarmDefinition.severity == AlarmSeverity[severity.upper()])
-            except KeyError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid severity: {severity}"
-                )
-        
-        if tag_id:
-            stmt = stmt.where(AlarmDefinition.tag_id == tag_id)
-    
+
+    if severity:
+        try:
+            stmt = stmt.where(AlarmDefinition.severity == AlarmSeverity[severity.upper()])
+        except KeyError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid severity: {severity}. Must be: CRITICAL, HIGH, MEDIUM, LOW"
+            )
+
+    if tag_id:
+        stmt = stmt.where(AlarmDefinition.tag_id == tag_id)
+
     stmt = stmt.offset(skip).limit(limit).order_by(AlarmEvent.trigger_timestamp.desc())
-    
+
     result = await db.execute(stmt)
-    alarms = result.scalars().all()
-    
-    return alarms
+    rows = result.all()
+
+    # ✨ Construir resposta enriquecida
+    enriched_alarms = []
+    for row in rows:
+        alarm_event = row[0]
+        enriched_alarm = AlarmEventEnrichedResponse(
+            # Campos do AlarmEvent
+            id=alarm_event.id,
+            definition_id=alarm_event.definition_id,
+            state=alarm_event.state.value,
+            trigger_value=alarm_event.trigger_value,
+            trigger_timestamp=alarm_event.trigger_timestamp,
+            acknowledged_at=alarm_event.acknowledged_at,
+            acknowledged_by=alarm_event.acknowledged_by,
+            acknowledgment_comment=alarm_event.acknowledgment_comment,
+            cleared_at=alarm_event.cleared_at,
+            clear_value=alarm_event.clear_value,
+            duration_seconds=alarm_event.duration_seconds,
+            created_at=alarm_event.created_at,
+            updated_at=alarm_event.updated_at,
+            # ✨ Campos enriquecidos da AlarmDefinition
+            severity=row[1].value,  # AlarmSeverity enum
+            alarm_name=row[2],
+            alarm_type=row[3].value,  # AlarmType enum
+            tag_id=row[4],
+            description=row[5],
+            high_limit=row[6],
+            low_limit=row[7]
+        )
+        enriched_alarms.append(enriched_alarm)
+
+    return enriched_alarms
 
 
 @router.get("/events/{alarm_id}", response_model=AlarmEventResponse)

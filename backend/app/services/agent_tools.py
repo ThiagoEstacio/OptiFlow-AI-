@@ -234,6 +234,41 @@ AVAILABLE_TOOLS = [
             },
             "required": ["tag_id"]
         }
+    },
+    {
+        "name": "get_all_tags",
+        "description": "Get list of all available tags in the system. Use when user asks 'what tags are available', 'list all sensors', or needs to know what data is available.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of tags to return (default: 50)"
+                },
+                "active_only": {
+                    "type": "boolean",
+                    "description": "Return only active tags (default: true)"
+                }
+            }
+        }
+    },
+    {
+        "name": "get_active_alarms",
+        "description": "Get list of currently active alarms in the system. Use when user asks about current alarms, alerts, or problems that need attention.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "severity": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "low"],
+                    "description": "Filter by severity level (optional)"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of alarms to return (default: 20)"
+                }
+            }
+        }
     }
 ]
 
@@ -260,6 +295,8 @@ class AgentToolkit:
             "calculate_oee": self._calculate_oee,
             "analyze_alarm_patterns": self._analyze_alarm_patterns,
             "get_tag_metadata": self._get_tag_metadata,
+            "get_all_tags": self._get_all_tags,
+            "get_active_alarms": self._get_active_alarms,
         }
     
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
@@ -605,6 +642,79 @@ class AgentToolkit:
                 
         except Exception as e:
             return {"error": str(e)}
+
+    async def _get_all_tags(self, limit: int = 50, active_only: bool = True) -> Dict[str, Any]:
+        """
+        Get list of all available tags in the system
+        """
+        try:
+            tags = await self.data_service.get_all_tags(limit=limit, active_only=active_only)
+
+            return {
+                "total_tags": len(tags),
+                "tags": [
+                    {
+                        "tag_id": str(tag.get("id")),
+                        "name": tag.get("name"),
+                        "description": tag.get("description"),
+                        "unit": tag.get("unit"),
+                        "last_value": tag.get("last_value"),
+                        "is_active": tag.get("is_active", True)
+                    }
+                    for tag in tags
+                ],
+                "showing": f"Showing {len(tags)} tags" + (" (active only)" if active_only else "")
+            }
+        except Exception as e:
+            logger.error(f"Error getting all tags: {e}")
+            return {"error": str(e), "tags": []}
+
+    async def _get_active_alarms(self, severity: str = None, limit: int = 20) -> Dict[str, Any]:
+        """
+        Get list of currently active alarms
+        """
+        try:
+            import httpx
+
+            # Call the alarms API endpoint
+            params = {"limit": limit}
+            if severity:
+                params["severity"] = severity
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "http://localhost:8000/api/v1/alarms/active",
+                    params=params,
+                    timeout=10.0
+                )
+
+                if response.status_code == 200:
+                    alarms_data = response.json()
+
+                    return {
+                        "total_alarms": len(alarms_data),
+                        "alarms": [
+                            {
+                                "alarm_id": alarm.get("id"),
+                                "alarm_name": alarm.get("alarm_name"),
+                                "severity": alarm.get("severity"),
+                                "tag_id": str(alarm.get("tag_id")),
+                                "trigger_value": alarm.get("trigger_value"),
+                                "trigger_timestamp": alarm.get("trigger_timestamp"),
+                                "state": alarm.get("state"),
+                                "description": alarm.get("description"),
+                                "alarm_type": alarm.get("alarm_type")
+                            }
+                            for alarm in alarms_data
+                        ],
+                        "filter_applied": f"severity={severity}" if severity else "all severities"
+                    }
+                else:
+                    return {"error": f"API returned status {response.status_code}", "alarms": []}
+
+        except Exception as e:
+            logger.error(f"Error getting active alarms: {e}")
+            return {"error": str(e), "alarms": []}
 
 
 def format_tools_for_prompt(tools: List[Dict[str, Any]]) -> str:

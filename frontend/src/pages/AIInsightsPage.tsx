@@ -67,25 +67,33 @@ export const AIInsightsPage: React.FC = () => {
   const [chatResponse, setChatResponse] = useState<string>('');
   const [showChat, setShowChat] = useState(false);
 
-  // Buscar resumo do dashboard
+  // Buscar resumo do dashboard - USANDO ENDPOINT PÚBLICO ✨
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/api/v1/ai/dashboard/summary`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      });
+      // ✨ Tentar endpoint público primeiro (sem autenticação)
+      let response = await fetch(`${API_BASE}/api/v1/ai/dashboard/summary/public`);
+
+      if (!response.ok) {
+        // Fallback para endpoint autenticado
+        response = await fetch(`${API_BASE}/api/v1/ai/dashboard/summary`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        });
+      }
 
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
+        console.log('✅ AI Insights carregados:', data);
       } else {
         // Usar dados mock para demonstração
+        console.warn('⚠️ Usando dados mock');
         setSummary(getMockSummary());
       }
     } catch (error) {
-      console.error('Erro ao buscar resumo AI:', error);
+      console.error('❌ Erro ao buscar resumo AI:', error);
       setSummary(getMockSummary());
     } finally {
       setLoading(false);

@@ -60,86 +60,77 @@ const AlarmsEventsView: React.FC = () => {
   // Fetch alarms and events
   const fetchAlarms = async () => {
     try {
-      // Fetch from autonomous agent insights
-      const insightsResponse = await apiClient.get('/api/v1/demo/ai-agent/insights');
+      // Fetch active alarms from the working endpoint
+      const activeAlarmsResponse = await apiClient.get('/api/v1/alarms/active');
 
-      // Fetch ML alerts
-      const mlResponse = await apiClient.get('/api/v1/ml/insights/all', {
-        params: { time_range: 'last_24h' },
-      });
-
-      // Combine and format alarms
-      const agentAlarms: AlarmEvent[] = insightsResponse.data.map((insight: any) => ({
-        id: insight.id || insight.insight_id,
-        type: insight.category === 'anomaly' ? 'anomaly' : insight.category === 'prediction' ? 'prediction' : 'event',
-        severity: insight.severity || 'medium',
-        title: insight.title,
-        description: insight.description,
-        tag_name: insight.tags?.[0],
-        timestamp: insight.timestamp,
-        acknowledged: false,
-        source: 'Autonomous Agent',
-      }));
-
-      // Add ML alarms
-      const mlAlarms: AlarmEvent[] = [];
-      if (mlResponse.data.insights) {
-        const { energy_prediction, anomalies, reliability } = mlResponse.data.insights;
-
-        // Energy alarms
-        if (energy_prediction?.status === 'success' && energy_prediction.abnormal_consumption) {
-          mlAlarms.push({
-            id: `ml-energy-${Date.now()}`,
-            type: 'prediction',
-            severity: 'high',
-            title: 'Abnormal Energy Consumption Detected',
-            description: `Current consumption: ${energy_prediction.current_consumption_kwh?.toFixed(2)} kWh is above expected range`,
-            timestamp: new Date().toISOString(),
-            acknowledged: false,
-            source: 'ML Energy Predictor',
-          });
-        }
-
-        // Anomaly alarms
-        if (anomalies?.status === 'success' && anomalies.recent_anomalies > 5) {
-          mlAlarms.push({
-            id: `ml-anomaly-${Date.now()}`,
-            type: 'anomaly',
-            severity: 'high',
-            title: `${anomalies.recent_anomalies} Anomalies Detected`,
-            description: `Multiple anomalies detected in the last 24 hours. Anomaly score: ${anomalies.anomaly_score?.toFixed(2)}`,
-            timestamp: new Date().toISOString(),
-            acknowledged: false,
-            source: 'ML Anomaly Detector',
-          });
-        }
-
-        // Reliability alarms
-        if (reliability?.status === 'success' && reliability.critical_equipment?.length > 0) {
-          reliability.critical_equipment.forEach((eq: any) => {
-            mlAlarms.push({
-              id: `ml-reliability-${eq.equipment_id}`,
-              type: 'alarm',
-              severity: 'critical',
-              title: `Critical MTBF: ${eq.equipment_id}`,
-              description: `MTBF: ${eq.mtbf_hours?.toFixed(1)}h is below threshold. Immediate maintenance required.`,
-              tag_name: eq.equipment_id,
-              timestamp: new Date().toISOString(),
-              acknowledged: false,
-              source: 'ML Reliability Analyzer',
-            });
-          });
-        }
+      // 🔍 DEBUG: Log first alarm to check data structure
+      if (activeAlarmsResponse.data.length > 0) {
+        console.log('🚨 First alarm from backend:', activeAlarmsResponse.data[0]);
       }
 
-      const allAlarms = [...agentAlarms, ...mlAlarms].sort(
+      // Fetch alarm history
+      const historyResponse = await apiClient.get('/api/v1/alarms/history?limit=50');
+
+      // ✅ Map active alarms to our format (now with real severity from backend!)
+      const activeAlarms: AlarmEvent[] = activeAlarmsResponse.data.map((alarm: any) => ({
+        id: alarm.id,
+        type: 'alarm',
+        severity: alarm.severity?.toLowerCase() || 'medium', // ✨ Real severity from backend
+        title: alarm.alarm_name || `Alarm ${alarm.id.substring(0, 8)}`, // ✨ Real alarm name
+        description: alarm.description || `Trigger value: ${alarm.trigger_value?.toFixed(2) || 'N/A'}`, // ✨ Real description
+        tag_name: alarm.tag_id || alarm.definition_id,
+        value: alarm.trigger_value,
+        timestamp: alarm.trigger_timestamp,
+        acknowledged: alarm.state === 'acknowledged',
+        source: `${alarm.alarm_type || 'Industrial Alarm'} System`, // ✨ Real alarm type
+      }));
+
+      // ✅ Map history alarms (now with real severity from backend!)
+      const historyAlarms: AlarmEvent[] = historyResponse.data.map((alarm: any) => ({
+        id: alarm.id,
+        type: alarm.state === 'cleared' ? 'event' : 'alarm',
+        severity: alarm.severity?.toLowerCase() || 'medium', // ✨ Real severity from backend
+        title: `${alarm.state === 'cleared' ? 'Cleared' : 'Active'}: ${alarm.alarm_name || alarm.id.substring(0, 8)}`, // ✨ Real alarm name
+        description: `${alarm.description || 'No description'}. Trigger: ${alarm.trigger_value?.toFixed(2) || 'N/A'}. Duration: ${formatDuration(alarm.duration_seconds)}`,
+        tag_name: alarm.tag_id || alarm.definition_id,
+        value: alarm.trigger_value,
+        timestamp: alarm.trigger_timestamp,
+        acknowledged: alarm.state === 'acknowledged' || alarm.state === 'cleared',
+        source: `${alarm.alarm_type || 'Industrial Alarm'} System`, // ✨ Real alarm type
+      }));
+
+      // Combine unique alarms (prioritize active)
+      const allAlarmsMap = new Map<string, AlarmEvent>();
+      [...activeAlarms, ...historyAlarms].forEach(alarm => {
+        if (!allAlarmsMap.has(alarm.id)) {
+          allAlarmsMap.set(alarm.id, alarm);
+        }
+      });
+
+      const allAlarms = Array.from(allAlarmsMap.values()).sort(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
+
+      // 🔍 DEBUG: Log mapped alarms
+      if (allAlarms.length > 0) {
+        console.log('✅ First mapped alarm:', allAlarms[0]);
+      }
 
       setAlarms(allAlarms);
     } catch (error) {
       console.error('Error fetching alarms:', error);
+      // Set empty array on error to prevent crash
+      setAlarms([]);
     }
+  };
+
+  // Helper function to format duration
+  const formatDuration = (seconds: number | null): string => {
+    if (!seconds) return 'N/A';
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    return `${minutes}m`;
   };
 
   useEffect(() => {

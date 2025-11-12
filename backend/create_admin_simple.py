@@ -13,7 +13,7 @@ async def create_admin():
         host=os.getenv("POSTGRES_HOST", "postgres"),
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         user=os.getenv("POSTGRES_USER", "optiflow"),
-        password=os.getenv("POSTGRES_PASSWORD", "optiflow123"),
+        password=os.getenv("POSTGRES_PASSWORD", "optiflow_password"),
         database=os.getenv("POSTGRES_DB", "optiflow"),
     )
 

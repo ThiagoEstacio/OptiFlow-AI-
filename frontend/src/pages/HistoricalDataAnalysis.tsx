@@ -76,7 +76,8 @@ const HistoricalDataAnalysis: React.FC = () => {
   useEffect(() => {
     const fetchTags = async () => {
       try {
-        const response = await apiClient.get('/api/v1/demo/tags/list');
+        // ✅ FIXED: Use correct endpoint
+        const response = await apiClient.get('/api/v1/tags/?limit=100');
         const tagNames = response.data.map((tag: any) => tag.name);
         setAvailableTags(tagNames);
         if (tagNames.length > 0) {
@@ -84,6 +85,8 @@ const HistoricalDataAnalysis: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching tags:', error);
+        // Set empty array on error to prevent crash
+        setAvailableTags([]);
       }
     };
     fetchTags();
@@ -95,12 +98,37 @@ const HistoricalDataAnalysis: React.FC = () => {
 
     setLoading(true);
     try {
+      // ✅ FIXED: Convert time_range to actual start_time and end_time
+      const end_time = new Date();
+      let start_time = new Date();
+
+      switch (timeRange) {
+        case 'last_1_hour':
+          start_time = new Date(end_time.getTime() - 1 * 60 * 60 * 1000);
+          break;
+        case 'last_6_hours':
+          start_time = new Date(end_time.getTime() - 6 * 60 * 60 * 1000);
+          break;
+        case 'last_24_hours':
+          start_time = new Date(end_time.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'last_7_days':
+          start_time = new Date(end_time.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last_30_days':
+          start_time = new Date(end_time.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          start_time = new Date(end_time.getTime() - 7 * 24 * 60 * 60 * 1000);
+      }
+
+      // ✅ FIXED: Use correct endpoint for each tag
       const promises = selectedTags.map((tagName) =>
-        apiClient.get('/api/v1/demo/tags/history', {
+        apiClient.get(`/api/v1/timeseries/tags/${tagName}`, {
           params: {
-            tag_name: tagName,
-            time_range: timeRange,
-            aggregation: aggregationType,
+            start_time: start_time.toISOString(),
+            end_time: end_time.toISOString(),
+            aggregation: aggregationType !== 'raw' ? aggregationType : undefined,
           },
         })
       );
@@ -110,12 +138,22 @@ const HistoricalDataAnalysis: React.FC = () => {
       const stats: StatisticalSummary[] = [];
 
       responses.forEach((response, index) => {
-        const tagData = response.data.data || [];
-        allData.push(...tagData);
+        // ✅ FIXED: Handle response format from timeseries endpoint
+        const tagData = Array.isArray(response.data) ? response.data : response.data.data || [];
+
+        // Map to HistoricalData format
+        const mappedData = tagData.map((point: any) => ({
+          timestamp: point.timestamp || point._time,
+          value: point.value || point._value,
+          tag_name: selectedTags[index],
+          quality: point.quality || 'good',
+        }));
+
+        allData.push(...mappedData);
 
         // Calculate statistics
-        if (tagData.length > 0) {
-          const values = tagData.map((d: HistoricalData) => d.value).sort((a: number, b: number) => a - b);
+        if (mappedData.length > 0) {
+          const values = mappedData.map((d: HistoricalData) => d.value).sort((a: number, b: number) => a - b);
           const mean = values.reduce((a: number, b: number) => a + b, 0) / values.length;
           const median = values[Math.floor(values.length / 2)];
           const std = Math.sqrt(
@@ -141,6 +179,9 @@ const HistoricalDataAnalysis: React.FC = () => {
       setStatistics(stats);
     } catch (error) {
       console.error('Error fetching historical data:', error);
+      // ✅ ADDED: Set empty arrays on error to prevent crash
+      setHistoricalData([]);
+      setStatistics([]);
     } finally {
       setLoading(false);
     }

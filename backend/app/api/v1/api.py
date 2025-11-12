@@ -30,6 +30,7 @@ from app.api.v1.endpoints import (
     cache,
     ml_compare,
     dashboards,
+    opcua_tags,
 )
 
 api_router = APIRouter()
@@ -60,4 +61,5 @@ api_router.include_router(gateway_config.router, prefix="/gateway-config", tags=
 api_router.include_router(cache.router, prefix="/cache", tags=["Cache Management"])
 api_router.include_router(ml_compare.router, prefix="/ml", tags=["ML Model Comparison & A/B Testing"])
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["Dashboards & Widgets"])
+api_router.include_router(opcua_tags.router, prefix="/opcua", tags=["OPC UA Tag Browser"])
 api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics

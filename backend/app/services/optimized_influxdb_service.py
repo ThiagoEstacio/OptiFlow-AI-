@@ -356,7 +356,90 @@ class OptimizedInfluxDBService:
         except Exception as e:
             logger.error(f"❌ Write error: {e}")
             raise
-    
+
+    def write_batch(self, points: List[Dict[str, Any]]) -> bool:
+        """
+        Write batch of data points to InfluxDB
+
+        Args:
+            points: List of data points in format:
+                [
+                    {
+                        "tag_id": "uuid",
+                        "value": 42.5,
+                        "timestamp": "2024-01-01T00:00:00Z",
+                        "quality": "good"
+                    }
+                ]
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not points:
+            logger.warning("Empty batch provided")
+            return False
+
+        try:
+            batch_points = []
+
+            for point_data in points:
+                tag_id = point_data.get("tag_id")
+                value = point_data.get("value")
+                timestamp_str = point_data.get("timestamp")
+                quality = point_data.get("quality", "good")
+
+                if not tag_id or value is None:
+                    logger.warning(f"Skipping invalid point: {point_data}")
+                    continue
+
+                # Parse timestamp
+                if isinstance(timestamp_str, str):
+                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                elif isinstance(timestamp_str, datetime):
+                    timestamp = timestamp_str
+                else:
+                    timestamp = datetime.utcnow()
+
+                # Create InfluxDB point
+                # Handle both numeric and string values
+                try:
+                    # Try to convert to float for numeric values
+                    numeric_value = float(value)
+                    field_value = {"value": numeric_value}
+                except (ValueError, TypeError):
+                    # If conversion fails, store as string in a separate field
+                    field_value = {"value_str": str(value)}
+                
+                influx_point = {
+                    "measurement": "tag_data",
+                    "tags": {
+                        "tag_id": str(tag_id),
+                        "quality": quality
+                    },
+                    "fields": field_value,
+                    "time": timestamp
+                }
+
+                batch_points.append(influx_point)
+
+            if not batch_points:
+                logger.warning("No valid points to write")
+                return False
+
+            # Write batch to InfluxDB
+            self.write_api.write(
+                bucket=self.buckets["raw"],
+                org=settings.INFLUXDB_ORG,
+                record=batch_points
+            )
+
+            logger.info(f"✅ Wrote batch of {len(batch_points)} points to InfluxDB")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Batch write error: {e}")
+            return False
+
     def get_latest_value(self, tag_id: str) -> Optional[Dict[str, Any]]:
         """
         Get latest value for a tag by ID or name.
