@@ -9,7 +9,7 @@
  * 4. Analytics - Insights de ML e análises
  * 5. Settings - Configurações e admin
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
@@ -20,6 +20,8 @@ import { Toaster } from './components/Toast/Toaster';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AssetProvider } from './contexts/AssetContext';
+import { tagDataSimulator } from './services/tagDataSimulator';
+import { simulatorDataSync } from './services/simulatorDataSync';
 
 // ========================================
 // 📊 CORE PAGES (5 principais)
@@ -39,8 +41,32 @@ import { ChatPage } from './pages/ChatPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { TagsPage } from './pages/TagsPage';
 import { GatewayManagementPage } from './pages/GatewayManagementPage';
+import DashboardsList from './pages/DashboardsList';
+import DashboardBuilder from './pages/DashboardBuilder';
+import SimulatorPage from './pages/SimulatorPage';
+import DashboardBuilderPage from './pages/DashboardBuilderPage';
+import ExecutiveDashboard from './pages/ExecutiveDashboard';
 
 function App() {
+  // 🚀 Start simulator on app initialization
+  useEffect(() => {
+    console.log('🚀 Starting Grain Terminal Simulator...');
+    tagDataSimulator.start();
+    
+    // Start syncing data to backend after 2 seconds (let simulator stabilize)
+    const syncTimeout = setTimeout(() => {
+      console.log('🔄 Starting data sync to backend...');
+      simulatorDataSync.start();
+    }, 2000);
+    
+    return () => {
+      clearTimeout(syncTimeout);
+      console.log('⏹️ Stopping Grain Terminal Simulator...');
+      simulatorDataSync.stop();
+      tagDataSimulator.stop();
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
       <Provider store={store}>
@@ -70,6 +96,9 @@ function App() {
                       ======================================== */}
                   <Route index element={<ModernDashboard />} />
                   <Route path="dashboard" element={<ModernDashboard />} />
+                  <Route path="dashboards" element={<DashboardsList />} />
+                  <Route path="dashboards/:id" element={<DashboardBuilder />} />
+                  <Route path="dashboards/:id/edit" element={<DashboardBuilder />} />
 
                   {/* ========================================
                       ⚡ MODULE 2: REAL-TIME (Tags & Trends)

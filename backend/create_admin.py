@@ -2,7 +2,7 @@
 """Script para criar usuário administrador no OptiFlow AI"""
 import asyncio
 from sqlalchemy import select
-from app.db.session import async_session
+from app.db.session import AsyncSessionLocal
 from app.models.user import User
 from app.core.security import get_password_hash
 
@@ -11,7 +11,7 @@ async def create_admin_user():
     admin_password = "admin123"
     admin_name = "Administrador OptiFlow"
 
-    async with async_session() as db:
+    async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.email == admin_email))
         existing_user = result.scalar_one_or_none()
 

@@ -228,9 +228,14 @@ export const TagsPage: React.FC = () => {
     showToast.success(`${filtered.length} tags exportados!`);
   };
 
-  const handleCopyTagId = (tagId: string) => {
-    navigator.clipboard.writeText(tagId);
-    showToast.success('Tag ID copiado!');
+  const handleCopyTagId = async (tagId: string) => {
+    try {
+      await navigator.clipboard.writeText(tagId);
+      showToast.success('Tag ID copiado!');
+    } catch (error) {
+      console.error('Error copying tag ID:', error);
+      showToast.error('Falha ao copiar Tag ID');
+    }
   };
 
   const getTagsWithRecentData = () => {

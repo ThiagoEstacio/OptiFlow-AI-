@@ -37,7 +37,7 @@ export const SimulationControlPanel: React.FC<SimulationControlPanelProps> = ({ 
     if (isSimulating) {
       intervalId = setInterval(() => {
         tagDataSimulator.updateValues();
-        setAlarms(tagDataSimulator.getAlarms());
+        setAlarms(tagDataSimulator.getActiveAlarms());
       }, 5000 / simulationSpeed); // Update every 5 seconds adjusted by speed
     }
 
@@ -84,10 +84,10 @@ export const SimulationControlPanel: React.FC<SimulationControlPanelProps> = ({ 
         tagDataSimulator.triggerHighTemperatureAlarm();
         break;
       case 'pressure':
-        tagDataSimulator.triggerLowPressureAlarm();
+        console.log('⚠️ Pressure alarm simulation - use gate controls to affect pressure');
         break;
       case 'vibration':
-        tagDataSimulator.triggerHighVibrationAlarm();
+        tagDataSimulator.triggerConveyorJam();
         break;
     }
   };

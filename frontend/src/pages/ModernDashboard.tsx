@@ -33,6 +33,9 @@ import {
   Warning,
   Error,
   Info,
+  Router,
+  Settings as SettingsIcon,
+  LocalOffer,
 } from '@mui/icons-material';
 
 interface FeatureCard {
@@ -54,7 +57,7 @@ export const ModernDashboard: React.FC = () => {
 
   useEffect(() => {
     dispatch(fetchSites({ site_type: 'smartport' }));
-    dispatch(fetchDevices());
+    dispatch(fetchDevices({}));
     dispatch(fetchActiveAlarms());
   }, [dispatch]);
 
@@ -64,46 +67,46 @@ export const ModernDashboard: React.FC = () => {
 
   const featureCards: FeatureCard[] = [
     {
-      title: 'Dashboard Executivo',
-      description: 'Visão 360° com KPIs, ROI e insights estratégicos para tomada de decisão',
-      icon: <TrendingUp sx={{ fontSize: 40 }} />,
+      title: 'Dashboards Personalizados',
+      description: 'Crie dashboards customizados com drag-and-drop e widgets profissionais',
+      icon: <Palette sx={{ fontSize: 40 }} />,
       color: '#2196F3',
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      path: `/executive/${defaultSiteId}`,
+      path: '/dashboards',
       badge: 'Novo',
     },
     {
-      title: 'Importar Dados GBM',
-      description: 'Importe dados da GBM Logística via Excel, API ou entrada manual',
-      icon: <CloudUpload sx={{ fontSize: 40 }} />,
+      title: 'Tempo Real',
+      description: 'Monitore tags, trends e valores ao vivo com atualização automática',
+      icon: <Speed sx={{ fontSize: 40 }} />,
       color: '#4CAF50',
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-      path: `/gbm-import/${defaultSiteId}`,
+      path: '/realtime',
       badge: 'Popular',
     },
     {
-      title: 'Insights GBM',
-      description: 'Análise inteligente com IA: identifique gargalos, oportunidades e reduza custos',
-      icon: <Insights sx={{ fontSize: 40 }} />,
+      title: 'Alarmes e Eventos',
+      description: 'Gerencie alarmes ativos, histórico e notificações em tempo real',
+      icon: <Warning sx={{ fontSize: 40 }} />,
       color: '#FF9800',
       gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      path: `/gbm-insights/${defaultSiteId}`,
+      path: '/alarms',
     },
     {
-      title: 'Centro de Análise',
-      description: 'Analytics avançado, detecção de anomalias e insights operacionais',
+      title: 'Analytics & IA',
+      description: 'Análise avançada com machine learning e insights operacionais',
       icon: <BarChart sx={{ fontSize: 40 }} />,
       color: '#9C27B0',
       gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-      path: '/analytics-hub',
+      path: '/analytics',
     },
     {
-      title: 'Saúde de Assets',
-      description: 'Monitore saúde de equipamentos, preveja falhas e otimize manutenção',
-      icon: <Favorite sx={{ fontSize: 40 }} />,
+      title: 'Gerenciamento de Tags',
+      description: 'Configure e monitore todas as tags do sistema com asset tree',
+      icon: <LocalOffer sx={{ fontSize: 40 }} />,
       color: '#E91E63',
       gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-      path: '/asset-health-hub',
+      path: '/realtime/tags',
     },
     {
       title: 'Assistente IA',
@@ -111,23 +114,23 @@ export const ModernDashboard: React.FC = () => {
       icon: <Chat sx={{ fontSize: 40 }} />,
       color: '#00BCD4',
       gradient: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-      path: '/chat',
+      path: '/analytics/chat',
     },
     {
-      title: 'Simulador',
-      description: 'Simule operações portuárias e teste cenários antes de implementar',
-      icon: <Speed sx={{ fontSize: 40 }} />,
+      title: 'Dispositivos',
+      description: 'Gerencie gateways, protocolos e conexões com equipamentos industriais',
+      icon: <Router sx={{ fontSize: 40 }} />,
       color: '#FF5722',
       gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-      path: '/simulator',
+      path: '/settings/devices',
     },
     {
-      title: 'Construtor de Dashboards',
-      description: 'Crie dashboards personalizados com drag-and-drop sem código',
-      icon: <Palette sx={{ fontSize: 40 }} />,
+      title: 'Configurações',
+      description: 'Ajuste preferências, usuários, permissões e integrações do sistema',
+      icon: <SettingsIcon sx={{ fontSize: 40 }} />,
       color: '#795548',
       gradient: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
-      path: '/dashboard-builder',
+      path: '/settings',
     },
   ];
 

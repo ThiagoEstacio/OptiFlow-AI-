@@ -335,18 +335,28 @@ export const DashboardBuilderPage: React.FC = () => {
   }, [dashboardManager]);
 
   const handleImportDashboard = useCallback(async (file: File) => {
-    const imported = await dashboardManager.importDashboardFromFile(file);
-    if (imported) {
-      showToast.success('Dashboard imported successfully');
-    } else {
-      showToast.error('Failed to import dashboard');
+    try {
+      const imported = await dashboardManager.importDashboardFromFile(file);
+      if (imported) {
+        showToast.success('Dashboard imported successfully');
+      } else {
+        showToast.error('Failed to import dashboard');
+      }
+    } catch (error) {
+      console.error('Error importing dashboard:', error);
+      showToast.error('Error importing dashboard');
     }
   }, [dashboardManager]);
 
-  const handleShareDashboard = useCallback((id: string) => {
-    const url = dashboardManager.shareDashboard(id);
-    navigator.clipboard.writeText(url);
-    showToast.success('Share link copied to clipboard!');
+  const handleShareDashboard = useCallback(async (id: string) => {
+    try {
+      const url = dashboardManager.shareDashboard(id);
+      await navigator.clipboard.writeText(url);
+      showToast.success('Share link copied to clipboard!');
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      showToast.error('Failed to copy link to clipboard');
+    }
   }, [dashboardManager]);
 
   // Auto-open property panel when widget is selected
@@ -521,7 +531,7 @@ export const DashboardBuilderPage: React.FC = () => {
               onClose={() => setShowTagsPanel(false)}
               onEditAsset={(asset) => {
                 // Handle asset editing (future enhancement)
-                showToast.info('Asset editing coming soon!');
+                showToast.success('Asset editing coming soon!');
               }}
               showInactive={false}
             />
