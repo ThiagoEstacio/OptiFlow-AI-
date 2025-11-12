@@ -35,6 +35,7 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             "/docs",
             "/openapi.json",
             "/redoc",
+            "/api/v1/agent/dashboard/chat",  # AI agent chat endpoint (can be slow)
         ]
 
         # Skip WebSocket connections

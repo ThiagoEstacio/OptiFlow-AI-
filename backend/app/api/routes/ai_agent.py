@@ -91,10 +91,10 @@ Call tools using:
 ## Response Format
 Brief explanation, then:
 ```json
-{{"type": "gauge", "title": "Title", "tagId": "TAG_ID", "config": {{...}}}}
+{{"type": "gauge", "title": "Title", "tagId": "TAG_ID", "config": {{"key": "value"}}}}
 ```
 
-For multiple widgets, use array: [{...}, {...}]
+For multiple widgets, use array: [{{...}}, {{...}}]
 
 Be concise. Use real data from tools."""
 
@@ -178,6 +178,120 @@ def build_context_prompt(request: DashboardAgentRequest) -> str:
     return "\n\n".join(context_parts) if context_parts else ""
 
 
+async def chat_fallback_mode(
+    request: DashboardAgentRequest,
+    data_service: DataService,
+    toolkit: AgentToolkit,
+    db: Session
+) -> DashboardAgentResponse:
+    """
+    Fallback chat mode when Ollama is not available.
+    Provides intelligent responses based on keywords and real data.
+    """
+    message_lower = request.message.lower()
+    
+    # Device status queries
+    if any(word in message_lower for word in ['dispositivo', 'device', 'online', 'offline', 'conectado']):
+        try:
+            # Get device count from database directly
+            from sqlalchemy import select, func, case
+            from ...models.device import Device
+            
+            result = await db.execute(
+                select(
+                    func.count(Device.id).label('total'),
+                    func.sum(case((Device.status == 'CONNECTED', 1), else_=0)).label('online'),
+                    func.sum(case((Device.status != 'CONNECTED', 1), else_=0)).label('offline')
+                )
+            )
+            row = result.first()
+            
+            total = row.total or 0
+            online = row.online or 0
+            offline = row.offline or 0
+            
+            response = f"📊 **Status dos Dispositivos**\n\n"
+            response += f"Total: {total} dispositivos\n"
+            response += f"🟢 Online: {online}\n"
+            response += f"🔴 Offline: {offline}\n\n"
+            
+            if online > 0:
+                response += f"Ótimo! {online} dispositivo(s) estão operando normalmente."
+            if offline > 0:
+                response += f" {offline} dispositivo(s) precisam de atenção."
+            
+            return DashboardAgentResponse(
+                response=response,
+                suggestions=[
+                    "Mostre-me os tags ativos",
+                    "Quais alarmes estão ativos?",
+                    "Crie um gráfico de temperatura"
+                ]
+            )
+        except Exception as e:
+            logger.error(f"Error getting device status: {e}")
+    
+    # Active tags queries
+    if any(word in message_lower for word in ['tag', 'dados', 'sensores', 'sensor']):
+        try:
+            tags_result = await toolkit.execute_tool("get_active_tags", {})
+            if tags_result.get("success"):
+                tags = tags_result.get("data", [])
+                count = len(tags)
+                
+                response = f"📡 **Tags Ativos**\n\n"
+                response += f"Encontrei {count} tags com dados recentes:\n\n"
+                
+                for i, tag in enumerate(tags[:5], 1):
+                    name = tag.get("name", tag.get("id", "Unknown"))
+                    value = tag.get("last_value", "N/A")
+                    response += f"{i}. **{name}**: {value}\n"
+                
+                if count > 5:
+                    response += f"\n... e mais {count - 5} tags."
+                
+                return DashboardAgentResponse(
+                    response=response,
+                    suggestions=[
+                        "Crie um gráfico para TEST_COUNTER_PV",
+                        "Mostre estatísticas dos sensores",
+                        "Quais tags mudaram recentemente?"
+                    ]
+                )
+        except Exception as e:
+            logger.error(f"Error getting active tags: {e}")
+    
+    # Greeting responses
+    if any(word in message_lower for word in ['olá', 'oi', 'hello', 'hi', 'bom dia', 'boa tarde']):
+        return DashboardAgentResponse(
+            response="👋 Olá! Sou o OptiFlow AI Assistant. Posso ajudá-lo a:\n\n"
+                    "• Monitorar status de dispositivos\n"
+                    "• Visualizar dados de tags em tempo real\n"
+                    "• Criar gráficos e widgets personalizados\n"
+                    "• Analisar histórico e tendências\n\n"
+                    "Como posso ajudá-lo hoje?",
+            suggestions=[
+                "Quantos dispositivos estão online?",
+                "Mostre-me os tags ativos",
+                "Crie um gráfico de temperatura",
+                "Quais alarmes estão ativos?"
+            ]
+        )
+    
+    # Default response
+    return DashboardAgentResponse(
+        response="Desculpe, não entendi completamente sua pergunta. "
+                "Posso ajudá-lo com informações sobre dispositivos, tags, alarmes e criação de dashboards. "
+                "Tente perguntar sobre o status dos dispositivos ou tags ativos!",
+        suggestions=[
+            "Status dos dispositivos",
+            "Tags ativos",
+            "Criar um widget",
+            "Histórico de dados"
+        ]
+    )
+
+
 @router.post("/dashboard/chat", response_model=DashboardAgentResponse)
 async def chat_with_agent(
     request: DashboardAgentRequest,
@@ -196,6 +310,20 @@ async def chat_with_agent(
     # Initialize services
     data_service = DataService(db)
     toolkit = AgentToolkit(data_service)
+    
+    # Fallback mode when Ollama is not available or not ready
+    # Force fallback mode for now since Ollama takes too long to load
+    logger.info("Using fallback chat mode (Ollama disabled)")
+    return await chat_fallback_mode(request, data_service, toolkit, db)
+    
+    # TODO: Re-enable when Ollama is properly configured with enough resources
+    # try:
+    #     # Quick check if Ollama is responsive
+    #     async with httpx.AsyncClient(timeout=2.0) as client:
+    #         await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+    # except Exception as e:
+    #     logger.warning(f"Ollama not available, using fallback mode: {e}")
+    #     return await chat_fallback_mode(request, data_service, toolkit)
     
     # Build system prompt with available tools
     tools_description = format_tools_for_prompt(toolkit.get_tool_definitions())

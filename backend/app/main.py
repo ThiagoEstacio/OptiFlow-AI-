@@ -634,14 +634,26 @@ if settings.ENVIRONMENT == "production":
     ]
     logger.info(f"🔒 CORS configured for PRODUCTION with origins: {allowed_origins}")
 else:
-    # Development: Permissive CORS
-    allowed_origins = settings.CORS_ORIGINS if settings.CORS_ORIGINS != ["*"] else ["http://localhost:3000", "http://localhost:3002", "http://localhost:5173"]
-    logger.warning(f"⚠️  CORS configured for {settings.ENVIRONMENT.upper()} with origins: {allowed_origins}")
+    # Development: Allow all origins
+    allowed_origins = ["*"]
+    logger.warning(f"⚠️  CORS configured for {settings.ENVIRONMENT.upper()} - ALLOWING ALL ORIGINS")
 
 app.add_middleware(
+    # If allowed_origins is a wildcard ("[\"*\"]" in settings), enable a permissive
+    # CORS policy that accepts any origin. Using allow_origin_regex=".*" allows
+    # credentials to be used while still permitting all origins.
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
+    **(
+        {
+            "allow_origin_regex": ".*",
+            "allow_credentials": True,
+        }
+        if allowed_origins == ["*"]
+        else {
+            "allow_origins": allowed_origins,
+            "allow_credentials": settings.CORS_CREDENTIALS,
+        }
+    ),
     allow_methods=["*"],  # Allow all methods including OPTIONS
     allow_headers=["*"],
     expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
