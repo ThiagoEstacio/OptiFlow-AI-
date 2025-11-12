@@ -433,6 +433,12 @@ class OptimizedInfluxDBService:
                 record=batch_points
             )
 
+            # Force flush to ensure data is written
+            try:
+                self.write_api.flush()
+            except Exception as flush_error:
+                logger.warning(f"Flush warning (may be expected for SYNCHRONOUS mode): {flush_error}")
+
             logger.info(f"✅ Wrote batch of {len(batch_points)} points to InfluxDB")
             return True
 
