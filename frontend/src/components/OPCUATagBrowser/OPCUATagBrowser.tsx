@@ -49,7 +49,7 @@ interface SelectedTag {
 }
 
 interface OPCUATagBrowserProps {
-  deviceId: number;
+  deviceId: string;
   deviceName: string;
   onTagsConfigured?: () => void;
 }
@@ -259,7 +259,6 @@ export const OPCUATagBrowser: React.FC<OPCUATagBrowserProps> = ({
       const response = await apiClient.post(
         `/api/v1/opcua/devices/${deviceId}/opcua/configure-tags`,
         {
-          device_id: deviceId,
           tags: Array.from(selectedTags.values()),
         }
       );

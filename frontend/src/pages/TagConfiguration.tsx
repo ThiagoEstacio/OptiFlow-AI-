@@ -42,9 +42,11 @@ export const TagConfiguration: React.FC = () => {
       const token = localStorage.getItem('token');
       const response = await axios.get<Device[]>('/api/v1/devices', {
         headers: { Authorization: `Bearer ${token}` },
-        params: { protocol: 'opcua' },
       });
-      const opcuaDevices = response.data.filter(d => d.protocol === 'opcua');
+      // Filter for OPC UA devices (protocol can be 'OPC_UA' or 'opcua')
+      const opcuaDevices = response.data.filter(d => 
+        d.protocol === 'OPC_UA' || d.protocol.toLowerCase() === 'opcua'
+      );
       setDevices(opcuaDevices);
       
       // Auto-select first OPC UA device
@@ -118,7 +120,7 @@ export const TagConfiguration: React.FC = () => {
       {selectedDevice && (
         <Box sx={{ height: 'calc(100vh - 350px)', minHeight: 600 }}>
           <OPCUATagBrowser
-            deviceId={parseInt(selectedDevice.id)}
+            deviceId={selectedDevice.id}
             deviceName={selectedDevice.name}
             onTagsConfigured={() => {
               // Optionally navigate or show success

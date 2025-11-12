@@ -11,6 +11,7 @@ from sqlalchemy import select, and_
 import asyncio
 from asyncua import Client
 import logging
+from uuid import UUID
 
 from ....db.session import get_db
 from ....models.device import Device
@@ -45,7 +46,6 @@ class TagConfiguration(BaseModel):
 
 class BulkTagConfigRequest(BaseModel):
     """Request to configure multiple tags"""
-    device_id: int
     tags: List[TagConfiguration]
 
 
@@ -114,7 +114,7 @@ async def browse_opcua_node(client: Client, node, level: int = 0, max_level: int
 
 @router.get("/devices/{device_id}/opcua/browse", response_model=List[OPCUANode])
 async def browse_opcua_tags(
-    device_id: int,
+    device_id: UUID,
     max_depth: int = 3,
     db: AsyncSession = Depends(get_db)
 ):
@@ -140,7 +140,7 @@ async def browse_opcua_tags(
             )
         
         # Get OPC UA endpoint from device config
-        config = device.config or {}
+        config = device.connection_config or {}
         endpoint = config.get("endpoint") or config.get("connection_string")
         
         if not endpoint:
@@ -188,7 +188,7 @@ async def browse_opcua_tags(
 
 @router.post("/devices/{device_id}/opcua/configure-tags")
 async def configure_opcua_tags(
-    device_id: int,
+    device_id: UUID,
     request: BulkTagConfigRequest,
     db: AsyncSession = Depends(get_db)
 ):
@@ -302,7 +302,7 @@ async def configure_opcua_tags(
 
 @router.get("/devices/{device_id}/tags")
 async def get_device_tags(
-    device_id: int,
+    device_id: UUID,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -341,7 +341,7 @@ async def get_device_tags(
 
 @router.delete("/devices/{device_id}/tags/{tag_id}")
 async def delete_tag(
-    device_id: int,
+    device_id: UUID,
     tag_id: int,
     db: AsyncSession = Depends(get_db)
 ):
