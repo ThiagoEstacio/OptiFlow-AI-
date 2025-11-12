@@ -1,5 +1,5 @@
 /**
- * Devices Management Page with Full CRUD
+ * Devices Management Page with Full CRUD and Enhanced Features
  */
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -22,11 +22,22 @@ export const DevicesPage: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   useEffect(() => {
-    dispatch(fetchDevices());
-    dispatch(fetchSites());
+    dispatch(fetchDevices({}));
+    dispatch(fetchSites({ site_type: 'smartport' }));
   }, [dispatch]);
+
+  const handleRefresh = async () => {
+    try {
+      await dispatch(fetchDevices({})).unwrap();
+      setLastRefresh(new Date());
+      showToast.success('Dispositivos atualizados!');
+    } catch (error) {
+      showToast.error('Erro ao atualizar dispositivos');
+    }
+  };
 
   const handleCreate = async (data: any) => {
     setIsSubmitting(true);
@@ -34,7 +45,7 @@ export const DevicesPage: React.FC = () => {
       await dispatch(createDevice(data)).unwrap();
       showToast.success('Device created successfully!');
       setIsCreateModalOpen(false);
-      dispatch(fetchDevices());
+      dispatch(fetchDevices({}));
     } catch (error: any) {
       showToast.error(error.message || 'Failed to create device');
     } finally {
@@ -50,7 +61,7 @@ export const DevicesPage: React.FC = () => {
       showToast.success('Device updated successfully!');
       setIsEditModalOpen(false);
       setSelectedDevice(null);
-      dispatch(fetchDevices());
+      dispatch(fetchDevices({}));
     } catch (error: any) {
       showToast.error(error.message || 'Failed to update device');
     } finally {
@@ -66,7 +77,7 @@ export const DevicesPage: React.FC = () => {
       showToast.success('Device deleted successfully!');
       setIsDeleteDialogOpen(false);
       setSelectedDevice(null);
-      dispatch(fetchDevices());
+      dispatch(fetchDevices({}));
     } catch (error: any) {
       showToast.error(error.message || 'Failed to delete device');
     } finally {
@@ -91,6 +102,29 @@ export const DevicesPage: React.FC = () => {
     (device.ip_address && device.ip_address.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  // Stats calculations
+  const connectedDevices = devices.filter(d => d.status === 'CONNECTED' || d.status === 'ONLINE').length;
+  const devicesByProtocol = devices.reduce((acc, device) => {
+    const protocol = device.protocol?.toUpperCase() || 'UNKNOWN';
+    acc[protocol] = (acc[protocol] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const getProtocolIcon = (protocol: string): string => {
+    const proto = protocol?.toLowerCase() || '';
+    if (proto.includes('opc') || proto === 'opcua' || proto === 'opc_ua') return '🔗';
+    if (proto.includes('modbus')) return '📡';
+    if (proto.includes('mqtt')) return '📨';
+    if (proto.includes('http')) return '🌐';
+    return '🔌';
+  };
+
+  const getStatusColor = (status: string): string => {
+    if (status === 'CONNECTED' || status === 'ONLINE') return 'text-green-600 bg-green-50';
+    if (status === 'DISCONNECTED' || status === 'OFFLINE') return 'text-red-600 bg-red-50';
+    return 'text-gray-600 bg-gray-50';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -103,25 +137,81 @@ export const DevicesPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Devices</h1>
-          <p className="text-gray-600 mt-1">Manage industrial devices and PLCs</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Devices</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Manage industrial devices and PLCs</p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Add Device
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            title={`Last refresh: ${lastRefresh.toLocaleTimeString()}`}
+          >
+            🔄 Refresh
+          </button>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            + Add Device
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Total Devices</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{devices.length}</p>
+            </div>
+            <div className="text-4xl">🔌</div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Connected</p>
+              <p className="text-3xl font-bold text-green-600 mt-2">{connectedDevices}</p>
+            </div>
+            <div className="text-4xl">✅</div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Offline</p>
+              <p className="text-3xl font-bold text-red-600 mt-2">{devices.length - connectedDevices}</p>
+            </div>
+            <div className="text-4xl">⚠️</div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">By Protocol</p>
+            <div className="space-y-1">
+              {Object.entries(devicesByProtocol).slice(0, 3).map(([protocol, count]) => (
+                <div key={protocol} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700 dark:text-gray-300">{getProtocolIcon(protocol)} {protocol}</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search Bar */}
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
         <input
           type="text"
           placeholder="Search devices by name, type, protocol, or IP address..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         />
       </div>
 
@@ -153,64 +243,56 @@ export const DevicesPage: React.FC = () => {
           </div>
         ) : (
           filteredDevices.map((device) => (
-            <div key={device.id} className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden border border-gray-100">
+            <div key={device.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden border border-gray-100 dark:border-gray-700">
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <div className="text-3xl">
-                        {device.protocol === 'modbus_tcp' || device.protocol === 'modbus_rtu' ? '📡' : 
-                         device.protocol === 'opc_ua' || device.protocol === 'opcua' ? '🔗' : 
-                         device.protocol === 'mqtt' ? '📨' : 
-                         device.protocol === 's7' ? '🏭' :
-                         device.protocol === 'ethernetip' || device.protocol === 'ethernet_ip' ? '🌐' : '🔌'}
+                        {getProtocolIcon(device.protocol)}
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-gray-900">{device.name}</h3>
-                        <p className="text-xs text-gray-500 uppercase tracking-wide">{device.device_type}</p>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{device.name}</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{device.device_type}</p>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">{device.description || 'No description'}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{device.description || 'No description'}</p>
                   </div>
                   <div className="flex flex-col items-end space-y-2">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        device.status === 'connected' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(device.status)}`}>
                       <span className={`w-2 h-2 rounded-full mr-1.5 ${
-                        device.status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                        device.status === 'CONNECTED' || device.status === 'ONLINE' 
+                          ? 'bg-green-500 animate-pulse' 
+                          : 'bg-red-400'
                       }`}></span>
-                      {device.status === 'connected' ? 'Online' : 'Offline'}
+                      {device.status}
                     </span>
                     {device.enabled && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                         ✓ Enabled
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-3">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <span className="text-gray-500 block text-xs mb-1">Protocol</span>
-                      <span className="font-semibold text-gray-900 uppercase">{device.protocol}</span>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs mb-1">Protocol</span>
+                      <span className="font-semibold text-gray-900 dark:text-white uppercase">{device.protocol}</span>
                     </div>
                     <div>
-                      <span className="text-gray-500 block text-xs mb-1">IP Address</span>
-                      <span className="font-medium text-gray-900">{device.ip_address || 'N/A'}</span>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs mb-1">IP Address</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{device.ip_address || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="text-gray-500 block text-xs mb-1">Port</span>
-                      <span className="font-medium text-gray-900">{device.port || 'N/A'}</span>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs mb-1">Port</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{device.port || 'N/A'}</span>
                     </div>
                     {device.last_seen && (
                       <div>
-                        <span className="text-gray-500 block text-xs mb-1">Last Seen</span>
-                        <span className="font-medium text-gray-900 text-xs">
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs mb-1">Last Seen</span>
+                        <span className="font-medium text-gray-900 dark:text-white text-xs">
                           {new Date(device.last_seen).toLocaleTimeString()}
                         </span>
                       </div>
@@ -218,16 +300,16 @@ export const DevicesPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end space-x-3">
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
                   <button
                     onClick={() => openEditModal(device)}
-                    className="px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
                   >
                     ✏️ Edit
                   </button>
                   <button
                     onClick={() => openDeleteDialog(device)}
-                    className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg transition-colors"
                   >
                     🗑️ Delete
                   </button>
