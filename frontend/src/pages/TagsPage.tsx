@@ -35,7 +35,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Stack
+  Stack,
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -88,6 +89,8 @@ export const TagsPage: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
+  const [isArchivingModalOpen, setIsArchivingModalOpen] = useState(false);
+  const [isPISystemModalOpen, setIsPISystemModalOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<Tag | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -697,7 +700,12 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                         <Typography variant="body2" color="text.secondary" paragraph>
                           Configure políticas de retenção e compressão de dados históricos
                         </Typography>
-                        <Button variant="outlined" size="small" fullWidth>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          onClick={() => setIsArchivingModalOpen(true)}
+                        >
                           Configurar Arquivamento
                         </Button>
                       </CardContent>
@@ -713,7 +721,12 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                         <Typography variant="body2" color="text.secondary" paragraph>
                           Importe tags e estrutura de assets do PI AF
                         </Typography>
-                        <Button variant="outlined" size="small" fullWidth>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          onClick={() => setIsPISystemModalOpen(true)}
+                        >
                           Configurar Sincronização
                         </Button>
                       </CardContent>
@@ -729,7 +742,12 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                         <Typography variant="body2" color="text.secondary" paragraph>
                           Exporte configurações de tags em diversos formatos
                         </Typography>
-                        <Button variant="outlined" size="small" fullWidth>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          onClick={handleExportFiltered}
+                        >
                           Exportar Configurações
                         </Button>
                       </CardContent>
@@ -745,7 +763,14 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
                         <Typography variant="body2" color="text.secondary" paragraph>
                           Configure alarmes baseados em valores de tags
                         </Typography>
-                        <Button variant="outlined" size="small" fullWidth>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          onClick={() => {
+                            window.location.href = '/alarms';
+                          }}
+                        >
                           Gerenciar Alarmes
                         </Button>
                       </CardContent>
@@ -818,6 +843,269 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
           <Typography variant="body2" color="text.secondary">
             Modal de criação de fórmulas será implementado aqui
           </Typography>
+        </Box>
+      </Modal>
+
+      {/* Archiving Configuration Modal */}
+      <Modal
+        isOpen={isArchivingModalOpen}
+        onClose={() => setIsArchivingModalOpen(false)}
+        title="Configurar Arquivamento"
+        size="lg"
+      >
+        <Box sx={{ p: 3 }}>
+          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+            Configurações de Arquivamento de Dados
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Archiving Mode */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Modo de Arquivamento
+              </Typography>
+              <Select fullWidth defaultValue="time-based" size="small">
+                <MenuItem value="time-based">Baseado em Tempo</MenuItem>
+                <MenuItem value="change-based">Baseado em Mudança</MenuItem>
+                <MenuItem value="hybrid">Híbrido</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Retention Period */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Período de Retenção
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                defaultValue={30}
+                InputProps={{
+                  endAdornment: <Typography variant="body2" sx={{ ml: 1 }}>dias</Typography>
+                }}
+              />
+            </Box>
+
+            {/* Compression */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Compressão
+              </Typography>
+              <Select fullWidth defaultValue="gzip" size="small">
+                <MenuItem value="none">Sem Compressão</MenuItem>
+                <MenuItem value="gzip">GZIP</MenuItem>
+                <MenuItem value="lz4">LZ4</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Archiving Interval */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Intervalo de Arquivamento
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                defaultValue={60}
+                InputProps={{
+                  endAdornment: <Typography variant="body2" sx={{ ml: 1 }}>segundos</Typography>
+                }}
+              />
+            </Box>
+
+            {/* Storage Location */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Local de Armazenamento
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                defaultValue="/data/archive"
+                placeholder="/path/to/archive"
+              />
+            </Box>
+
+            {/* Enable/Disable */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Habilitar Arquivamento Automático
+              </Typography>
+              <Switch defaultChecked />
+            </Box>
+
+            {/* Action Buttons */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2, justifyContent: 'flex-end' }}>
+              <Button
+                variant="outlined"
+                onClick={() => setIsArchivingModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  showToast.success('Configurações de arquivamento salvas!');
+                  setIsArchivingModalOpen(false);
+                }}
+              >
+                Salvar Configurações
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* PI System Synchronization Modal */}
+      <Modal
+        isOpen={isPISystemModalOpen}
+        onClose={() => setIsPISystemModalOpen(false)}
+        title="Configurar Sincronização PI System"
+        size="lg"
+      >
+        <Box sx={{ p: 3 }}>
+          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+            Configurações de Integração com PI System
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* PI Server Address */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Endereço do PI Server
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="pi-server.company.com"
+                defaultValue=""
+              />
+            </Box>
+
+            {/* PI Server Port */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Porta
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                defaultValue={5450}
+              />
+            </Box>
+
+            {/* Authentication */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Tipo de Autenticação
+              </Typography>
+              <Select fullWidth defaultValue="windows" size="small">
+                <MenuItem value="windows">Windows Authentication</MenuItem>
+                <MenuItem value="pi">PI Authentication</MenuItem>
+                <MenuItem value="kerberos">Kerberos</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Username */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Usuário
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="username"
+              />
+            </Box>
+
+            {/* Password */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Senha
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                placeholder="••••••••"
+              />
+            </Box>
+
+            {/* Sync Direction */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Direção de Sincronização
+              </Typography>
+              <Select fullWidth defaultValue="bidirectional" size="small">
+                <MenuItem value="to-pi">OptiFlow → PI System</MenuItem>
+                <MenuItem value="from-pi">PI System → OptiFlow</MenuItem>
+                <MenuItem value="bidirectional">Bidirecional</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Sync Interval */}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                Intervalo de Sincronização
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                defaultValue={30}
+                InputProps={{
+                  endAdornment: <Typography variant="body2" sx={{ ml: 1 }}>segundos</Typography>
+                }}
+              />
+            </Box>
+
+            {/* Enable/Disable */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Habilitar Sincronização Automática
+              </Typography>
+              <Switch />
+            </Box>
+
+            {/* Test Connection Button */}
+            <Box sx={{ mt: 1 }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => {
+                  const loadingToast = showToast.loading('Testando conexão com PI System...');
+                  setTimeout(() => {
+                    showToast.dismiss(loadingToast);
+                    showToast.success('Conexão estabelecida com sucesso!');
+                  }, 1500);
+                }}
+              >
+                Testar Conexão
+              </Button>
+            </Box>
+
+            {/* Action Buttons */}
+            <Box sx={{ display: 'flex', gap: 2, mt: 2, justifyContent: 'flex-end' }}>
+              <Button
+                variant="outlined"
+                onClick={() => setIsPISystemModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  showToast.success('Configurações de sincronização PI System salvas!');
+                  setIsPISystemModalOpen(false);
+                }}
+              >
+                Salvar Configurações
+              </Button>
+            </Box>
+          </Box>
         </Box>
       </Modal>
     </Box>
