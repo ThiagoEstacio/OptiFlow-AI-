@@ -110,8 +110,8 @@ export const TagsPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    dispatch(fetchTags());
-    dispatch(fetchDevices());
+    dispatch(fetchTags({}));
+    dispatch(fetchDevices({}));
   }, [dispatch]);
 
   const handleCreate = async (data: any) => {
@@ -120,7 +120,7 @@ export const TagsPage: React.FC = () => {
       await dispatch(createTag(data)).unwrap();
       showToast.success('Tag criado com sucesso!');
       setIsCreateModalOpen(false);
-      dispatch(fetchTags());
+      dispatch(fetchTags({}));
     } catch (error: any) {
       showToast.error(error.message || 'Erro ao criar tag');
     } finally {
@@ -136,7 +136,7 @@ export const TagsPage: React.FC = () => {
       showToast.success('Tag atualizado com sucesso!');
       setIsEditModalOpen(false);
       setSelectedTag(null);
-      dispatch(fetchTags());
+      dispatch(fetchTags({}));
     } catch (error: any) {
       showToast.error(error.message || 'Erro ao atualizar tag');
     } finally {
@@ -152,7 +152,7 @@ export const TagsPage: React.FC = () => {
       showToast.success('Tag excluído com sucesso!');
       setIsDeleteDialogOpen(false);
       setSelectedTag(null);
-      dispatch(fetchTags());
+      dispatch(fetchTags({}));
     } catch (error: any) {
       showToast.error(error.message || 'Erro ao excluir tag');
     } finally {
@@ -178,7 +178,7 @@ export const TagsPage: React.FC = () => {
     try {
       showToast.success(`Importando ${importRequest.tags.length} tags...`);
       setTimeout(() => {
-        dispatch(fetchTags());
+        dispatch(fetchTags({}));
       }, 1000);
     } catch (error: any) {
       throw error;
@@ -188,7 +188,7 @@ export const TagsPage: React.FC = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await dispatch(fetchTags()).unwrap();
+      await dispatch(fetchTags({})).unwrap();
       setLastRefresh(new Date());
       showToast.success('Tags atualizados!');
     } catch (error) {
@@ -768,7 +768,7 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
         <TagForm
           onSubmit={handleCreate}
           onCancel={() => setIsCreateModalOpen(false)}
-          isSubmitting={isSubmitting}
+          isLoading={isSubmitting}
         />
       </Modal>
 
@@ -780,10 +780,10 @@ PRESS_01,ns=2;s=Pressure,${devices[0]?.id || ''},FLOAT,bar,Pressure sensor,true,
       >
         {selectedTag && (
           <TagForm
-            initialData={selectedTag}
+            tag={selectedTag}
             onSubmit={handleEdit}
             onCancel={() => setIsEditModalOpen(false)}
-            isSubmitting={isSubmitting}
+            isLoading={isSubmitting}
           />
         )}
       </Modal>
