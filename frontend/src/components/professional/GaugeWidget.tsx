@@ -1,8 +1,9 @@
 /**
  * Professional Gauge Widget - Industrial Metrics Display
  * Circular gauge for OEE, temperature, speed, pressure, etc.
+ * Optimized with React.memo and useMemo for performance
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -36,7 +37,7 @@ interface GaugeWidgetProps {
   size?: 'small' | 'medium' | 'large';
 }
 
-export const GaugeWidget: React.FC<GaugeWidgetProps> = ({
+export const GaugeWidget: React.FC<GaugeWidgetProps> = React.memo(({
   title,
   value,
   min = 0,
@@ -50,43 +51,41 @@ export const GaugeWidget: React.FC<GaugeWidgetProps> = ({
 }) => {
   const theme = useTheme();
 
-  // Calculate percentage
-  const percentage = ((value - min) / (max - min)) * 100;
-  const clampedPercentage = Math.max(0, Math.min(100, percentage));
+  // Memoize calculations
+  const percentage = useMemo(() => ((value - min) / (max - min)) * 100, [value, min, max]);
+  const clampedPercentage = useMemo(() => Math.max(0, Math.min(100, percentage)), [percentage]);
 
-  // Determine color based on value and thresholds
-  const getColor = () => {
+  // Memoize color determination
+  const color = useMemo(() => {
     if (value >= thresholds.high) return theme.palette.success.main;
     if (value >= thresholds.medium) return theme.palette.warning.main;
     return theme.palette.error.main;
-  };
+  }, [value, thresholds, theme]);
 
-  const color = getColor();
-
-  // Size configurations
-  const sizeConfig = {
+  // Memoize size configurations
+  const sizeConfig = useMemo(() => ({
     small: { diameter: 120, strokeWidth: 8, fontSize: '1.5rem' },
     medium: { diameter: 160, strokeWidth: 10, fontSize: '2rem' },
     large: { diameter: 200, strokeWidth: 12, fontSize: '2.5rem' }
-  };
+  }), []);
 
-  const { diameter, strokeWidth, fontSize } = sizeConfig[size];
-  const radius = (diameter - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (clampedPercentage / 100) * circumference;
+  const { diameter, strokeWidth, fontSize } = useMemo(() => sizeConfig[size], [sizeConfig, size]);
+  const radius = useMemo(() => (diameter - strokeWidth) / 2, [diameter, strokeWidth]);
+  const circumference = useMemo(() => 2 * Math.PI * radius, [radius]);
+  const offset = useMemo(() => circumference - (clampedPercentage / 100) * circumference, [circumference, clampedPercentage]);
 
-  const getTrendIcon = () => {
+  const getTrendIcon = useMemo(() => {
     if (trend === 'up') return <TrendingUp fontSize="small" />;
     if (trend === 'down') return <TrendingDown fontSize="small" />;
     if (trend === 'neutral') return <Remove fontSize="small" />;
     return null;
-  };
+  }, [trend]);
 
-  const getTrendColor = () => {
+  const getTrendColor = useMemo(() => {
     if (trend === 'up') return theme.palette.success.main;
     if (trend === 'down') return theme.palette.error.main;
     return theme.palette.text.secondary;
-  };
+  }, [trend, theme]);
 
   return (
     <Card
@@ -256,4 +255,4 @@ export const GaugeWidget: React.FC<GaugeWidgetProps> = ({
       </CardContent>
     </Card>
   );
-};
+});

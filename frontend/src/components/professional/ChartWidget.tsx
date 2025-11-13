@@ -1,8 +1,9 @@
 /**
  * Professional Chart Widget - Enterprise Data Visualization
  * Supports multiple chart types with professional styling
+ * Optimized with React.memo and useMemo for performance
  */
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -62,7 +63,7 @@ interface ChartWidgetProps {
   actions?: React.ReactNode;
 }
 
-export const ChartWidget: React.FC<ChartWidgetProps> = ({
+export const ChartWidget: React.FC<ChartWidgetProps> = React.memo(({
   title,
   subtitle,
   data,
@@ -84,28 +85,28 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+  const handleMenuClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
-  };
+  }, []);
 
-  const handleMenuClose = () => {
+  const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
-  };
+  }, []);
 
-  const chartColor = theme.palette[color].main;
-  const gradientId = `gradient-${color}-${dataKey}`;
+  const chartColor = useMemo(() => theme.palette[color].main, [theme, color]);
+  const gradientId = useMemo(() => `gradient-${color}-${dataKey}`, [color, dataKey]);
 
-  const getTrendIcon = () => {
+  const getTrendIcon = useMemo(() => {
     if (trend === 'up') return <TrendingUp fontSize="small" />;
     if (trend === 'down') return <TrendingDown fontSize="small" />;
     return <Remove fontSize="small" />;
-  };
+  }, [trend]);
 
-  const getTrendColor = () => {
+  const getTrendColor = useMemo(() => {
     if (trend === 'up') return theme.palette.success.main;
     if (trend === 'down') return theme.palette.error.main;
     return theme.palette.text.secondary;
-  };
+  }, [trend, theme]);
 
   const renderChart = () => {
     const commonProps = {
@@ -360,4 +361,4 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
       </Menu>
     </Card>
   );
-};
+});

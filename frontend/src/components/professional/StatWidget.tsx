@@ -1,8 +1,9 @@
 /**
  * Professional Stat Widget - Enterprise Grade
  * Modern, animated, and highly visual
+ * Optimized with React.memo and useMemo for performance
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -42,7 +43,7 @@ interface StatWidgetProps {
   onClick?: () => void;
 }
 
-export const StatWidget: React.FC<StatWidgetProps> = ({
+export const StatWidget: React.FC<StatWidgetProps> = React.memo(({
   title,
   value,
   icon,
@@ -56,14 +57,14 @@ export const StatWidget: React.FC<StatWidgetProps> = ({
 }) => {
   const theme = useTheme();
 
-  const gradientColors = {
+  const gradientColors = useMemo(() => ({
     primary: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
     secondary: `linear-gradient(135deg, ${theme.palette.secondary.main} 0%, ${theme.palette.secondary.dark} 100%)`,
     success: `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`,
     error: `linear-gradient(135deg, ${theme.palette.error.main} 0%, ${theme.palette.error.dark} 100%)`,
     warning: `linear-gradient(135deg, ${theme.palette.warning.main} 0%, ${theme.palette.warning.dark} 100%)`,
     info: `linear-gradient(135deg, ${theme.palette.info.main} 0%, ${theme.palette.info.dark} 100%)`
-  };
+  }), [theme]);
 
   return (
     <Card
@@ -210,4 +211,4 @@ export const StatWidget: React.FC<StatWidgetProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
