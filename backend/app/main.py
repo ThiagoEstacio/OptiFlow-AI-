@@ -413,6 +413,24 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️  Kafka producer initialization failed: {e}")
         logger.warning("⚠️  System will continue without Kafka publishing")
 
+    # Initialize Alarm Monitoring Service
+    try:
+        from app.services.alarm_monitor_service import get_alarm_monitor_service
+        from app.services.alarm_initializer import initialize_default_alarms
+        from app.db.session import AsyncSessionLocal
+
+        # Initialize default alarm definitions if needed
+        await initialize_default_alarms()
+
+        # Start alarm monitoring
+        alarm_monitor = get_alarm_monitor_service()
+        async with AsyncSessionLocal() as db:
+            await alarm_monitor.start(db)
+        logger.info("✅ Alarm monitoring service initialized and running")
+    except Exception as e:
+        logger.warning(f"⚠️  Alarm monitoring initialization failed: {e}")
+        logger.warning("⚠️  System will continue without automatic alarm monitoring")
+
     # Initialize Kafka consumer for time-series data to InfluxDB
     try:
         await start_timeseries_consumer()
@@ -482,7 +500,17 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("👋 Shutting down OptiFlow AI Platform...")
-    
+
+    # Stop Alarm Monitoring Service
+    try:
+        from app.services.alarm_monitor_service import get_alarm_monitor_service
+        alarm_monitor = get_alarm_monitor_service()
+        if alarm_monitor.is_running:
+            await alarm_monitor.stop()
+            logger.info("✅ Alarm monitoring service stopped")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to stop alarm monitoring: {e}")
+
     # Stop Gateway Service
     try:
         from app.services.gateway_service import get_gateway
