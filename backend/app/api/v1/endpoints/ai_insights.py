@@ -1113,7 +1113,7 @@ async def list_models(
         type_filter = ModelType(model_type) if model_type else None
         status_filter = ModelStatus(status) if status else None
 
-        models = model_manager.list_models(
+        models = await model_manager.list_models(
             db=db,
             model_type=type_filter,
             status=status_filter,

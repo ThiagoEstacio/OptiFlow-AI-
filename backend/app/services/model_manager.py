@@ -13,6 +13,8 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 import mlflow
 import mlflow.sklearn
@@ -309,9 +311,9 @@ class ModelManager:
 
         return {}
 
-    def deploy_model(
+    async def deploy_model(
         self,
-        db: Session,
+        db: AsyncSession,
         model_id: str
     ) -> MLModel:
         """
@@ -324,7 +326,10 @@ class ModelManager:
         Returns:
             Updated MLModel instance
         """
-        model = db.query(MLModel).filter(MLModel.id == model_id).first()
+        # Get the model
+        stmt = select(MLModel).where(MLModel.id == model_id)
+        result = await db.execute(stmt)
+        model = result.scalar_one_or_none()
 
         if not model:
             raise ValueError(f"Model {model_id} not found")
@@ -333,28 +338,31 @@ class ModelManager:
             raise ValueError(f"Model {model_id} is not in ACTIVE status")
 
         # Deactivate other models of the same type
-        db.query(MLModel).filter(
-            MLModel.model_type == model.model_type,
-            MLModel.id != model.id,
-            MLModel.is_active == True
-        ).update({
-            "is_active": False
-        })
+        stmt_update = (
+            update(MLModel)
+            .where(
+                MLModel.model_type == model.model_type,
+                MLModel.id != model.id,
+                MLModel.is_active == True
+            )
+            .values(is_active=False)
+        )
+        await db.execute(stmt_update)
 
         # Activate this model
         model.is_active = True
         model.deployed_at = datetime.utcnow()
 
-        db.commit()
-        db.refresh(model)
+        await db.commit()
+        await db.refresh(model)
 
         logger.info(f"Model {model.name} deployed successfully")
 
         return model
 
-    def predict(
+    async def predict(
         self,
-        db: Session,
+        db: AsyncSession,
         model_id: str,
         features: Dict[str, float],
         target_type: str,
@@ -373,10 +381,13 @@ class ModelManager:
         Returns:
             Prediction instance
         """
-        model = db.query(MLModel).filter(
+        # Get the active model
+        stmt = select(MLModel).where(
             MLModel.id == model_id,
             MLModel.is_active == True
-        ).first()
+        )
+        result = await db.execute(stmt)
+        model = result.scalar_one_or_none()
 
         if not model:
             raise ValueError(f"Active model {model_id} not found")
@@ -416,14 +427,14 @@ class ModelManager:
         )
 
         db.add(prediction)
-        db.commit()
-        db.refresh(prediction)
+        await db.commit()
+        await db.refresh(prediction)
 
         return prediction
 
-    def list_models(
+    async def list_models(
         self,
-        db: Session,
+        db: AsyncSession,
         model_type: ModelType = None,
         status: ModelStatus = None,
         is_active: bool = None
@@ -440,22 +451,25 @@ class ModelManager:
         Returns:
             List of MLModel instances
         """
-        query = db.query(MLModel)
+        stmt = select(MLModel)
 
         if model_type:
-            query = query.filter(MLModel.model_type == model_type)
+            stmt = stmt.where(MLModel.model_type == model_type)
 
         if status:
-            query = query.filter(MLModel.status == status)
+            stmt = stmt.where(MLModel.status == status)
 
         if is_active is not None:
-            query = query.filter(MLModel.is_active == is_active)
+            stmt = stmt.where(MLModel.is_active == is_active)
 
-        return query.order_by(MLModel.created_at.desc()).all()
+        stmt = stmt.order_by(MLModel.created_at.desc())
 
-    def get_model_performance(
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
+    async def get_model_performance(
         self,
-        db: Session,
+        db: AsyncSession,
         model_id: str,
         time_window_days: int = 30
     ) -> Dict[str, Any]:
@@ -470,7 +484,10 @@ class ModelManager:
         Returns:
             Performance metrics
         """
-        model = db.query(MLModel).filter(MLModel.id == model_id).first()
+        # Get the model
+        stmt = select(MLModel).where(MLModel.id == model_id)
+        result = await db.execute(stmt)
+        model = result.scalar_one_or_none()
 
         if not model:
             raise ValueError(f"Model {model_id} not found")
@@ -478,10 +495,12 @@ class ModelManager:
         # Get predictions from the time window
         cutoff_date = datetime.utcnow() - timedelta(days=time_window_days)
 
-        predictions = db.query(Prediction).filter(
+        stmt_pred = select(Prediction).where(
             Prediction.model_id == model_id,
             Prediction.created_at >= cutoff_date
-        ).all()
+        )
+        result_pred = await db.execute(stmt_pred)
+        predictions = result_pred.scalars().all()
 
         # Calculate statistics
         total_predictions = len(predictions)
