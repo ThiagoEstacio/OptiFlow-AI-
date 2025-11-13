@@ -29,6 +29,7 @@ import { simulatorDataSync } from './services/simulatorDataSync';
 // ========================================
 import { ModernDashboard } from './pages/ModernDashboard';
 import { ProfessionalDashboard } from './pages/ProfessionalDashboard';
+import { ProfessionalAnalytics } from './pages/ProfessionalAnalytics';
 import RealtimeTagPage from './pages/RealtimeTagPage';
 import { ModernAlarmsPage } from './pages/ModernAlarmsPage';
 import { AnalyticsHub } from './pages/AnalyticsHub';
@@ -123,8 +124,9 @@ function App() {
                   {/* ========================================
                       🤖 MODULE 4: ANALYTICS (ML Insights)
                       ======================================== */}
-                  <Route path="analytics" element={<AnalyticsHub />} />
-                  <Route path="analytics/ml-insights" element={<AnalyticsHub />} />
+                  <Route path="analytics" element={<ProfessionalAnalytics />} />
+                  <Route path="analytics/classic" element={<AnalyticsHub />} />
+                  <Route path="analytics/ml-insights" element={<ProfessionalAnalytics />} />
                   <Route path="analytics/ai-monitoring" element={<AIMonitoringDashboard />} />
                   <Route path="analytics/chat" element={<ChatPage />} />
 
