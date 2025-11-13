@@ -324,3 +324,184 @@ async def test_with_synthetic_data(
     
     # Call compare endpoint
     return await compare_models(data, description=f"Synthetic test data ({n_samples} samples, {contamination*100:.1f}% anomalies)")
+
+
+@router.get("/experiments")
+async def list_experiments(
+    limit: int = 10
+):
+    """
+    Lista experimentos de ML/treinamentos realizados
+
+    Retorna histórico de treinamentos, métricas e comparações
+    """
+    from app.services.ml_model_storage import ml_model_storage
+
+    try:
+        # Buscar modelos treinados
+        models = ml_model_storage.list_available_models()
+
+        experiments = []
+
+        # Processar modelos sklearn
+        for model_name in models['sklearn'][:limit]:
+            info = ml_model_storage.get_model_info(model_name)
+            if info and info.get('metadata'):
+                experiments.append({
+                    'id': model_name,
+                    'name': model_name,
+                    'type': 'sklearn',
+                    'algorithm': model_name.split('_')[0],
+                    'metrics': {
+                        'r2_score': info['metadata'].get('r2_score'),
+                        'mape': info['metadata'].get('mape'),
+                        'anomaly_rate': info['metadata'].get('anomaly_rate')
+                    },
+                    'trained_at': info['metadata'].get('trained_at'),
+                    'data_period': info['metadata'].get('training_data_period', 'last_30_days'),
+                    'model_size_mb': round(info['size_bytes'] / (1024 * 1024), 2),
+                    'status': 'completed'
+                })
+
+        # Processar modelos tensorflow
+        for model_name in models['tensorflow'][:limit]:
+            info = ml_model_storage.get_model_info(model_name)
+            if info and info.get('metadata'):
+                experiments.append({
+                    'id': model_name,
+                    'name': model_name,
+                    'type': 'tensorflow',
+                    'algorithm': 'lstm',
+                    'metrics': {
+                        'r2_score': info['metadata'].get('r2_score'),
+                        'mape': info['metadata'].get('mape')
+                    },
+                    'trained_at': info['metadata'].get('trained_at'),
+                    'data_period': info['metadata'].get('training_data_period', 'last_30_days'),
+                    'model_size_mb': round(info['size_bytes'] / (1024 * 1024), 2),
+                    'status': 'completed'
+                })
+
+        # Ordenar por data de treino
+        experiments.sort(key=lambda x: x.get('trained_at', ''), reverse=True)
+
+        return {
+            'total': len(experiments),
+            'experiments': experiments,
+            'summary': {
+                'total_experiments': len(experiments),
+                'sklearn_count': len([e for e in experiments if e['type'] == 'sklearn']),
+                'tensorflow_count': len([e for e in experiments if e['type'] == 'tensorflow']),
+                'completed': len([e for e in experiments if e['status'] == 'completed'])
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao listar experimentos: {str(e)}")
+
+
+@router.get("/comparisons")
+async def compare_model_performance(
+    model_type: Optional[str] = None
+):
+    """
+    Compara performance de diferentes modelos ML
+
+    Retorna comparação de métricas entre modelos similares
+    """
+    from app.services.ml_model_storage import ml_model_storage
+    from typing import Optional
+
+    try:
+        models = ml_model_storage.list_available_models()
+
+        comparisons = []
+
+        # Agrupar modelos por tipo/propósito
+        model_groups = {
+            'efficiency': [],
+            'anomaly': [],
+            'energy': []
+        }
+
+        # Classificar modelos sklearn
+        for model_name in models['sklearn']:
+            info = ml_model_storage.get_model_info(model_name)
+            if not info or not info.get('metadata'):
+                continue
+
+            if 'efficiency' in model_name:
+                model_groups['efficiency'].append({
+                    'name': model_name,
+                    'algorithm': 'gradient_boosting',
+                    'metrics': info['metadata'],
+                    'size_mb': round(info['size_bytes'] / (1024 * 1024), 2)
+                })
+            elif 'anomaly' in model_name or 'anomalies' in model_name:
+                model_groups['anomaly'].append({
+                    'name': model_name,
+                    'algorithm': 'isolation_forest',
+                    'metrics': info['metadata'],
+                    'size_mb': round(info['size_bytes'] / (1024 * 1024), 2)
+                })
+
+        # Classificar modelos tensorflow
+        for model_name in models['tensorflow']:
+            info = ml_model_storage.get_model_info(model_name)
+            if not info or not info.get('metadata'):
+                continue
+
+            if 'energy' in model_name:
+                model_groups['energy'].append({
+                    'name': model_name,
+                    'algorithm': 'lstm',
+                    'metrics': info['metadata'],
+                    'size_mb': round(info['size_bytes'] / (1024 * 1024), 2)
+                })
+
+        # Criar comparações
+        for group_name, group_models in model_groups.items():
+            if model_type and group_name != model_type:
+                continue
+
+            if len(group_models) > 0:
+                # Calcular médias
+                avg_r2 = None
+                avg_mape = None
+                avg_anomaly_rate = None
+
+                r2_scores = [m['metrics'].get('r2_score') for m in group_models if m['metrics'].get('r2_score')]
+                if r2_scores:
+                    avg_r2 = sum(r2_scores) / len(r2_scores)
+
+                mapes = [m['metrics'].get('mape') for m in group_models if m['metrics'].get('mape')]
+                if mapes:
+                    avg_mape = sum(mapes) / len(mapes)
+
+                anomaly_rates = [m['metrics'].get('anomaly_rate') for m in group_models if m['metrics'].get('anomaly_rate')]
+                if anomaly_rates:
+                    avg_anomaly_rate = sum(anomaly_rates) / len(anomaly_rates)
+
+                comparisons.append({
+                    'category': group_name,
+                    'models_count': len(group_models),
+                    'models': group_models,
+                    'average_metrics': {
+                        'r2_score': round(avg_r2, 4) if avg_r2 else None,
+                        'mape': round(avg_mape, 4) if avg_mape else None,
+                        'anomaly_rate': round(avg_anomaly_rate, 4) if avg_anomaly_rate else None
+                    },
+                    'best_model': max(group_models, key=lambda m: m['metrics'].get('r2_score', 0)) if group_models else None
+                })
+
+        return {
+            'total_comparisons': len(comparisons),
+            'comparisons': comparisons,
+            'summary': {
+                'categories_analyzed': len(comparisons),
+                'total_models': sum(c['models_count'] for c in comparisons)
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao comparar modelos: {str(e)}")
