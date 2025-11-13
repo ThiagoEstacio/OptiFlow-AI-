@@ -19,6 +19,7 @@ import { LoginPage } from './pages/LoginPage';
 import { Toaster } from './components/Toast/Toaster';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { MuiThemeWrapper } from './components/professional/MuiThemeWrapper';
 import { AssetProvider } from './contexts/AssetContext';
 import { tagDataSimulator } from './services/tagDataSimulator';
 import { simulatorDataSync } from './services/simulatorDataSync';
@@ -74,10 +75,11 @@ function App() {
     <ErrorBoundary>
       <Provider store={store}>
         <ThemeProvider>
-          <AssetProvider>
-            <Toaster />
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              <Routes>
+          <MuiThemeWrapper>
+            <AssetProvider>
+              <Toaster />
+              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <Routes>
                 {/* ========================================
                     🔓 PUBLIC ROUTES
                     ======================================== */}
@@ -182,6 +184,7 @@ function App() {
               </Routes>
             </BrowserRouter>
           </AssetProvider>
+          </MuiThemeWrapper>
         </ThemeProvider>
       </Provider>
     </ErrorBoundary>

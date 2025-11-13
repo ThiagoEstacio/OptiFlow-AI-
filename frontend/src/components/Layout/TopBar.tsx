@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppSelector } from '../../store';
+import { ThemeToggle } from '../professional/ThemeToggle';
 
 export const TopBar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -67,6 +68,9 @@ export const TopBar: React.FC = () => {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
+          {/* Theme Toggle */}
+          <ThemeToggle />
+
           {/* Alarms Badge */}
           {activeAlarms.length > 0 && (
             <div className="relative">
