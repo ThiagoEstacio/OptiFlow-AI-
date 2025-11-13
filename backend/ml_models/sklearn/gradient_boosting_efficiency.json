@@ -1,0 +1,20 @@
+{
+  "trained_at": "2025-11-13T00:25:16.841428",
+  "r2_score": -4.3947146374900825e-05,
+  "mape": 117759620329536.12,
+  "n_estimators": 100,
+  "features": [
+    "N\u00edvel - Tanque \u00c1gua",
+    "Motor 01 - Corrente",
+    "Motor 01 - Velocidade",
+    "Motor 01 - Vibra\u00e7\u00e3o",
+    "Consumo Energ\u00e9tico Total",
+    "Press\u00e3o - Linha Principal",
+    "Press\u00e3o - Caldeira",
+    "Taxa de Produ\u00e7\u00e3o",
+    "Temperatura - \u00c1rea Produ\u00e7\u00e3o",
+    "Temperatura - Caldeira"
+  ],
+  "target": "oee",
+  "n_samples": 214926
+}

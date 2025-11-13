@@ -1,0 +1,19 @@
+{
+  "trained_at": "2025-11-13T00:25:09.681556",
+  "anomaly_rate": 0.019532304141890697,
+  "n_estimators": 100,
+  "contamination": 0.02,
+  "features": [
+    "N\u00edvel - Tanque \u00c1gua",
+    "Motor 01 - Corrente",
+    "Motor 01 - Velocidade",
+    "Motor 01 - Vibra\u00e7\u00e3o",
+    "Consumo Energ\u00e9tico Total",
+    "Press\u00e3o - Linha Principal",
+    "Press\u00e3o - Caldeira",
+    "Taxa de Produ\u00e7\u00e3o",
+    "Temperatura - \u00c1rea Produ\u00e7\u00e3o",
+    "Temperatura - Caldeira"
+  ],
+  "n_samples": 214926
+}

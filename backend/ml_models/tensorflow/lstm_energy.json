@@ -1,0 +1,9 @@
+{
+  "trained_at": "2025-11-13T00:44:06.643488",
+  "r2_score": 0.2511169605966823,
+  "mape": 0.22701669336396846,
+  "loss": 0.6507923007011414,
+  "sequence_length": 24,
+  "target": "power_consumption",
+  "n_samples": 64
+}
