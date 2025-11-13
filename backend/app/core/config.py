@@ -1,13 +1,22 @@
 """
-Application configuration using Pydantic Settings
+Application configuration using Pydantic Settings with HashiCorp Vault integration
 """
 from pydantic_settings import BaseSettings
 from typing import List, Optional
 import secrets
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
-    """Application settings"""
+    """Application settings with Vault integration"""
+
+    # Vault Configuration
+    VAULT_ENABLED: bool = True
+    VAULT_ADDR: str = "http://vault:8200"
+    VAULT_TOKEN: str = "optiflow-dev-root-token"
 
     # Application
     APP_NAME: str = "OptiFlow AI Platform"
@@ -169,6 +178,95 @@ class Settings(BaseSettings):
     # Kafka Configuration
     KAFKA_BOOTSTRAP_SERVERS: str = "kafka:9092"
     KAFKA_DLQ_TOPIC: str = "raw_tags_dlq"
+
+    def __init__(self, **kwargs):
+        """Initialize settings with Vault integration."""
+        super().__init__(**kwargs)
+
+        # Only try to load from Vault if enabled
+        if not self.VAULT_ENABLED:
+            logger.info("⚙️ Vault disabled - using environment variables")
+            return
+
+        try:
+            from app.core.vault import get_vault_client
+
+            vault = get_vault_client()
+            if not vault.is_authenticated():
+                logger.warning("⚠️ Vault not authenticated - using environment fallback")
+                return
+
+            logger.info("🔐 Loading secrets from Vault...")
+
+            # Database URLs
+            postgres_url = vault.get_database_url("postgres")
+            if postgres_url:
+                self.DATABASE_URL = postgres_url
+                logger.debug("✅ PostgreSQL URL loaded from Vault")
+
+            influxdb_url = vault.get_secret("database/influxdb", "url")
+            if influxdb_url:
+                self.INFLUXDB_URL = influxdb_url
+
+            influxdb_token = vault.get_secret("database/influxdb", "token")
+            if influxdb_token:
+                self.INFLUXDB_TOKEN = influxdb_token
+                logger.debug("✅ InfluxDB credentials loaded from Vault")
+
+            # Redis URL
+            redis_url = vault.get_redis_url()
+            if redis_url:
+                self.REDIS_URL = redis_url
+                logger.debug("✅ Redis URL loaded from Vault")
+
+            # RabbitMQ URLs
+            rabbitmq_url = vault.get_rabbitmq_url()
+            if rabbitmq_url:
+                self.RABBITMQ_URL = rabbitmq_url
+                self.CELERY_BROKER_URL = rabbitmq_url
+                logger.debug("✅ RabbitMQ URL loaded from Vault")
+
+            # Celery result backend (Redis)
+            redis_secrets = vault.get_secret("cache/redis")
+            if redis_secrets:
+                password = redis_secrets['password']
+                host = redis_secrets['host']
+                port = redis_secrets['port']
+                self.CELERY_RESULT_BACKEND = f"redis://:{password}@{host}:{port}/4"
+
+            # Security secrets
+            jwt_secret = vault.get_secret("security/jwt", "secret_key")
+            if jwt_secret:
+                self.JWT_SECRET_KEY = jwt_secret
+                logger.debug("✅ JWT secret loaded from Vault")
+
+            app_secret = vault.get_secret("security/app_secret", "key")
+            if app_secret:
+                self.SECRET_KEY = app_secret
+                logger.debug("✅ App secret loaded from Vault")
+
+            gateway_key = vault.get_secret("security/gateway", "api_key")
+            if gateway_key:
+                self.GATEWAY_API_KEY = gateway_key
+                logger.debug("✅ Gateway API key loaded from Vault")
+
+            # OpenAI
+            openai_key = vault.get_secret("openai", "api_key")
+            if openai_key:
+                self.OPENAI_API_KEY = openai_key
+                logger.debug("✅ OpenAI API key loaded from Vault")
+
+            openai_model = vault.get_secret("openai", "model")
+            if openai_model:
+                self.OPENAI_MODEL = openai_model
+
+            logger.info("✅ All secrets loaded from Vault successfully")
+
+        except ImportError:
+            logger.warning("⚠️ Vault client not available (hvac not installed?) - using environment fallback")
+        except Exception as e:
+            logger.error(f"❌ Error loading secrets from Vault: {e}")
+            logger.warning("⚠️ Falling back to environment variables")
 
     class Config:
         env_file = ".env"

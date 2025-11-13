@@ -43,6 +43,7 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 cryptography==41.0.7
 slowapi==0.1.9
+hvac==2.1.0  # HashiCorp Vault Client
 
 # Industrial Protocols (for backend device management)
 asyncua==1.0.6
