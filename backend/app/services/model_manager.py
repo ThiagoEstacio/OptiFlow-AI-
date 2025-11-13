@@ -29,8 +29,7 @@ import joblib
 import json
 import uuid
 
-from app.models.ml_model import MLModel, ModelType, ModelStatus
-from app.models.prediction import Prediction
+from app.models.ml_model import MLModel, ModelType, ModelStatus, Prediction
 
 logger = logging.getLogger(__name__)
 
