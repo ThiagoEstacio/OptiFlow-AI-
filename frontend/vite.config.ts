@@ -49,10 +49,13 @@ export default defineConfig({
       '@mui/system',
       '@mui/x-tree-view',
       '@emotion/react',
-      '@emotion/styled'
+      '@emotion/styled',
+      '@reduxjs/toolkit',
+      'react-redux',
+      'axios',
+      'date-fns'
     ],
     exclude: ['@mui/icons-material'],
-    force: true,
     esbuildOptions: {
       loader: {
         '.js': 'jsx',
