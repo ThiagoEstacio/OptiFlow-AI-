@@ -34,6 +34,9 @@ class AlarmMonitorService:
             logger.warning("Alarm monitor already running")
             return
 
+        # Recover active alarms from database before starting
+        await self._recover_active_alarms(db)
+
         self.is_running = True
         self.monitor_task = asyncio.create_task(self._monitor_loop(db))
         logger.info("🚨 Alarm monitoring service started")
@@ -51,6 +54,39 @@ class AlarmMonitorService:
             except asyncio.CancelledError:
                 pass
         logger.info("⏹️  Alarm monitoring service stopped")
+
+    async def _recover_active_alarms(self, db: AsyncSession):
+        """
+        Recover active alarms from database on startup.
+        This ensures alarm state is preserved across restarts.
+        """
+        try:
+            # Query all active and acknowledged alarms from database
+            result = await db.execute(
+                select(AlarmEvent, AlarmDefinition)
+                .join(AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id)
+                .where(
+                    AlarmEvent.state.in_([AlarmState.ACTIVE, AlarmState.ACKNOWLEDGED])
+                )
+            )
+            active_events = result.all()
+
+            # Rebuild active_alarms dictionary
+            recovered_count = 0
+            for alarm_event, alarm_def in active_events:
+                alarm_key = f"{alarm_def.tag_id}_{alarm_def.id}"
+                self.active_alarms[alarm_key] = str(alarm_event.id)
+                recovered_count += 1
+
+            if recovered_count > 0:
+                logger.info(
+                    f"✅ Recovered {recovered_count} active alarm(s) from database"
+                )
+            else:
+                logger.info("ℹ️  No active alarms to recover")
+
+        except Exception as e:
+            logger.error(f"❌ Error recovering active alarms: {e}", exc_info=True)
 
     async def _monitor_loop(self, db: AsyncSession):
         """Main monitoring loop"""
