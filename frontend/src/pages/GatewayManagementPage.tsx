@@ -178,7 +178,7 @@ export const GatewayManagementPage: React.FC = () => {
         name: fullGateway.name,
         gateway_type: fullGateway.gateway_type,
         enabled: fullGateway.enabled,
-        connection_config: fullGateway.connection_config,
+        connection_config: fullGateway.connection_config as any,
         polling_interval_ms: fullGateway.polling_interval_ms,
         description: fullGateway.description || '',
       });

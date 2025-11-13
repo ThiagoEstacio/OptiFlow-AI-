@@ -289,9 +289,9 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
       case 'pie':
         // Mock data for pie chart
         const pieData = [
-          { name: 'Running', value: typeof value === 'number' ? value : 60 },
-          { name: 'Idle', value: 25 },
-          { name: 'Stopped', value: 15 },
+          { label: 'Running', value: typeof value === 'number' ? value : 60 },
+          { label: 'Idle', value: 25 },
+          { label: 'Stopped', value: 15 },
         ];
         return (
           <PieChart
@@ -303,15 +303,17 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
 
       case 'bar':
         // Mock data for bar chart
-        const barData = [
-          { category: 'Conv 1', value: typeof value === 'number' ? value : 120 },
-          { category: 'Conv 2', value: 150 },
-          { category: 'Elevator', value: 180 },
-          { category: 'Shiploader', value: 200 },
+        const barCategories = ['Conv 1', 'Conv 2', 'Elevator', 'Shiploader'];
+        const barValues = [
+          typeof value === 'number' ? value : 120,
+          150,
+          180,
+          200,
         ];
         return (
           <BarChart
-            data={barData}
+            categories={barCategories}
+            data={barValues}
             title={widget.config.title || 'Comparison'}
             height={widget.size.height - 60}
           />
@@ -326,11 +328,11 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
           { id: 4, name: 'Shiploader', value: '220.5', status: 'good', unit: widget.config.unit },
         ];
 
-        const tableColumns = [
+        const tableColumns: import('../Widgets/DataTable').TableColumn[] = [
           { key: 'name', label: 'Equipment', sortable: true },
-          { key: 'value', label: 'Value', format: 'number', decimals: 1, sortable: true },
+          { key: 'value', label: 'Value', format: 'number' as const, decimals: 1, sortable: true },
           { key: 'unit', label: 'Unit', sortable: false },
-          { key: 'status', label: 'Status', format: 'status', align: 'center' },
+          { key: 'status', label: 'Status', format: 'status' as const, align: 'center' as const },
         ];
 
         return (

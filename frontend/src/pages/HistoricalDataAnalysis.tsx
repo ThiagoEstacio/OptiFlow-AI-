@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   TextField,
   MenuItem,
   Button,
@@ -18,6 +17,7 @@ import {
   Chip,
   CircularProgress,
 } from '@mui/material';
+import { Grid } from '../components/GridWrapper';
 import {
   Timeline as TimelineIcon,
   Analytics as AnalyticsIcon,

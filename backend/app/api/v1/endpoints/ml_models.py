@@ -18,10 +18,8 @@ from app.models.user import User
 router = APIRouter()
 
 
-@router.get("/models/list")
-async def list_models(
-    current_user: User = Depends(get_current_user)
-):
+@router.get("/")
+async def list_models():
     """
     Lista todos os modelos ML disponíveis
     """
@@ -53,7 +51,7 @@ async def list_models(
         raise HTTPException(status_code=500, detail=f"Erro ao listar modelos: {str(e)}")
 
 
-@router.get("/models/{model_name}")
+@router.get("/{model_name}")
 async def get_model_info(
     model_name: str,
     current_user: User = Depends(get_current_user)
@@ -78,7 +76,7 @@ async def get_model_info(
         raise HTTPException(status_code=500, detail=f"Erro ao obter info do modelo: {str(e)}")
 
 
-@router.post("/models/train")
+@router.post("/train")
 async def train_models(
     background_tasks: BackgroundTasks,
     time_range: str = 'last_30_days',
@@ -209,7 +207,7 @@ async def _train_and_save_models(
         return {'status': 'error', 'error': str(e)}
 
 
-@router.delete("/models/{model_name}")
+@router.delete("/{model_name}")
 async def delete_model(
     model_name: str,
     model_type: str = 'sklearn',  # 'sklearn' ou 'tensorflow'
@@ -239,7 +237,7 @@ async def delete_model(
         raise HTTPException(status_code=500, detail=f"Erro ao deletar modelo: {str(e)}")
 
 
-@router.post("/models/{model_name}/validate")
+@router.post("/{model_name}/validate")
 async def validate_model(
     model_name: str,
     model_type: str = 'sklearn',
@@ -266,7 +264,7 @@ async def validate_model(
         raise HTTPException(status_code=500, detail=f"Erro ao validar modelo: {str(e)}")
 
 
-@router.get("/models/storage/stats")
+@router.get("/storage/stats")
 async def get_storage_stats(
     current_user: User = Depends(get_current_user)
 ):

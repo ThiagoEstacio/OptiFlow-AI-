@@ -54,6 +54,7 @@ import DashboardBuilderPage from './pages/DashboardBuilderPage';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import { AIMonitoringDashboard } from './pages/AIMonitoringDashboard';
 import { TagConfiguration } from './pages/TagConfiguration';
+import { ReportsDashboard } from './pages/ReportsDashboard';
 
 function App() {
   // 🚀 Start simulator and WebSocket on app initialization
@@ -150,6 +151,11 @@ function App() {
                   <Route path="settings/tag-configuration" element={<TagConfiguration />} />
                   <Route path="settings/gateways" element={<GatewayManagementPage />} />
                   <Route path="settings/users" element={<SettingsPage />} />
+
+                  {/* ========================================
+                      📊 MODULE 6: REPORTS (Export & Download)
+                      ======================================== */}
+                  <Route path="reports" element={<ReportsDashboard />} />
 
                   {/* ========================================
                       🔀 LEGACY REDIRECTS (backward compatibility)

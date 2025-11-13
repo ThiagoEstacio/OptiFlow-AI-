@@ -36,6 +36,7 @@ export interface QueryAggregation {
   params?: Record<string, any>;
 }
 
+// Local interface for API usage (compatible with backend)
 export interface AnalyticsQuery {
   tags: string[];
   start: string;

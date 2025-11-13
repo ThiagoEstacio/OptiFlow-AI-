@@ -9,7 +9,7 @@ import { showToast } from '../utils/toast';
 
 export const SettingsPage: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { sidebarCollapsed } = useAppSelector((state) => state.ui);
+  const { sidebarOpen } = useAppSelector((state) => state.ui);
   const { user } = useAppSelector((state) => state.auth);
   const { theme, effectiveTheme, setTheme } = useTheme();
 
@@ -131,12 +131,12 @@ export const SettingsPage: React.FC = () => {
             <button
               onClick={() => dispatch(toggleSidebar())}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                sidebarCollapsed ? 'bg-blue-600' : 'bg-gray-200'
+                !sidebarOpen ? 'bg-blue-600' : 'bg-gray-200'
               }`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  sidebarCollapsed ? 'translate-x-6' : 'translate-x-1'
+                  !sidebarOpen ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>

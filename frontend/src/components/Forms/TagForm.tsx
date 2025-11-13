@@ -53,14 +53,14 @@ export const TagForm: React.FC<TagFormProps> = ({
           enabled: tag.enabled,
           log_enabled: tag.log_enabled,
         }
-      : {
+      : ({
           device_id: deviceId || '',
           enabled: true,
           log_enabled: true,
           data_type: 'FLOAT',
           scale_factor: 1.0,
           offset: 0.0,
-        },
+        } as any),
   });
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export const TagForm: React.FC<TagFormProps> = ({
   }, [tag, reset]);
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
       {/* Basic Information */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-gray-700 uppercase">Basic Information</h3>

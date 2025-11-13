@@ -33,6 +33,8 @@ from app.api.v1.endpoints import (
     ml_models,
     dashboards,
     opcua_tags,
+    reports,
+    data_quality,
 )
 
 api_router = APIRouter()
@@ -66,4 +68,6 @@ api_router.include_router(ml_compare.router, prefix="/ml", tags=["ML Model Compa
 api_router.include_router(ml_models.router, prefix="/ml/models", tags=["ML Model Training & Management"])
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["Dashboards & Widgets"])
 api_router.include_router(opcua_tags.router, prefix="/opcua", tags=["OPC UA Tag Browser"])
+api_router.include_router(reports.router, prefix="/reports", tags=["Reports & Export"])
+api_router.include_router(data_quality.router, prefix="/data-quality", tags=["Data Quality Analytics"])
 api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics

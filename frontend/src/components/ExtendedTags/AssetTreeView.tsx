@@ -155,7 +155,7 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
           }
           return null;
         })
-        .filter((node): node is Asset => node !== null);
+        .filter((node): node is NonNullable<typeof node> => node !== null) as Asset[];
     };
 
     const filtered = filterTree(assets);
@@ -230,8 +230,10 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
 
       return (
         <TreeItem
-          key={node.id}
-          nodeId={node.id}
+          {...({
+            key: node.id,
+            nodeId: node.id,
+          } as any)}
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5 }}>
               <Box sx={{ mr: 1 }}>
@@ -318,16 +320,27 @@ export const AssetTreeView: React.FC<AssetTreeViewProps> = ({
         ) : (
           <SimpleTreeView
             aria-label="asset navigator"
-            defaultCollapseIcon={<ExpandMoreIcon />}
-            defaultExpandIcon={<ChevronRightIcon />}
             expandedItems={expanded}
-            selectedItems={selectedAssetId || ''}
+            selectedItems={selectedAssetId ? [selectedAssetId] : []}
             onExpandedItemsChange={(event, itemIds) => setExpanded(itemIds as string[])}
             onSelectedItemsChange={(event, itemId) => {
               if (itemId) {
                 const assetId = typeof itemId === 'string' ? itemId : itemId[0];
-                setSelectedAssetId(assetId);
-                onAssetSelect?.(assetId);
+                // Find the asset object to pass to callback
+                const findAsset = (nodes: Asset[], id: string): Asset | null => {
+                  for (const node of nodes) {
+                    if (node.id === id) return node;
+                    if (node.children) {
+                      const found = findAsset(node.children, id);
+                      if (found) return found;
+                    }
+                  }
+                  return null;
+                };
+                const asset = findAsset(filteredAssets, assetId);
+                if (asset) {
+                  onAssetSelect?.(asset);
+                }
               }
             }}
             sx={{

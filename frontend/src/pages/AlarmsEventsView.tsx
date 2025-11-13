@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -25,6 +24,7 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
+import { Grid } from '../components/GridWrapper';
 import {
   Warning as WarningIcon,
   Error as ErrorIcon,

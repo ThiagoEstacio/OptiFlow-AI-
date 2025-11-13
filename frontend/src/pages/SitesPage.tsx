@@ -23,7 +23,7 @@ export const SitesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    dispatch(fetchSites());
+    dispatch(fetchSites(undefined));
   }, [dispatch]);
 
   const handleCreate = async (data: any) => {
@@ -32,7 +32,7 @@ export const SitesPage: React.FC = () => {
       await dispatch(createSite(data)).unwrap();
       showToast.success('Site created successfully!');
       setIsCreateModalOpen(false);
-      dispatch(fetchSites());
+      dispatch(fetchSites(undefined));
     } catch (error: any) {
       showToast.error(error.message || 'Failed to create site');
     } finally {
@@ -48,7 +48,7 @@ export const SitesPage: React.FC = () => {
       showToast.success('Site updated successfully!');
       setIsEditModalOpen(false);
       setSelectedSite(null);
-      dispatch(fetchSites());
+      dispatch(fetchSites(undefined));
     } catch (error: any) {
       showToast.error(error.message || 'Failed to update site');
     } finally {
@@ -64,7 +64,7 @@ export const SitesPage: React.FC = () => {
       showToast.success('Site deleted successfully!');
       setIsDeleteDialogOpen(false);
       setSelectedSite(null);
-      dispatch(fetchSites());
+      dispatch(fetchSites(undefined));
     } catch (error: any) {
       showToast.error(error.message || 'Failed to delete site');
     } finally {

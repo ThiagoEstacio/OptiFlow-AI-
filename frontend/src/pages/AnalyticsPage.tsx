@@ -78,7 +78,7 @@ export const AnalyticsPage: React.FC = () => {
     setError(null);
 
     try {
-      const result = await analyticsApi.executeQuery(query);
+      const result = await analyticsApi.executeQuery(query as any);
       setQueryResult(result);
     } catch (err: any) {
       setError(err.message || 'Failed to execute query');
@@ -171,9 +171,9 @@ export const AnalyticsPage: React.FC = () => {
             categories={firstAgg.values.map(
               (v) => v.tag_id || v.timestamp.split('T')[0]
             )}
-            series={aggregations.map((agg) => ({
+            data={aggregations.map((agg) => ({
               name: `${agg.function}(${agg.field})`,
-              data: agg.values.map((v) => v.value),
+              values: agg.values.map((v) => v.value),
             }))}
             title="Query Results - Comparison"
             height={500}

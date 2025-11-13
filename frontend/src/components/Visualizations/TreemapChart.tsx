@@ -20,6 +20,7 @@ export interface TreemapItem {
   parent: string;  // Empty string for root items
   value: number;
   color?: string;
+  category?: string;  // Optional category for grouping
 }
 
 export interface TreemapChartProps {

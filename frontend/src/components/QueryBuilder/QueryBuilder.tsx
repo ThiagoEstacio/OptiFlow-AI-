@@ -13,9 +13,10 @@ import FilterBuilder, { QueryFilter } from './FilterBuilder';
 import AggregationBuilder, { QueryAggregation } from './AggregationBuilder';
 import StreamControls from './StreamControls';
 import { useAnalyticsStream } from '../../hooks/useAnalyticsStream';
+import type { AnalyticsQuery as AnalyticsQueryType } from '../../types/analytics';
 
-export interface AnalyticsQuery {
-  tags: string[];
+// Extended query interface with additional UI-specific fields
+export interface AnalyticsQuery extends Omit<AnalyticsQueryType, 'start_time' | 'end_time'> {
   start: string;
   end: string;
   filters?: QueryFilter[];
@@ -138,7 +139,7 @@ export const QueryBuilder: React.FC<QueryBuilderProps> = ({
 
     // Start streaming
     streamHook.start({
-      query,
+      query: query as any,
       refresh_interval: refreshInterval,
       mode: 'continuous',
     });

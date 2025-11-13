@@ -254,13 +254,13 @@ export const ChartWidget: React.FC<ChartWidgetProps> = React.memo(({
           trend && (
             <Avatar
               sx={{
-                bgcolor: alpha(getTrendColor(), 0.1),
-                color: getTrendColor(),
+                bgcolor: alpha(getTrendColor, 0.1),
+                color: getTrendColor,
                 width: 40,
                 height: 40
               }}
             >
-              {getTrendIcon()}
+              {getTrendIcon}
             </Avatar>
           )
         }
@@ -281,8 +281,8 @@ export const ChartWidget: React.FC<ChartWidgetProps> = React.memo(({
                 label={trendValue}
                 size="small"
                 sx={{
-                  bgcolor: alpha(getTrendColor(), 0.1),
-                  color: getTrendColor(),
+                  bgcolor: alpha(getTrendColor, 0.1),
+                  color: getTrendColor,
                   fontWeight: 600,
                   height: 20,
                   fontSize: '0.7rem'

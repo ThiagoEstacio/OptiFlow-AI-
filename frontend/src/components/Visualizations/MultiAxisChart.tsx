@@ -74,8 +74,8 @@ export const MultiAxisChart: React.FC<MultiAxisChartProps> = ({
 
   // Create traces for each series
   const traces: Plotly.Data[] = series.map((s, index) => ({
-    type: 'scatter',
-    mode: s.showMarkers ? 'lines+markers' : 'lines',
+    type: 'scatter' as const,
+    mode: (s.showMarkers ? 'lines+markers' : 'lines') as any,
     name: `${s.name} (${s.unit})`,
     x: timestamps,
     y: s.data,
@@ -83,7 +83,7 @@ export const MultiAxisChart: React.FC<MultiAxisChartProps> = ({
     line: {
       color: s.color || defaultColors[index % defaultColors.length],
       width: s.lineWidth || 2,
-      dash: getDashType(s.lineStyle),
+      dash: getDashType(s.lineStyle) as any,
     },
     marker: s.showMarkers ? {
       size: 4,
@@ -92,7 +92,7 @@ export const MultiAxisChart: React.FC<MultiAxisChartProps> = ({
     hovertemplate: `<b>${s.name}</b><br>` +
       '%{x}<br>' +
       `Value: %{y:.2f} ${s.unit}<extra></extra>`,
-  }));
+  } as any));
 
   // Determine axis titles from series if not provided
   const leftSeries = series.find(s => s.yAxis === 'left');

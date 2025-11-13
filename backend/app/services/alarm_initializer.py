@@ -177,7 +177,7 @@ async def initialize_default_alarms():
                     deviation_limit=config.get("deviation_limit"),
                     deadband=config["deadband"],
                     delay_seconds=config["delay_seconds"],
-                    enabled=True
+                    is_active=True
                 )
 
                 db.add(alarm_def)

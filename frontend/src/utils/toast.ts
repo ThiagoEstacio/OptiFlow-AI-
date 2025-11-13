@@ -137,6 +137,7 @@ export const handleApiError = (error: any, context?: string) => {
 export const showToast = {
   success: showSuccessToast,
   error: (message: string) => toast.error(message),
+  info: showInfoToast,
   loading: showLoadingToast,
   dismiss: dismissToast,
   promise: <T,>(

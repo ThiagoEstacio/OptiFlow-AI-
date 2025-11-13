@@ -20,7 +20,7 @@ import {
   CircularProgress,
   Button
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import { Grid } from '../components/GridWrapper';
 import {
   Notifications,
   Error,

@@ -4,7 +4,6 @@ import {
   Container,
   Typography,
   Paper,
-  Grid,
   Card,
   CardContent,
   Chip,
@@ -18,6 +17,7 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material';
+import { Grid } from '../components/GridWrapper';
 import {
   TrendingUp as TrendingUpIcon,
   Warning as WarningIcon,

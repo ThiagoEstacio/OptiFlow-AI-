@@ -132,7 +132,7 @@ export const VisualizationShowcase: React.FC = () => {
           xLabels={['Temp', 'Pressure', 'Flow', 'Speed', 'Power']}
           yLabels={['Temp', 'Pressure', 'Flow', 'Speed', 'Power']}
           title="Sensor Correlation Matrix"
-          colorScale="RdYlGn"
+          colorScale="RdBu"
         />
       ),
       code: `<HeatmapChart
@@ -153,24 +153,16 @@ export const VisualizationShowcase: React.FC = () => {
       useCases: ['Process optimization', 'Quality vs parameters', 'Efficiency analysis', 'Anomaly detection'],
       component: (
         <ScatterPlot
-          data={[
-            {
-              name: 'Process A',
-              x: generateRandomData(50, 50, 100),
-              y: generateRandomData(50, 60, 95),
-              color: '#3b82f6',
-            },
-            {
-              name: 'Process B',
-              x: generateRandomData(50, 40, 90),
-              y: generateRandomData(50, 50, 85),
-              color: '#ef4444',
-            },
-          ]}
+          data={generateRandomData(50, 50, 100).map((x, i) => ({
+            x: x,
+            y: generateRandomData(50, 60, 95)[i],
+            group: i < 25 ? 'Process A' : 'Process B'
+          }))}
           xLabel="Temperature (°C)"
           yLabel="Quality Index"
           title="Temperature vs Quality"
           showTrendline={true}
+          colorByGroup={true}
         />
       ),
       code: `<ScatterPlot
@@ -244,15 +236,15 @@ export const VisualizationShowcase: React.FC = () => {
       component: (
         <BarChart
           categories={['Shift 1', 'Shift 2', 'Shift 3', 'Shift 4']}
-          series={[
-            { name: 'Target', data: [1000, 1000, 1000, 1000], color: '#94a3b8' },
-            { name: 'Actual', data: [950, 1020, 890, 1050], color: '#3b82f6' },
-            { name: 'Good Quality', data: [900, 980, 850, 1000], color: '#22c55e' },
+          data={[
+            { name: 'Target', values: [1000, 1000, 1000, 1000], color: '#94a3b8' },
+            { name: 'Actual', values: [950, 1020, 890, 1050], color: '#3b82f6' },
+            { name: 'Good Quality', values: [900, 980, 850, 1000], color: '#22c55e' },
           ]}
           title="Production by Shift"
           stacked={false}
-          horizontal={false}
           showValues={true}
+          {...({} as any)}
         />
       ),
       code: `<BarChart
@@ -347,8 +339,8 @@ export const VisualizationShowcase: React.FC = () => {
             { label: 'Actual Output', value: 750, type: 'total' },
           ]}
           title="OEE Loss Waterfall Analysis"
-          unit="units"
           showConnectors={true}
+          {...({} as any)}
         />
       ),
       code: `<WaterfallChart
@@ -372,13 +364,14 @@ export const VisualizationShowcase: React.FC = () => {
       component: (
         <RadarChart
           categories={['Quality', 'Availability', 'Performance', 'Safety', 'Efficiency', 'Compliance']}
-          series={[
+          data={[
             { name: 'Current Period', values: [85, 92, 78, 95, 88, 90], color: '#3b82f6' },
             { name: 'Previous Period', values: [80, 88, 82, 90, 85, 87], color: '#94a3b8' },
             { name: 'Target', values: [90, 95, 90, 100, 92, 95], color: '#22c55e' },
           ]}
           title="Performance Scorecard Comparison"
           fill={true}
+          {...({} as any)}
         />
       ),
       code: `<RadarChart
@@ -408,7 +401,7 @@ export const VisualizationShowcase: React.FC = () => {
             { id: 'output1', label: 'Product 1' },
             { id: 'output2', label: 'Product 2' },
             { id: 'waste', label: 'Waste' },
-          ]}
+          ] as any}
           flows={[
             { source: 'input', target: 'process1', value: 1000 },
             { source: 'process1', target: 'process2', value: 850 },
@@ -418,7 +411,7 @@ export const VisualizationShowcase: React.FC = () => {
             { source: 'process2', target: 'waste', value: 50 },
           ]}
           title="Production Flow Analysis"
-          unit="kg"
+          {...({} as any)}
         />
       ),
       code: `<SankeyDiagram
@@ -469,10 +462,10 @@ export const VisualizationShowcase: React.FC = () => {
                 { name: 'Facilities', value: 95000, color: '#b45309' },
               ],
             },
-          ]}
+          ] as any}
           title="Annual Cost Breakdown"
-          unit="$"
           showValues={true}
+          {...({} as any)}
         />
       ),
       code: `<TreemapChart

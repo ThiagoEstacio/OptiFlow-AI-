@@ -60,8 +60,8 @@ export const TimeRangePicker: React.FC<TimeRangePickerProps> = ({
     });
   };
 
-  const handleCustomChange = (field: 'start' | 'end', value: string) => {
-    const newDate = new Date(value);
+  const handleCustomChange = (field: 'start' | 'end', dateValue: string) => {
+    const newDate = new Date(dateValue);
 
     onChange({
       ...value,

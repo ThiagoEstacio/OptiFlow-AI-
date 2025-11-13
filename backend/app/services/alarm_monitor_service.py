@@ -78,7 +78,7 @@ class AlarmMonitorService:
             # Get all enabled alarm definitions
             result = await db.execute(
                 select(AlarmDefinition)
-                .where(AlarmDefinition.enabled == True)
+                .where(AlarmDefinition.is_active == True)
             )
             alarm_defs = result.scalars().all()
 
@@ -196,15 +196,17 @@ class AlarmMonitorService:
 
         # Create alarm event
         alarm_event = AlarmEvent(
-            alarm_definition_id=alarm_def.id,
-            tag_id=tag.id,
+            definition_id=alarm_def.id,
             state=AlarmState.ACTIVE,
-            severity=alarm_def.severity,
-            alarm_type=alarm_def.alarm_type,
-            value=value,
-            limit=limit,
-            message=message,
-            occurred_at=datetime.utcnow()
+            trigger_value=value,
+            trigger_timestamp=datetime.utcnow(),
+            event_metadata={
+                "tag_name": tag.name,
+                "severity": alarm_def.severity.value,
+                "alarm_type": alarm_def.alarm_type.value,
+                "limit": limit,
+                "message": message
+            }
         )
 
         db.add(alarm_event)
@@ -222,7 +224,7 @@ class AlarmMonitorService:
         if alarm_event and alarm_event.state == AlarmState.ACTIVE:
             alarm_event.state = AlarmState.CLEARED
             alarm_event.cleared_at = datetime.utcnow()
-            alarm_event.cleared_by = "System"
+            alarm_event.clear_value = alarm_event.trigger_value  # Store clear value
             db.add(alarm_event)
             await db.flush()
 

@@ -17,7 +17,7 @@ import {
   alpha,
   useTheme
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import { Grid } from '../components/GridWrapper';
 import {
   Speed,
   Refresh,
@@ -95,7 +95,7 @@ export const ProfessionalRealtime: React.FC = () => {
   const loadTags = async () => {
     try {
       const tagsData = await apiClient.getTags();
-      setTags(tagsData.slice(0, 12)); // Show first 12 tags
+      setTags(tagsData.slice(0, 12) as any); // Show first 12 tags
       setLoading(false);
     } catch (error) {
       console.error('Error loading tags:', error);

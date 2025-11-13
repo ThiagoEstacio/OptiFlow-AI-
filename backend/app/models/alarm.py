@@ -23,6 +23,8 @@ class AlarmType(str, enum.Enum):
     """Alarm types"""
     HIGH_LIMIT = "high_limit"
     LOW_LIMIT = "low_limit"
+    HIGH_HIGH_LIMIT = "high_high_limit"
+    LOW_LOW_LIMIT = "low_low_limit"
     RATE_OF_CHANGE = "rate_of_change"
     DEVIATION = "deviation"
     PREDICTIVE = "predictive"
@@ -57,6 +59,10 @@ class AlarmDefinition(Base):
     # Thresholds
     high_limit = Column(Float, nullable=True)
     low_limit = Column(Float, nullable=True)
+    high_high_limit = Column(Float, nullable=True)
+    low_low_limit = Column(Float, nullable=True)
+    setpoint = Column(Float, nullable=True)
+    deviation_limit = Column(Float, nullable=True)
     deadband = Column(Float, nullable=True)
 
     # Timing

@@ -55,7 +55,7 @@ export const TagDetailsPage: React.FC = () => {
           break;
       }
 
-      const data = await apiClient.getTagTimeseries(id, {
+      const data = await (apiClient as any).getTagTimeseries(id, {
         start_time: startTime.toISOString(),
         end_time: now.toISOString(),
       });

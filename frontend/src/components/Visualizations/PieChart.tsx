@@ -88,7 +88,7 @@ export const PieChart: React.FC<PieChartProps> = ({
     },
     hole: donut ? donutHoleSize : 0,
     pull: pull,
-    textinfo: textInfo.join('+'),
+    textinfo: textInfo.join('+') as any,
     textposition: 'auto',
     textfont: {
       size: 12,

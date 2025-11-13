@@ -34,6 +34,8 @@ export interface GeoMapProps {
   mapStyle?: 'light' | 'dark' | 'satellite' | 'outdoors';
   showScale?: boolean;
   clusterMarkers?: boolean;
+  metric?: string;  // Optional metric name being displayed
+  unit?: string;    // Optional unit for the metric
 }
 
 export const GeoMap: React.FC<GeoMapProps> = ({

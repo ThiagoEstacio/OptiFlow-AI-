@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Stepper,
   Step,
   StepLabel,
@@ -23,6 +22,7 @@ import {
   CircularProgress,
   Divider,
 } from '@mui/material';
+import { Grid } from '../components/GridWrapper';
 import {
   PlayArrow as PlayIcon,
   Stop as StopIcon,

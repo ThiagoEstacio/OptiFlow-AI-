@@ -312,14 +312,15 @@ export const FormulaEditor: React.FC<FormulaEditorProps> = ({
               {suggestions.map((tag, index) => (
                 <ListItem
                   key={index}
-                  button
                   onClick={() => insertTag(tag)}
                   sx={{
+                    cursor: 'pointer',
                     '&:hover': {
                       backgroundColor: 'primary.light',
                       color: 'white'
                     }
                   }}
+                  {...({} as any)}
                 >
                   <ListItemText
                     primary={tag}

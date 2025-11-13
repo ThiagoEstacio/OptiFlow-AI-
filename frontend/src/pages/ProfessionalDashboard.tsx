@@ -18,7 +18,7 @@ import {
   alpha,
   useTheme
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
+import { Grid } from '../components/GridWrapper';
 import {
   Dashboard as DashboardIcon,
   Memory,

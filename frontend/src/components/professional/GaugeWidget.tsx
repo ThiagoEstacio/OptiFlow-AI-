@@ -184,12 +184,12 @@ export const GaugeWidget: React.FC<GaugeWidgetProps> = React.memo(({
             <Stack direction="row" spacing={1} alignItems="center">
               {trend && trendValue && (
                 <Chip
-                  icon={getTrendIcon() || undefined}
+                  icon={getTrendIcon || undefined}
                   label={trendValue}
                   size="small"
                   sx={{
-                    bgcolor: alpha(getTrendColor(), 0.1),
-                    color: getTrendColor(),
+                    bgcolor: alpha(getTrendColor, 0.1),
+                    color: getTrendColor,
                     fontWeight: 600,
                     fontSize: '0.75rem'
                   }}

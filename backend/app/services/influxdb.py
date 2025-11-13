@@ -153,6 +153,7 @@ class InfluxDBService:
         end_time: Optional[datetime] = None,
         aggregation: Optional[str] = None,
         interval: Optional[str] = None,
+        quality_filter: str = "good",
     ) -> List[Dict[str, Any]]:
         """
         Query historical data for a tag
@@ -163,9 +164,10 @@ class InfluxDBService:
             end_time: End time (defaults to now)
             aggregation: Aggregation function (mean, min, max, sum, count)
             interval: Aggregation interval (e.g., "1m", "5m", "1h")
+            quality_filter: Filter by data quality ("good", "bad", "uncertain", or None for all)
 
         Returns:
-            List of data points
+            List of data points with quality indicators
         """
         try:
             if end_time is None:
@@ -181,6 +183,11 @@ class InfluxDBService:
   |> filter(fn: (r) => r["_measurement"] == "tag_data")
   |> filter(fn: (r) => r["tag_id"] == "{tag_id}")
   |> filter(fn: (r) => r["_field"] == "value")'''
+
+            # Add quality filter if specified
+            if quality_filter:
+                query += f'''
+  |> filter(fn: (r) => r["quality"] == "{quality_filter}")'''
 
             # Add aggregation if specified
             if aggregation and interval:
@@ -767,6 +774,136 @@ class InfluxDBService:
         except Exception as e:
             logger.error(f"InfluxDB health check failed: {e}")
             return False
+
+    async def get_quality_statistics(
+        self,
+        tag_id: str,
+        start_time: datetime,
+        end_time: datetime
+    ) -> Dict[str, Any]:
+        """
+        Get quality statistics for a tag
+
+        Returns:
+            Dict with total_points, good_percentage, bad_percentage, uncertain_percentage
+        """
+        try:
+            start_str = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+            end_str = end_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
+            query = f'''
+import "experimental/aggregate"
+
+data = from(bucket: "{self.bucket}")
+  |> range(start: {start_str}, stop: {end_str})
+  |> filter(fn: (r) => r["_measurement"] == "tag_data")
+  |> filter(fn: (r) => r["tag_id"] == "{tag_id}")
+  |> filter(fn: (r) => r["_field"] == "value")
+
+// Count by quality
+quality_counts = data
+  |> group(columns: ["quality"])
+  |> count()
+  |> yield(name: "quality_counts")
+'''
+
+            tables = self.query_api.query(query, org=self.org)
+
+            counts = {"good": 0, "bad": 0, "uncertain": 0}
+
+            for table in tables:
+                for record in table.records:
+                    quality = record.values.get("quality", "good")
+                    count = record.get_value()
+                    counts[quality] = count
+
+            total = sum(counts.values())
+
+            if total == 0:
+                return {
+                    "total_points": 0,
+                    "good_percentage": 0,
+                    "bad_percentage": 0,
+                    "uncertain_percentage": 0
+                }
+
+            return {
+                "total_points": total,
+                "good_percentage": round((counts["good"] / total) * 100, 2),
+                "bad_percentage": round((counts["bad"] / total) * 100, 2),
+                "uncertain_percentage": round((counts["uncertain"] / total) * 100, 2)
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting quality statistics: {e}")
+            return {
+                "total_points": 0,
+                "good_percentage": 0,
+                "bad_percentage": 0,
+                "uncertain_percentage": 0
+            }
+
+    async def get_quality_timeline(
+        self,
+        tag_id: str,
+        start_time: datetime,
+        end_time: datetime,
+        interval: str = "1h"
+    ) -> List[Dict[str, Any]]:
+        """
+        Get quality breakdown over time
+
+        Returns:
+            List of time buckets with quality percentages
+        """
+        try:
+            start_str = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+            end_str = end_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
+            query = f'''
+from(bucket: "{self.bucket}")
+  |> range(start: {start_str}, stop: {end_str})
+  |> filter(fn: (r) => r["_measurement"] == "tag_data")
+  |> filter(fn: (r) => r["tag_id"] == "{tag_id}")
+  |> filter(fn: (r) => r["_field"] == "value")
+  |> group(columns: ["quality", "_time"])
+  |> aggregateWindow(every: {interval}, fn: count, createEmpty: false)
+  |> yield(name: "timeline")
+'''
+
+            tables = self.query_api.query(query, org=self.org)
+
+            timeline_data = {}
+
+            for table in tables:
+                for record in table.records:
+                    timestamp = record.get_time().isoformat()
+                    quality = record.values.get("quality", "good")
+                    count = record.get_value()
+
+                    if timestamp not in timeline_data:
+                        timeline_data[timestamp] = {"timestamp": timestamp, "good": 0, "bad": 0, "uncertain": 0}
+
+                    timeline_data[timestamp][quality] = count
+
+            # Convert to list and calculate percentages
+            timeline = []
+            for ts, data in sorted(timeline_data.items()):
+                total = data["good"] + data["bad"] + data["uncertain"]
+                if total > 0:
+                    timeline.append({
+                        "timestamp": data["timestamp"],
+                        "good_percentage": round((data["good"] / total) * 100, 1),
+                        "bad_percentage": round((data["bad"] / total) * 100, 1),
+                        "uncertain_percentage": round((data["uncertain"] / total) * 100, 1),
+                        "total_points": total
+                    })
+
+            return timeline
+
+        except Exception as e:
+            logger.error(f"Error getting quality timeline: {e}")
+            return []
 
     def close(self):
         """Close InfluxDB client"""

@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -20,6 +19,7 @@ import {
   TextField,
   MenuItem,
 } from '@mui/material';
+import { Grid } from '../components/GridWrapper';
 import {
   PlayArrow as PlayIcon,
   Pause as PauseIcon,

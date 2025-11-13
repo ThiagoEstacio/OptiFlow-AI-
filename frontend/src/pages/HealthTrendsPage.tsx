@@ -64,7 +64,8 @@ interface Anomaly {
 }
 
 export const HealthTrendsPage: React.FC = () => {
-  const { assets, selectedAssetId, selectAsset } = useAssets();
+  const { assets, selectedAsset, selectAsset } = useAssets();
+  const selectedAssetId = selectedAsset?.id;
 
   // State
   const [loading, setLoading] = useState(false);
@@ -141,13 +142,31 @@ export const HealthTrendsPage: React.FC = () => {
   // Get current asset
   const currentAsset = assets.find(a => a.id === currentAssetId);
 
-  // Prepare chart data
-  const chartData = trendData.map(point => ({
-    timestamp: new Date(point.snapshot_time).getTime(),
-    'Health Score': point.health_score,
-    'Issues': point.issues_count,
-    'Warnings': point.warnings_count,
-  }));
+  // Prepare chart data for MultiAxisChart
+  const chartTimestamps = trendData.map(point => new Date(point.snapshot_time));
+  const chartSeries = [
+    {
+      name: 'Health Score',
+      data: trendData.map(point => point.health_score),
+      yAxis: 'left' as const,
+      unit: 'Score',
+      color: '#3B82F6',
+    },
+    {
+      name: 'Issues',
+      data: trendData.map(point => point.issues_count),
+      yAxis: 'right' as const,
+      unit: 'Count',
+      color: '#EF4444',
+    },
+    {
+      name: 'Warnings',
+      data: trendData.map(point => point.warnings_count),
+      yAxis: 'right' as const,
+      unit: 'Count',
+      color: '#F59E0B',
+    },
+  ];
 
   // Trend icon
   const getTrendIcon = (trend: string) => {
@@ -334,16 +353,16 @@ export const HealthTrendsPage: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Tendência de Health Score
             </h2>
-            {chartData.length > 0 ? (
+            {chartTimestamps.length > 0 ? (
               <div style={{ height: '400px' }}>
                 <MultiAxisChart
-                  data={chartData}
+                  timestamps={chartTimestamps}
+                  series={chartSeries}
                   height={400}
-                  yAxisConfig={{
-                    'Health Score': { domain: [0, 100], stroke: '#3B82F6' },
-                    'Issues': { domain: [0, 'auto'], stroke: '#EF4444' },
-                    'Warnings': { domain: [0, 'auto'], stroke: '#F59E0B' },
-                  }}
+                  leftAxisTitle="Health Score"
+                  rightAxisTitle="Count"
+                  showLegend={true}
+                  showGrid={true}
                 />
               </div>
             ) : (
