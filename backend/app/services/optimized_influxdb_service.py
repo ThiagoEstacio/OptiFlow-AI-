@@ -16,13 +16,23 @@ logger = logging.getLogger(__name__)
 class OptimizedInfluxDBService:
     """
     InfluxDB service with automatic bucket selection based on time range
-    
-    Buckets:
-    - timeseries: Raw data, 2 days retention
-    - downsampled_1m: 1-minute aggregations, 30 days retention
-    - downsampled_1h: 1-hour aggregations, 365 days retention
+
+    ESTRATÉGIA DE RETENÇÃO PERMANENTE:
+    ====================================
+    - timeseries: Raw data, 7 days retention, full resolution
+    - downsampled_1m: 1-minute aggregations, 90 days retention
+    - downsampled_1h: 1-hour aggregations, 2 years retention
+    - downsampled_1d: 1-day aggregations, INFINITE retention (permanent storage)
+
+    Uso de espaço estimado (10 tags @ 1s):
+    - Raw (7d):      ~6M points  = ~150 MB
+    - 1min (90d):    ~1.3M points = ~30 MB
+    - 1hour (2y):    ~175k points = ~5 MB
+    - 1day (∞):      ~3.6k/year  = ~1 MB/year
+
+    Total para 10 anos: ~195 MB (excelente compressão!)
     """
-    
+
     def __init__(self):
         self.client = InfluxDBClient(
             url=settings.INFLUXDB_URL,
@@ -32,51 +42,64 @@ class OptimizedInfluxDBService:
         )
         self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
         self.query_api = self.client.query_api()
-        
-        # Bucket definitions
+
+        # Bucket definitions - Multi-tier retention strategy
         self.buckets = {
-            "raw": "timeseries",            # 2 days retention, 1-second resolution
-            "1m": "downsampled_1m",         # 30 days retention, 1-minute resolution
-            "1h": "downsampled_1h",         # 365 days retention, 1-hour resolution
+            "raw": "timeseries",            # 7 days, full resolution (queries recentes)
+            "1m": "downsampled_1m",         # 90 days, 1-min aggregations (queries médio prazo)
+            "1h": "downsampled_1h",         # 2 years, 1-hour aggregations (queries longo prazo)
+            "1d": "downsampled_1d",         # INFINITE, 1-day aggregations (storage permanente)
         }
-        
-        logger.info("✅ OptimizedInfluxDBService initialized with downsampling")
+
+        logger.info("✅ OptimizedInfluxDBService initialized with permanent retention strategy")
     
     def _select_optimal_bucket(
-        self, 
+        self,
         time_range: timedelta,
         force_bucket: Optional[str] = None
     ) -> tuple[str, str]:
         """
         Auto-select best bucket based on time range
-        
-        Strategy:
-        - 0-2 days: Use raw data (best precision)
-        - 2-30 days: Use 1-minute aggregations (good precision, fast)
-        - 30+ days: Use 1-hour aggregations (acceptable precision, very fast)
-        
+
+        NOVA ESTRATÉGIA - 4 CAMADAS:
+        =============================
+        - 0-7 days:    RAW data (resolução completa, ultra-rápido)
+        - 7-90 days:   1-minute aggregations (boa precisão, rápido)
+        - 90-730 days: 1-hour aggregations (precisão aceitável, muito rápido)
+        - 730+ days:   1-day aggregations (trends/reports, extremamente rápido)
+
+        Benefícios:
+        - Queries de 10 anos: ~3600 pontos (1 dia cada) = instantâneo!
+        - Queries de 1 ano: ~8760 pontos (1 hora cada) = muito rápido
+        - Queries de 1 mês: ~43k pontos (1 min cada) = rápido
+        - Queries de 1 dia: ~86k pontos (raw) = ultra-rápido
+
         Args:
             time_range: Query time range
             force_bucket: Force specific bucket (for testing)
-        
+
         Returns:
             Tuple of (bucket_name, resolution)
         """
         if force_bucket:
             return self.buckets.get(force_bucket, self.buckets["raw"]), force_bucket
-        
-        if time_range <= timedelta(days=2):
+
+        if time_range <= timedelta(days=7):
             bucket = self.buckets["raw"]
-            resolution = "raw"
-            logger.debug(f"Selected RAW bucket (time_range: {time_range})")
-        elif time_range <= timedelta(days=30):
+            resolution = "raw (1s)"
+            logger.debug(f"✅ Selected RAW bucket for {time_range} - full resolution")
+        elif time_range <= timedelta(days=90):
             bucket = self.buckets["1m"]
-            resolution = "1m"
-            logger.debug(f"Selected 1M bucket (time_range: {time_range})")
-        else:
+            resolution = "1min"
+            logger.debug(f"✅ Selected 1MIN bucket for {time_range} - 60x compression")
+        elif time_range <= timedelta(days=730):  # 2 years
             bucket = self.buckets["1h"]
-            resolution = "1h"
-            logger.debug(f"Selected 1H bucket (time_range: {time_range})")
+            resolution = "1hour"
+            logger.debug(f"✅ Selected 1HOUR bucket for {time_range} - 3600x compression")
+        else:
+            bucket = self.buckets["1d"]
+            resolution = "1day"
+            logger.debug(f"✅ Selected 1DAY bucket for {time_range} - 86400x compression")
         
         return bucket, resolution
     

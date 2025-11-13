@@ -61,11 +61,22 @@ class KafkaTagProducer:
                 self.producer = AIOKafkaProducer(
                     bootstrap_servers=bootstrap_servers,
                     value_serializer=lambda v: json.dumps(v, default=str).encode('utf-8'),
+
+                    # PRODUCTION SETTINGS - DURABILITY & RELIABILITY
+                    acks='all',  # Wait for ALL replicas to acknowledge (no data loss)
+                    enable_idempotence=True,  # Prevent duplicates even with retries
+                    retries=10,  # Retry up to 10 times on transient failures
+                    max_in_flight_requests_per_connection=5,  # Max concurrent requests
+
+                    # PERFORMANCE SETTINGS
                     compression_type='lz4',  # Fast compression
                     linger_ms=10,  # Wait up to 10ms to batch messages
-                    max_batch_size=16384,  # 16KB batch size (changed parameter name in v0.10.0)
-                    acks=1,  # Wait for leader acknowledgment only (balance between speed and reliability)
+                    batch_size=32768,  # 32KB batch size for better throughput
                     max_request_size=1048576,  # 1MB max request size
+
+                    # TIMEOUT SETTINGS
+                    request_timeout_ms=30000,  # 30s timeout for requests
+                    delivery_timeout_ms=120000,  # 2 minutes total delivery timeout
                 )
 
                 # Start producer in background
