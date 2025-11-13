@@ -1,0 +1,166 @@
+---
+# Kafka Cluster Alert Rules
+# These rules monitor Kafka broker health, consumer lag, and throughput
+
+groups:
+  - name: kafka_cluster
+    interval: 30s
+    rules:
+      # ===================================================================
+      # CRITICAL ALERTS - Immediate action required
+      # ===================================================================
+
+      - alert: KafkaBrokerDown
+        expr: up{job="kafka"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Kafka broker {{ $labels.instance }} is down"
+          description: "Kafka broker {{ $labels.instance }} has been down for more than 1 minute. This may cause data loss if replication factor is insufficient."
+          action: "Check broker logs and restart if necessary: docker logs optiflow-kafka-{{ $labels.instance }}"
+
+      - alert: KafkaControllerNotElected
+        expr: kafka_controller_kafkacontroller_activecontrollercount < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "No Kafka controller elected"
+          description: "Kafka cluster has no active controller. Cluster operations are blocked."
+          action: "Check Zookeeper connectivity and broker logs"
+
+      - alert: KafkaUnderReplicatedPartitions
+        expr: kafka_server_replicamanager_underreplicatedpartitions > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Kafka has under-replicated partitions on {{ $labels.instance }}"
+          description: "Broker {{ $labels.instance }} has {{ $value }} under-replicated partitions. Data is at risk of loss."
+          action: "Check broker health, disk space, and network connectivity"
+
+      - alert: KafkaOfflinePartitions
+        expr: kafka_controller_kafkacontroller_offlinepartitionscount > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Kafka has offline partitions"
+          description: "Cluster has {{ $value }} offline partitions. Data is unavailable."
+          action: "Check broker logs and restart affected brokers"
+
+      # ===================================================================
+      # HIGH PRIORITY ALERTS - Action needed soon
+      # ===================================================================
+
+      - alert: KafkaConsumerLagHigh
+        expr: kafka_consumergroup_lag{consumergroup="timeseries-consumer-group"} > 10000
+        for: 5m
+        labels:
+          severity: high
+          component: kafka_consumer
+        annotations:
+          summary: "Consumer lag is high on topic {{ $labels.topic }}"
+          description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} messages on topic {{ $labels.topic }}. Processing is falling behind."
+          action: "Consider scaling up consumer replicas or investigating consumer performance"
+
+      - alert: KafkaConsumerLagCritical
+        expr: kafka_consumergroup_lag{consumergroup="timeseries-consumer-group"} > 50000
+        for: 2m
+        labels:
+          severity: critical
+          component: kafka_consumer
+        annotations:
+          summary: "Consumer lag is CRITICAL on topic {{ $labels.topic }}"
+          description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} messages (>50k). Severe processing delay."
+          action: "URGENT: Scale up consumer replicas immediately"
+
+      - alert: KafkaDiskUsageHigh
+        expr: (kafka_log_log_size{topic="raw_tags"} / 1024 / 1024 / 1024) > 50
+        for: 10m
+        labels:
+          severity: high
+          component: kafka
+        annotations:
+          summary: "Kafka disk usage is high on {{ $labels.instance }}"
+          description: "Topic {{ $labels.topic }} is using {{ $value }}GB of disk space on {{ $labels.instance }}."
+          action: "Review retention policies or add more disk space"
+
+      - alert: KafkaISRShrinking
+        expr: kafka_server_replicamanager_isrshrinkspersec > 5
+        for: 5m
+        labels:
+          severity: high
+          component: kafka
+        annotations:
+          summary: "ISR shrinking frequently on {{ $labels.instance }}"
+          description: "In-Sync Replica set is shrinking at {{ $value }} times/sec. Replicas are falling behind."
+          action: "Check broker performance, network, and disk I/O"
+
+      # ===================================================================
+      # MEDIUM PRIORITY ALERTS - Monitor and plan action
+      # ===================================================================
+
+      - alert: KafkaProducerRequestLatencyHigh
+        expr: kafka_network_requestmetrics_totaltime{request="Produce",quantile="0.99"} > 1000
+        for: 10m
+        labels:
+          severity: medium
+          component: kafka
+        annotations:
+          summary: "Producer request latency is high on {{ $labels.instance }}"
+          description: "P99 producer latency is {{ $value }}ms (>1s). Clients may experience timeouts."
+          action: "Check broker CPU, disk I/O, and network performance"
+
+      - alert: KafkaConsumerRequestLatencyHigh
+        expr: kafka_network_requestmetrics_totaltime{request="Fetch",quantile="0.99"} > 1000
+        for: 10m
+        labels:
+          severity: medium
+          component: kafka
+        annotations:
+          summary: "Consumer request latency is high on {{ $labels.instance }}"
+          description: "P99 consumer latency is {{ $value }}ms (>1s). Consumers may be slow."
+          action: "Check broker CPU and disk I/O"
+
+      - alert: KafkaMessagesInPerSecLow
+        expr: rate(kafka_server_brokertopicmetrics_messagesinpersec{topic="raw_tags"}[5m]) < 10
+        for: 15m
+        labels:
+          severity: medium
+          component: kafka
+        annotations:
+          summary: "Message ingestion rate is low on topic {{ $labels.topic }}"
+          description: "Only {{ $value }} messages/sec are being ingested (expected >10). Check producers."
+          action: "Verify simulator/gateway health and Kafka connectivity"
+
+      # ===================================================================
+      # LOW PRIORITY ALERTS - Informational
+      # ===================================================================
+
+      - alert: KafkaZookeeperConnectionLost
+        expr: kafka_server_sessionexpirelistener_zookeeperdisconnectspersec > 0
+        for: 2m
+        labels:
+          severity: low
+          component: zookeeper
+        annotations:
+          summary: "Broker {{ $labels.instance }} lost Zookeeper connection"
+          description: "Broker is experiencing Zookeeper disconnections at {{ $value }}/sec."
+          action: "Check Zookeeper cluster health and network"
+
+      - alert: KafkaTopicTooManyPartitions
+        expr: kafka_controller_kafkacontroller_globalpartitioncount > 1000
+        for: 5m
+        labels:
+          severity: low
+          component: kafka
+        annotations:
+          summary: "Kafka cluster has too many partitions"
+          description: "Cluster has {{ $value }} partitions (>1000). May impact performance."
+          action: "Review topic partition strategy"

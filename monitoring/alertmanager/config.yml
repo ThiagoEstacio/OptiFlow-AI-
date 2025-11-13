@@ -1,0 +1,226 @@
+---
+# AlertManager Configuration
+# Routes alerts to appropriate notification channels based on severity
+
+global:
+  resolve_timeout: 5m
+  # SMTP settings for email notifications (configure as needed)
+  smtp_from: 'optiflow-alerts@example.com'
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_auth_username: 'alerts@example.com'
+  smtp_auth_password: 'your-smtp-password'
+  smtp_require_tls: true
+
+# Alert routing tree
+route:
+  # Default receiver
+  receiver: 'default'
+
+  # Group alerts by cluster, severity, and alertname
+  group_by: ['cluster', 'severity', 'alertname']
+
+  # Wait before sending initial notification (collect similar alerts)
+  group_wait: 30s
+
+  # Wait before sending notification about new alerts in existing group
+  group_interval: 5m
+
+  # Wait before repeating notifications for same alert
+  repeat_interval: 4h
+
+  # Routing rules based on severity and component
+  routes:
+    # CRITICAL alerts - immediate notification, no grouping delay
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true  # Also send to default receiver
+
+    # High priority alerts - faster notification
+    - match:
+        severity: high
+      receiver: 'high-priority-alerts'
+      group_wait: 30s
+      repeat_interval: 2h
+      continue: true
+
+    # Kafka-specific alerts
+    - match:
+        component: kafka
+      receiver: 'kafka-team'
+      group_by: ['cluster', 'alertname', 'instance']
+      repeat_interval: 4h
+
+    # InfluxDB-specific alerts
+    - match:
+        component: influxdb
+      receiver: 'database-team'
+      group_by: ['cluster', 'alertname', 'instance']
+      repeat_interval: 4h
+
+    # Low priority / informational
+    - match:
+        severity: low
+      receiver: 'info-alerts'
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 12h
+
+# Inhibition rules - suppress alerts when other alerts are active
+inhibit_rules:
+  # Suppress high/medium alerts if critical alert is firing for same instance
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'high'
+    equal: ['instance', 'component']
+
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'medium'
+    equal: ['instance', 'component']
+
+  - source_match:
+      severity: 'high'
+    target_match:
+      severity: 'medium'
+    equal: ['instance', 'component']
+
+  # Suppress consumer lag alerts if Kafka broker is down
+  - source_match:
+      alertname: 'KafkaBrokerDown'
+    target_match:
+      component: 'kafka_consumer'
+    equal: ['cluster']
+
+  # Suppress write failures if InfluxDB is down
+  - source_match:
+      alertname: 'InfluxDBDown'
+    target_match:
+      alertname: 'InfluxDBWritesFailing'
+    equal: ['instance']
+
+# Receivers - notification destinations
+receivers:
+  # Default receiver (logs only)
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+  # Critical alerts - multiple channels for immediate attention
+  - name: 'critical-alerts'
+    # Email notification
+    email_configs:
+      - to: 'ops-team@example.com'
+        headers:
+          Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
+        html: |
+          <h2 style="color: red;">🚨 CRITICAL ALERT</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .GroupLabels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .GroupLabels.severity }}</p>
+          <br>
+          <h3>Firing Alerts:</h3>
+          {{ range .Alerts }}
+            <div style="border: 1px solid red; padding: 10px; margin: 10px 0;">
+              <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+              <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+              <p><strong>Action:</strong> {{ .Annotations.action }}</p>
+              <p><strong>Started:</strong> {{ .StartsAt }}</p>
+            </div>
+          {{ end }}
+        send_resolved: true
+
+    # Slack notification (configure webhook URL)
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#optiflow-critical-alerts'
+        username: 'OptiFlow AlertManager'
+        color: 'danger'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          *Instance:* {{ .GroupLabels.instance }}
+          *Severity:* {{ .GroupLabels.severity }}
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Action:* {{ .Annotations.action }}
+          {{ end }}
+        send_resolved: true
+
+    # PagerDuty integration (configure integration key)
+    pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        description: '{{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
+        severity: 'critical'
+        details:
+          summary: '{{ .Annotations.summary }}'
+          description: '{{ .Annotations.description }}'
+          action: '{{ .Annotations.action }}'
+
+  # High priority alerts
+  - name: 'high-priority-alerts'
+    email_configs:
+      - to: 'ops-team@example.com'
+        headers:
+          Subject: '⚠️  HIGH: {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
+        send_resolved: true
+
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#optiflow-alerts'
+        color: 'warning'
+        title: '⚠️  HIGH: {{ .GroupLabels.alertname }}'
+        text: '{{ .Annotations.summary }}'
+        send_resolved: true
+
+  # Kafka team alerts
+  - name: 'kafka-team'
+    email_configs:
+      - to: 'kafka-team@example.com'
+        headers:
+          Subject: 'Kafka Alert: {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#kafka-monitoring'
+        title: 'Kafka: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+  # Database team alerts
+  - name: 'database-team'
+    email_configs:
+      - to: 'database-team@example.com'
+        headers:
+          Subject: 'InfluxDB Alert: {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#database-monitoring'
+        title: 'InfluxDB: {{ .GroupLabels.alertname }}'
+        text: '{{ .Annotations.summary }}'
+        send_resolved: true
+
+  # Informational alerts (low priority)
+  - name: 'info-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#optiflow-info'
+        color: 'good'
+        title: 'ℹ️  Info: {{ .GroupLabels.alertname }}'
+        text: '{{ .Annotations.summary }}'
+        send_resolved: true
+
+# Templates for custom alert formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

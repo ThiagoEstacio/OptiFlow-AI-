@@ -1,0 +1,188 @@
+---
+# InfluxDB Cluster Alert Rules
+# Monitor InfluxDB health, write performance, and query latency
+
+groups:
+  - name: influxdb_cluster
+    interval: 30s
+    rules:
+      # ===================================================================
+      # CRITICAL ALERTS - Immediate action required
+      # ===================================================================
+
+      - alert: InfluxDBDown
+        expr: up{job="influxdb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: influxdb
+        annotations:
+          summary: "InfluxDB instance {{ $labels.instance }} is down"
+          description: "InfluxDB instance {{ $labels.instance }} has been down for more than 1 minute. Time-series data ingestion may be failing."
+          action: "Check container logs: docker logs optiflow-influxdb-{{ $labels.instance }}"
+
+      - alert: InfluxDBWritesFailing
+        expr: rate(influxdb_write_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: influxdb
+        annotations:
+          summary: "InfluxDB writes are failing on {{ $labels.instance }}"
+          description: "InfluxDB on {{ $labels.instance }} is experiencing {{ $value }} write errors/sec. Data loss is occurring!"
+          action: "Check disk space, memory, and InfluxDB logs immediately"
+
+      - alert: InfluxDBDiskFull
+        expr: (node_filesystem_avail_bytes{mountpoint="/var/lib/influxdb2"} / node_filesystem_size_bytes{mountpoint="/var/lib/influxdb2"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          component: influxdb
+        annotations:
+          summary: "InfluxDB disk usage critical on {{ $labels.instance }}"
+          description: "Only {{ $value }}% disk space remaining on {{ $labels.instance }}. Writes will fail soon!"
+          action: "URGENT: Free up disk space or add storage immediately"
+
+      - alert: InfluxDBMemoryHigh
+        expr: (container_memory_usage_bytes{name=~"optiflow-influxdb.*"} / container_spec_memory_limit_bytes{name=~"optiflow-influxdb.*"}) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: influxdb
+        annotations:
+          summary: "InfluxDB memory usage critical on {{ $labels.name }}"
+          description: "Memory usage is {{ $value }}% on {{ $labels.name }}. Risk of OOM kill."
+          action: "Check for memory leaks or increase memory limits"
+
+      # ===================================================================
+      # HIGH PRIORITY ALERTS - Action needed soon
+      # ===================================================================
+
+      - alert: InfluxDBWriteLatencyHigh
+        expr: histogram_quantile(0.99, rate(influxdb_write_duration_seconds_bucket[5m])) > 1.0
+        for: 10m
+        labels:
+          severity: high
+          component: influxdb
+        annotations:
+          summary: "InfluxDB write latency is high on {{ $labels.instance }}"
+          description: "P99 write latency is {{ $value }}s (>1s). Writes are slow."
+          action: "Check disk I/O, CPU usage, and optimize series cardinality"
+
+      - alert: InfluxDBQueryLatencyHigh
+        expr: histogram_quantile(0.99, rate(influxdb_query_duration_seconds_bucket[5m])) > 5.0
+        for: 10m
+        labels:
+          severity: high
+          component: influxdb
+        annotations:
+          summary: "InfluxDB query latency is high on {{ $labels.instance }}"
+          description: "P99 query latency is {{ $value }}s (>5s). Queries are slow."
+          action: "Review query patterns, add indexes, or optimize retention policies"
+
+      - alert: InfluxDBSeriesCardinalityHigh
+        expr: influxdb_series_cardinality_total > 1000000
+        for: 10m
+        labels:
+          severity: high
+          component: influxdb
+        annotations:
+          summary: "InfluxDB series cardinality is high"
+          description: "Series cardinality is {{ $value }} (>1M). This can cause performance issues."
+          action: "Review tag design and avoid high-cardinality tags"
+
+      - alert: InfluxDBWriteThroughputLow
+        expr: rate(influxdb_write_requests_total[5m]) < 1
+        for: 15m
+        labels:
+          severity: high
+          component: influxdb
+        annotations:
+          summary: "InfluxDB write throughput is low"
+          description: "Only {{ $value }} writes/sec on {{ $labels.instance }} (expected >1). Check upstream pipeline."
+          action: "Verify consumer is running and processing messages"
+
+      # ===================================================================
+      # MEDIUM PRIORITY ALERTS - Monitor and plan action
+      # ===================================================================
+
+      - alert: InfluxDBDiskUsageHigh
+        expr: (node_filesystem_avail_bytes{mountpoint="/var/lib/influxdb2"} / node_filesystem_size_bytes{mountpoint="/var/lib/influxdb2"}) * 100 < 20
+        for: 10m
+        labels:
+          severity: medium
+          component: influxdb
+        annotations:
+          summary: "InfluxDB disk usage high on {{ $labels.instance }}"
+          description: "Only {{ $value }}% disk space remaining. Plan to add storage."
+          action: "Review retention policies or add disk space"
+
+      - alert: InfluxDBMemoryUsageHigh
+        expr: (container_memory_usage_bytes{name=~"optiflow-influxdb.*"} / container_spec_memory_limit_bytes{name=~"optiflow-influxdb.*"}) * 100 > 80
+        for: 10m
+        labels:
+          severity: medium
+          component: influxdb
+        annotations:
+          summary: "InfluxDB memory usage high on {{ $labels.name }}"
+          description: "Memory usage is {{ $value }}% on {{ $labels.name }}."
+          action: "Monitor for memory leaks or increase limits"
+
+      - alert: InfluxDBCPUUsageHigh
+        expr: rate(container_cpu_usage_seconds_total{name=~"optiflow-influxdb.*"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: medium
+          component: influxdb
+        annotations:
+          summary: "InfluxDB CPU usage high on {{ $labels.name }}"
+          description: "CPU usage is {{ $value }}% on {{ $labels.name }}."
+          action: "Check for expensive queries or optimize workload"
+
+      - alert: InfluxDBCompactionsFailing
+        expr: rate(influxdb_compactions_failed_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: medium
+          component: influxdb
+        annotations:
+          summary: "InfluxDB compactions failing on {{ $labels.instance }}"
+          description: "Compactions are failing at {{ $value }}/sec. Database performance may degrade."
+          action: "Check disk I/O and InfluxDB logs"
+
+      # ===================================================================
+      # LOW PRIORITY ALERTS - Informational
+      # ===================================================================
+
+      - alert: InfluxDBBucketRetentionPolicyExpiring
+        expr: influxdb_retention_policy_duration_hours < 168
+        for: 1h
+        labels:
+          severity: low
+          component: influxdb
+        annotations:
+          summary: "InfluxDB retention policy expiring soon for {{ $labels.bucket }}"
+          description: "Bucket {{ $labels.bucket }} has retention of {{ $value }}h (<7d)."
+          action: "Review data retention requirements"
+
+      - alert: InfluxDBTaskExecutionSlow
+        expr: histogram_quantile(0.95, rate(influxdb_task_execution_duration_seconds_bucket[5m])) > 60
+        for: 15m
+        labels:
+          severity: low
+          component: influxdb
+        annotations:
+          summary: "InfluxDB task execution is slow"
+          description: "P95 task execution time is {{ $value }}s (>60s)."
+          action: "Review task efficiency and optimize if needed"
+
+      - alert: InfluxDBConnectionsHigh
+        expr: influxdb_http_connections_total > 100
+        for: 10m
+        labels:
+          severity: low
+          component: influxdb
+        annotations:
+          summary: "InfluxDB has many concurrent connections"
+          description: "InfluxDB has {{ $value }} concurrent connections (>100)."
+          action: "Monitor for connection leaks or adjust limits"

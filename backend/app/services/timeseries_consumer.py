@@ -35,6 +35,7 @@ except ImportError:
 
 from app.core.config import settings
 from app.services.influxdb import influxdb_service
+from app.services.circuit_breaker import CircuitBreaker
 
 # Redis for deduplication
 try:
@@ -127,6 +128,15 @@ class TimeSeriesConsumer:
 
         # Performance metrics
         self._write_latencies_ms = []
+
+        # Circuit breaker for InfluxDB writes (prevents cascade failures)
+        self._influxdb_circuit_breaker = CircuitBreaker(
+            failure_threshold=5,      # Open circuit after 5 consecutive failures
+            success_threshold=2,      # Close circuit after 2 successes
+            timeout=30,               # Wait 30s before attempting recovery
+            half_open_max_calls=3,    # Max 3 test calls in half-open state
+            name="influxdb_writer"
+        )
 
     async def start(self, max_retries: int = 5, initial_delay: float = 2.0):
         """
@@ -314,36 +324,71 @@ class TimeSeriesConsumer:
 
     async def _write_batch(self, batch: List[Dict[str, Any]]):
         """
-        Write batch of messages to InfluxDB
+        Write batch of messages to InfluxDB with circuit breaker protection
 
         Args:
             batch: List of tag data dictionaries
+
+        Returns:
+            True if write succeeded, False if failed or circuit is open
         """
+        # Check if circuit breaker is open (InfluxDB is down)
+        if self._influxdb_circuit_breaker.is_open:
+            logger.warning(
+                f"⚡ Circuit breaker OPEN - skipping write of {len(batch)} points "
+                f"(InfluxDB unavailable, will retry after {self._influxdb_circuit_breaker.config.timeout}s)"
+            )
+            self._errors += 1
+            return False
+
         try:
             start = time.time()
-            success = influxdb_service.write_batch(batch)
+
+            # Wrap InfluxDB write operation with circuit breaker
+            def _write_operation():
+                """Wrapper function for circuit breaker"""
+                success = influxdb_service.write_batch(batch)
+                if not success:
+                    raise Exception("InfluxDB write_batch returned False")
+                return success
+
+            # Execute write through circuit breaker
+            result = self._influxdb_circuit_breaker.call(_write_operation)
+
             latency_ms = (time.time() - start) * 1000
-            
+
             # Prometheus metrics
             consumer_write_latency_seconds.observe(latency_ms / 1000.0)
-            
-            # record latency
+
+            # Record latency
             self._write_latencies_ms.append(latency_ms)
             if len(self._write_latencies_ms) > 1000:
                 self._write_latencies_ms = self._write_latencies_ms[-1000:]
 
-            if success:
+            if result:
                 self._messages_processed += len(batch)
                 self._batches_written += 1
-                logger.info(f"✅ Wrote {len(batch)} points to InfluxDB (total: {self._messages_processed}) - {latency_ms:.1f}ms")
+                logger.info(
+                    f"✅ Wrote {len(batch)} points to InfluxDB "
+                    f"(total: {self._messages_processed}) - {latency_ms:.1f}ms "
+                    f"[circuit: {self._influxdb_circuit_breaker.state.value}]"
+                )
                 return True
             else:
-                logger.error(f"❌ Failed to write batch of {len(batch)} points to InfluxDB")
+                # Circuit breaker blocked the call or write failed
+                logger.error(
+                    f"❌ Failed to write batch of {len(batch)} points to InfluxDB "
+                    f"[circuit: {self._influxdb_circuit_breaker.state.value}]"
+                )
                 self._errors += 1
                 return False
 
         except Exception as e:
-            logger.error(f"❌ Error writing batch to InfluxDB: {e}")
+            # This exception is caught by circuit breaker, but log it anyway
+            logger.error(
+                f"❌ Error writing batch to InfluxDB: {e} "
+                f"[circuit: {self._influxdb_circuit_breaker.state.value}]"
+            )
             self._errors += 1
             return False
 
@@ -427,7 +472,8 @@ class TimeSeriesConsumer:
         return {
             'messages_processed': self._messages_processed,
             'batches_written': self._batches_written,
-            'errors': self._errors
+            'errors': self._errors,
+            'circuit_breaker': self._influxdb_circuit_breaker.get_stats()
         }
 
 
