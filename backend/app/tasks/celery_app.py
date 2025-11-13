@@ -8,6 +8,7 @@ celery_app = Celery(
     "optiflow",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=['app.tasks.data_tasks']  # Explicitly include task modules
 )
 
 celery_app.conf.update(
@@ -18,5 +19,3 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-# Import tasks
-# from app.tasks import ml_tasks, data_tasks
