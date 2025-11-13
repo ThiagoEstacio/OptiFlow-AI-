@@ -296,12 +296,10 @@ async def get_tag_timeseries(
         end_time = datetime.utcnow()
 
         # Query InfluxDB using the tag name as tag_id (since simulator uses tag names)
-        data = influxdb_service.query_tag_data(
+        data = await influxdb_service.query_tag_data(
             tag_id=tag_name,
-            start_time=start_time,
-            end_time=end_time,
-            aggregation=aggregation,
-            interval=interval
+            start=start_time,
+            end=end_time
         )
 
         return {
@@ -352,12 +350,10 @@ async def get_multiple_tags_timeseries(
 
         results = {}
         for tag_name in tag_names:
-            data = influxdb_service.query_tag_data(
+            data = await influxdb_service.query_tag_data(
                 tag_id=tag_name,
-                start_time=start_time,
-                end_time=end_time,
-                aggregation=aggregation,
-                interval=interval
+                start=start_time,
+                end=end_time
             )
             results[tag_name] = {
                 "data_points": len(data),

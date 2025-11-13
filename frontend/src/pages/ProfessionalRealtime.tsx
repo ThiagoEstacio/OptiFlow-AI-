@@ -29,7 +29,7 @@ import {
 import { GaugeWidget } from '../components/professional/GaugeWidget';
 import { StatWidget } from '../components/professional/StatWidget';
 import { ChartWidget } from '../components/professional/ChartWidget';
-import { useRealtimeData, useWebSocketStatus } from '../hooks/useRealtimeData';
+import { useRealtimeData, useWebSocketStatus, SimulatorUpdate } from '../hooks/useRealtimeData';
 import apiClient from '../api/client';
 
 interface TagData {
@@ -41,71 +41,56 @@ interface TagData {
   quality?: 'good' | 'uncertain' | 'bad';
 }
 
+interface ChartDataPoint {
+  time: string;
+  value: number;
+}
+
 export const ProfessionalRealtime: React.FC = () => {
   const theme = useTheme();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [tags, setTags] = useState<TagData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
   // WebSocket connection status
   const isConnected = useWebSocketStatus();
 
-  // Real-time tag updates (when backend WebSocket is ready)
-  const { data: realtimeUpdate } = useRealtimeData<TagData>('tag_update');
+  // Real-time simulator updates from WebSocket
+  const { data: simulatorData } = useRealtimeData<SimulatorUpdate>('simulator_update');
 
-  // Sample real-time data for demonstration
-  const [liveData, setLiveData] = useState({
-    production_rate: { value: 1050, trend: 'up' as const },
-    temperature: { value: 78.5, trend: 'neutral' as const },
-    pressure: { value: 92.3, trend: 'down' as const },
-    oee: { value: 85.2, trend: 'up' as const }
+  // Previous values for trend calculation
+  const [prevValues, setPrevValues] = useState({
+    production_rate: 0,
+    temperature: 0,
+    pressure: 0,
+    power: 0
   });
 
-  // Chart data for trends
-  const [chartData, setChartData] = useState([
-    { time: '10:00', value: 1000 },
-    { time: '10:05', value: 1020 },
-    { time: '10:10', value: 1040 },
-    { time: '10:15', value: 1030 },
-    { time: '10:20', value: 1050 }
-  ]);
-
+  // Load historical chart data on mount
   useEffect(() => {
     loadTags();
-
-    // Simulate real-time updates
-    const interval = setInterval(() => {
-      setLiveData(prev => ({
-        production_rate: {
-          value: prev.production_rate.value + (Math.random() - 0.5) * 20,
-          trend: Math.random() > 0.5 ? 'up' : 'down'
-        },
-        temperature: {
-          value: prev.temperature.value + (Math.random() - 0.5) * 2,
-          trend: Math.random() > 0.5 ? 'up' : 'down'
-        },
-        pressure: {
-          value: prev.pressure.value + (Math.random() - 0.5) * 5,
-          trend: Math.random() > 0.5 ? 'up' : 'down'
-        },
-        oee: {
-          value: Math.max(75, Math.min(95, prev.oee.value + (Math.random() - 0.5) * 3)),
-          trend: Math.random() > 0.5 ? 'up' : 'down'
-        }
-      }));
-
-      // Update chart data
-      setChartData(prev => {
-        const newData = [...prev.slice(1), {
-          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          value: 1000 + Math.random() * 100
-        }];
-        return newData;
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
+    loadHistoricalData();
   }, []);
+
+  // Update chart data when simulator updates arrive
+  useEffect(() => {
+    if (simulatorData?.tags) {
+      const flowValue = simulatorData.tags['SLD01_FLOW_TPH_PV'] || 0;
+      const timestamp = new Date(simulatorData.timestamp);
+
+      setChartData(prev => {
+        const newPoint = {
+          time: timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          value: flowValue
+        };
+
+        // Keep last 20 points (rolling window)
+        const updated = [...prev, newPoint];
+        return updated.slice(-20);
+      });
+    }
+  }, [simulatorData]);
 
   const loadTags = async () => {
     try {
@@ -118,16 +103,55 @@ export const ProfessionalRealtime: React.FC = () => {
     }
   };
 
-  // Update tag data when real-time update arrives
+  const loadHistoricalData = async () => {
+    try {
+      const response = await fetch(
+        'http://localhost:8000/api/v1/tags/timeseries/SLD01_FLOW_TPH_PV?start_minutes_ago=5'
+      );
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data && result.data.length > 0) {
+          const historicalPoints = result.data.map((point: any) => ({
+            time: new Date(point.timestamp).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            value: point.value
+          }));
+          setChartData(historicalPoints.slice(-20)); // Keep last 20 points
+        }
+      }
+    } catch (error) {
+      console.error('Error loading historical data:', error);
+    }
+  };
+
+  // Update tags when simulator data arrives
   useEffect(() => {
-    if (realtimeUpdate) {
+    if (simulatorData?.tags && tags.length > 0) {
       setTags(prev =>
-        prev.map(tag =>
-          tag.id === realtimeUpdate.id ? { ...tag, ...realtimeUpdate } : tag
-        )
+        prev.map(tag => {
+          const tagValue = simulatorData.tags[tag.id];
+          if (tagValue !== undefined) {
+            return { ...tag, value: tagValue, quality: 'good' as const };
+          }
+          return tag;
+        })
       );
     }
-  }, [realtimeUpdate]);
+  }, [simulatorData]);
+
+  // Track previous values for trend calculation
+  useEffect(() => {
+    if (simulatorData?.tags && simulatorData?.status) {
+      setPrevValues({
+        production_rate: simulatorData.tags['SLD01_FLOW_TPH_PV'] || 0,
+        temperature: simulatorData.tags['CORR01_TEMP_C_PV'] || 0,
+        pressure: simulatorData.status.system.warehouse_level_pct || 0,
+        power: simulatorData.tags['SLD01_POWER_KW_PV'] || 0
+      });
+    }
+  }, [simulatorData]);
 
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', pb: 4 }}>
@@ -226,58 +250,82 @@ export const ProfessionalRealtime: React.FC = () => {
         <Grid container spacing={3} mb={3}>
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Production Rate"
-              value={liveData.production_rate.value}
-              min={800}
-              max={1200}
-              unit="units/h"
-              thresholds={{ low: 900, medium: 1000, high: 1100 }}
-              trend={liveData.production_rate.trend}
-              trendValue={`${((liveData.production_rate.value / 1000 - 1) * 100).toFixed(1)}%`}
-              subtitle="Current output"
+              title="Shiploader Flow"
+              value={simulatorData?.tags['SLD01_FLOW_TPH_PV'] || 0}
+              min={0}
+              max={2500}
+              unit="t/h"
+              thresholds={{ low: 1000, medium: 1500, high: 2000 }}
+              trend={
+                simulatorData?.tags['SLD01_FLOW_TPH_PV'] ?? 0 > prevValues.production_rate
+                  ? 'up'
+                  : simulatorData?.tags['SLD01_FLOW_TPH_PV'] ?? 0 < prevValues.production_rate
+                  ? 'down'
+                  : 'neutral'
+              }
+              trendValue={`${simulatorData?.tags['SLD01_SETPOINT_TPH_PV']?.toFixed(0) || 0} t/h target`}
+              subtitle="Production rate"
               size="medium"
             />
           </Grid>
 
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Temperature"
-              value={liveData.temperature.value}
+              title="Belt Temperature"
+              value={simulatorData?.tags['CORR01_TEMP_C_PV'] || 0}
               min={0}
               max={100}
               unit="°C"
-              thresholds={{ low: 60, medium: 75, high: 85 }}
-              trend={liveData.temperature.trend}
-              subtitle="Reactor core"
+              thresholds={{ low: 50, medium: 70, high: 85 }}
+              trend={
+                simulatorData?.tags['CORR01_TEMP_C_PV'] ?? 0 > prevValues.temperature
+                  ? 'up'
+                  : simulatorData?.tags['CORR01_TEMP_C_PV'] ?? 0 < prevValues.temperature
+                  ? 'down'
+                  : 'neutral'
+              }
+              subtitle="Conveyor CORR01"
               size="medium"
             />
           </Grid>
 
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Pressure"
-              value={liveData.pressure.value}
-              min={0}
-              max={120}
-              unit="PSI"
-              thresholds={{ low: 70, medium: 85, high: 100 }}
-              trend={liveData.pressure.trend}
-              subtitle="Main line"
-              size="medium"
-            />
-          </Grid>
-
-          <Grid xs={12} sm={6} md={3}>
-            <GaugeWidget
-              title="OEE"
-              value={liveData.oee.value}
+              title="Warehouse Level"
+              value={simulatorData?.status?.system?.warehouse_level_pct || 0}
               min={0}
               max={100}
               unit="%"
-              thresholds={{ low: 75, medium: 85, high: 95 }}
-              trend={liveData.oee.trend}
-              trendValue={`${(liveData.oee.value - 85).toFixed(1)}%`}
-              subtitle="Overall efficiency"
+              thresholds={{ low: 30, medium: 60, high: 85 }}
+              trend={
+                simulatorData?.status?.system?.warehouse_level_pct ?? 0 > prevValues.pressure
+                  ? 'up'
+                  : simulatorData?.status?.system?.warehouse_level_pct ?? 0 < prevValues.pressure
+                  ? 'down'
+                  : 'neutral'
+              }
+              subtitle="Storage capacity"
+              size="medium"
+            />
+          </Grid>
+
+          <Grid xs={12} sm={6} md={3}>
+            <GaugeWidget
+              title="Total Power"
+              value={simulatorData?.tags['SLD01_POWER_KW_PV'] || 0}
+              min={0}
+              max={500}
+              unit="kW"
+              thresholds={{ low: 200, medium: 350, high: 450 }}
+              trend={
+                simulatorData?.tags['SLD01_POWER_KW_PV'] ?? 0 > prevValues.power
+                  ? 'up'
+                  : simulatorData?.tags['SLD01_POWER_KW_PV'] ?? 0 < prevValues.power
+                  ? 'down'
+                  : 'neutral'
+              }
+              trendValue={`${simulatorData?.status?.system?.kWh_per_ton?.toFixed(2) || 0} kWh/t`}
+              subtitle="Shiploader power"
               size="medium"
             />
           </Grid>
