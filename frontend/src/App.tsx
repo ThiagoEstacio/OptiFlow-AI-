@@ -27,6 +27,7 @@ import { simulatorDataSync } from './services/simulatorDataSync';
 // 📊 CORE PAGES (5 principais)
 // ========================================
 import { ModernDashboard } from './pages/ModernDashboard';
+import { ProfessionalDashboard } from './pages/ProfessionalDashboard';
 import RealtimeTagPage from './pages/RealtimeTagPage';
 import { ModernAlarmsPage } from './pages/ModernAlarmsPage';
 import { AnalyticsHub } from './pages/AnalyticsHub';
@@ -96,8 +97,9 @@ function App() {
                   {/* ========================================
                       📊 MODULE 1: DASHBOARD (Overview & KPIs)
                       ======================================== */}
-                  <Route index element={<ModernDashboard />} />
-                  <Route path="dashboard" element={<ModernDashboard />} />
+                  <Route index element={<ProfessionalDashboard />} />
+                  <Route path="dashboard" element={<ProfessionalDashboard />} />
+                  <Route path="dashboard/classic" element={<ModernDashboard />} />
                   <Route path="dashboards" element={<DashboardsList />} />
                   <Route path="dashboards/:id" element={<DashboardBuilder />} />
                   <Route path="dashboards/:id/edit" element={<DashboardBuilder />} />
