@@ -38,10 +38,16 @@ import {
 import { StatWidget } from '../components/professional/StatWidget';
 import { AnalyticsCard } from '../components/professional/AnalyticsCard';
 import { ChartWidget } from '../components/professional/ChartWidget';
+import { useRealtimeData, useWebSocketStatus, SimulatorUpdate } from '../hooks/useRealtimeData';
 import apiClient from '../api/client';
 
 export const ProfessionalDashboard: React.FC = () => {
   const theme = useTheme();
+
+  // Real-time WebSocket data
+  const isConnected = useWebSocketStatus();
+  const { data: simulatorData } = useRealtimeData<SimulatorUpdate>('simulator_update');
+
   const [stats, setStats] = useState({
     totalDevices: 0,
     activeConnections: 0,
