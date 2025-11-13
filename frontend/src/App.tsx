@@ -23,6 +23,7 @@ import { MuiThemeWrapper } from './components/professional/MuiThemeWrapper';
 import { AssetProvider } from './contexts/AssetContext';
 import { tagDataSimulator } from './services/tagDataSimulator';
 import { simulatorDataSync } from './services/simulatorDataSync';
+import { websocketService } from './services/websocket';
 
 // ========================================
 // 📊 CORE PAGES (5 principais)
@@ -55,20 +56,26 @@ import { AIMonitoringDashboard } from './pages/AIMonitoringDashboard';
 import { TagConfiguration } from './pages/TagConfiguration';
 
 function App() {
-  // 🚀 Start simulator on app initialization
+  // 🚀 Start simulator and WebSocket on app initialization
   useEffect(() => {
     console.log('🚀 Starting Grain Terminal Simulator...');
     tagDataSimulator.start();
-    
+
+    // Connect to real-time WebSocket server
+    const wsUrl = 'ws://localhost:8000/api/v1/ws/simulator/stream';
+    console.log('🔌 Connecting to WebSocket:', wsUrl);
+    websocketService.connect(wsUrl);
+
     // Start syncing data to backend after 2 seconds (let simulator stabilize)
     const syncTimeout = setTimeout(() => {
       console.log('🔄 Starting data sync to backend...');
       simulatorDataSync.start();
     }, 2000);
-    
+
     return () => {
       clearTimeout(syncTimeout);
       console.log('⏹️ Stopping Grain Terminal Simulator...');
+      websocketService.disconnect();
       simulatorDataSync.stop();
       tagDataSimulator.stop();
     };

@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     alarms,
     analytics,
     websocket_analytics,
+    websocket_simulator,
     ai_insights,
     chat,
     assets,
@@ -48,6 +49,7 @@ api_router.include_router(timeseries.router, prefix="/timeseries", tags=["Time S
 api_router.include_router(alarms.router, prefix="/alarms", tags=["Alarms"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(websocket_analytics.router, prefix="/analytics/ws", tags=["Analytics WebSocket"])
+api_router.include_router(websocket_simulator.router, tags=["Real-time Simulator WebSocket"])
 api_router.include_router(ai_insights.router, prefix="/ai", tags=["AI Insights"])
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat & AI Assistant"])
 api_router.include_router(assets.router, prefix="/assets", tags=["Asset Framework"])

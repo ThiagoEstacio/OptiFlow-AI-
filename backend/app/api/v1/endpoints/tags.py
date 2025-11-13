@@ -264,3 +264,116 @@ async def get_realtime_tag_values_batch(tag_names: List[str]):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving batch realtime values: {str(e)}"
         )
+
+
+@router.get("/timeseries/{tag_name}")
+async def get_tag_timeseries(
+    tag_name: str,
+    start_minutes_ago: int = Query(default=60, ge=1, le=1440, description="Minutes ago to start query"),
+    aggregation: Optional[str] = Query(default=None, description="Aggregation function: mean, min, max, sum, count"),
+    interval: Optional[str] = Query(default=None, description="Aggregation interval (e.g., '1m', '5m', '1h')"),
+):
+    """
+    Get time-series data for a tag by name
+
+    Perfect for real-time charts and historical analysis.
+
+    Parameters:
+    - tag_name: Name of the tag (e.g., 'TEST_COUNTER_PV')
+    - start_minutes_ago: How many minutes back to query (default: 60, max: 1440 = 24h)
+    - aggregation: Optional aggregation function (mean, min, max, sum, count)
+    - interval: Aggregation interval (e.g., '1m' for 1 minute, '5m', '1h')
+
+    Example:
+    - GET /api/v1/tags/timeseries/TEST_COUNTER_PV?start_minutes_ago=10
+    - GET /api/v1/tags/timeseries/WAREHOUSE_LEVEL_PCT_PV?start_minutes_ago=60&aggregation=mean&interval=5m
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        # Calculate start time
+        start_time = datetime.utcnow() - timedelta(minutes=start_minutes_ago)
+        end_time = datetime.utcnow()
+
+        # Query InfluxDB using the tag name as tag_id (since simulator uses tag names)
+        data = influxdb_service.query_tag_data(
+            tag_id=tag_name,
+            start_time=start_time,
+            end_time=end_time,
+            aggregation=aggregation,
+            interval=interval
+        )
+
+        return {
+            "tag_name": tag_name,
+            "start_time": start_time.isoformat() + "Z",
+            "end_time": end_time.isoformat() + "Z",
+            "aggregation": aggregation,
+            "interval": interval,
+            "data_points": len(data),
+            "data": data
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving time-series data: {str(e)}"
+        )
+
+
+@router.post("/timeseries/batch")
+async def get_multiple_tags_timeseries(
+    tag_names: List[str],
+    start_minutes_ago: int = Query(default=60, ge=1, le=1440),
+    aggregation: Optional[str] = Query(default=None),
+    interval: Optional[str] = Query(default=None),
+):
+    """
+    Get time-series data for multiple tags at once
+
+    Perfect for synchronized charts with multiple series.
+
+    Example POST body:
+    ```json
+    ["TEST_COUNTER_PV", "WAREHOUSE_LEVEL_PCT_PV", "CORR01_POWER_KW_PV"]
+    ```
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        if not tag_names or len(tag_names) > 20:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide 1-20 tag names"
+            )
+
+        start_time = datetime.utcnow() - timedelta(minutes=start_minutes_ago)
+        end_time = datetime.utcnow()
+
+        results = {}
+        for tag_name in tag_names:
+            data = influxdb_service.query_tag_data(
+                tag_id=tag_name,
+                start_time=start_time,
+                end_time=end_time,
+                aggregation=aggregation,
+                interval=interval
+            )
+            results[tag_name] = {
+                "data_points": len(data),
+                "data": data
+            }
+
+        return {
+            "start_time": start_time.isoformat() + "Z",
+            "end_time": end_time.isoformat() + "Z",
+            "aggregation": aggregation,
+            "interval": interval,
+            "tags": results
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving batch time-series: {str(e)}"
+        )

@@ -17,6 +17,49 @@ interface RealtimeData<T = any> {
   lastUpdate: Date | null;
 }
 
+// Type for simulator update messages
+export interface SimulatorUpdate {
+  type: 'simulator_update';
+  timestamp: string;
+  tags: Record<string, number>;
+  status: {
+    system: {
+      running: boolean;
+      time_s: number;
+      total_mass_t: number;
+      total_kWh: number;
+      warehouse_level_pct: number;
+      kWh_per_ton: number;
+      cost_BRL: number;
+    };
+    gates: Array<{
+      name: string;
+      setpoint_pct: number;
+      opening_pct: number;
+      flow_tph: number;
+      failure: boolean;
+    }>;
+    belts: Array<{
+      name: string;
+      running: boolean;
+      speed_mps: number;
+      flow_tph: number;
+      load_pct: number;
+      power_kw: number;
+      current_a: number;
+      temp_c: number;
+      misalignment: number;
+    }>;
+    shiploader: {
+      name: string;
+      setpoint_tph: number;
+      flow_tph: number;
+      power_kw: number;
+      current_a: number;
+    };
+  };
+}
+
 /**
  * Hook for subscribing to real-time data updates
  */
