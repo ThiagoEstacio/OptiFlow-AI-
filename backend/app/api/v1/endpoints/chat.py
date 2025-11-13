@@ -477,3 +477,49 @@ async def get_conversation_messages(
     messages = result.scalars().all()
 
     return messages
+
+
+@router.get("/health")
+async def chat_health():
+    """
+    Health check endpoint for chat/assistant service.
+    Returns the status of AI service components.
+    """
+    try:
+        # Check if AI service is available
+        ai_available = ai_service is not None
+
+        # Check model configuration
+        model_info = {
+            "model": ai_service.model if ai_service else None,
+            "use_ollama": ai_service.use_ollama if ai_service else False,
+            "ollama_url": ai_service.ollama_url if ai_service and hasattr(ai_service, 'ollama_url') else None
+        }
+
+        return {
+            "status": "healthy" if ai_available else "unavailable",
+            "service": "chat_assistant",
+            "timestamp": datetime.now().isoformat(),
+            "components": {
+                "ai_service": {
+                    "available": ai_available,
+                    "model_config": model_info
+                },
+                "chat_api": {
+                    "available": True,
+                    "endpoints": [
+                        "/conversations",
+                        "/chat",
+                        "/chat/demo",
+                        "/insights"
+                    ]
+                }
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "service": "chat_assistant",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
