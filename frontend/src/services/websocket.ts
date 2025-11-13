@@ -1,28 +1,36 @@
 /**
  * WebSocket Service for Real-Time Updates
+ * Enhanced with connection handlers and improved reconnection logic
  */
 
 type MessageHandler = (data: any) => void;
+type ConnectionHandler = () => void;
 
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectInterval: number = 5000;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private messageHandlers: Map<string, MessageHandler[]> = new Map();
+  private connectHandlers: ConnectionHandler[] = [];
+  private disconnectHandlers: ConnectionHandler[] = [];
   private url: string = '';
+  private isIntentionalClose: boolean = false;
 
   connect(url: string) {
     this.url = url;
+    this.isIntentionalClose = false;
 
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('✅ WebSocket connected');
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
         }
+        // Notify connection handlers
+        this.connectHandlers.forEach(handler => handler());
       };
 
       this.ws.onmessage = (event) => {
@@ -46,12 +54,18 @@ class WebSocketService {
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('❌ WebSocket error:', error);
       };
 
       this.ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        this.reconnect();
+        console.log('🔌 WebSocket disconnected');
+        // Notify disconnection handlers
+        this.disconnectHandlers.forEach(handler => handler());
+        
+        // Auto-reconnect if not intentional
+        if (!this.isIntentionalClose) {
+          this.reconnect();
+        }
       };
     } catch (error) {
       console.error('WebSocket connection error:', error);
@@ -60,6 +74,8 @@ class WebSocketService {
   }
 
   disconnect() {
+    this.isIntentionalClose = true;
+    
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -72,21 +88,24 @@ class WebSocketService {
   }
 
   private reconnect() {
-    if (this.reconnectTimer) {
+    if (this.reconnectTimer || this.isIntentionalClose) {
       return;
     }
 
     this.reconnectTimer = setTimeout(() => {
-      console.log('Attempting to reconnect WebSocket...');
+      console.log('🔄 Attempting to reconnect WebSocket...');
       this.connect(this.url);
     }, this.reconnectInterval);
   }
 
-  on(type: string, handler: MessageHandler) {
+  on(type: string, handler: MessageHandler): () => void {
     if (!this.messageHandlers.has(type)) {
       this.messageHandlers.set(type, []);
     }
     this.messageHandlers.get(type)!.push(handler);
+
+    // Return unsubscribe function
+    return () => this.off(type, handler);
   }
 
   off(type: string, handler: MessageHandler) {
@@ -99,12 +118,36 @@ class WebSocketService {
     }
   }
 
+  onConnect(handler: ConnectionHandler): () => void {
+    this.connectHandlers.push(handler);
+    return () => {
+      const index = this.connectHandlers.indexOf(handler);
+      if (index !== -1) {
+        this.connectHandlers.splice(index, 1);
+      }
+    };
+  }
+
+  onDisconnect(handler: ConnectionHandler): () => void {
+    this.disconnectHandlers.push(handler);
+    return () => {
+      const index = this.disconnectHandlers.indexOf(handler);
+      if (index !== -1) {
+        this.disconnectHandlers.splice(index, 1);
+      }
+    };
+  }
+
   send(type: string, data: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type, data }));
     } else {
       console.warn('WebSocket not connected, message not sent');
     }
+  }
+
+  get isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
 }
 

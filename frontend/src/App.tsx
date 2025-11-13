@@ -30,6 +30,8 @@ import { simulatorDataSync } from './services/simulatorDataSync';
 import { ModernDashboard } from './pages/ModernDashboard';
 import { ProfessionalDashboard } from './pages/ProfessionalDashboard';
 import { ProfessionalAnalytics } from './pages/ProfessionalAnalytics';
+import { ProfessionalRealtime } from './pages/ProfessionalRealtime';
+import { ProfessionalAlarms } from './pages/ProfessionalAlarms';
 import RealtimeTagPage from './pages/RealtimeTagPage';
 import { ModernAlarmsPage } from './pages/ModernAlarmsPage';
 import { AnalyticsHub } from './pages/AnalyticsHub';
@@ -110,16 +112,18 @@ function App() {
                   {/* ========================================
                       ⚡ MODULE 2: REAL-TIME (Tags & Trends)
                       ======================================== */}
-                  <Route path="realtime" element={<RealtimeTagPage />} />
+                  <Route path="realtime" element={<ProfessionalRealtime />} />
+                  <Route path="realtime/classic" element={<RealtimeTagPage />} />
                   <Route path="realtime/tags" element={<ExtendedTagsPage />} />
                   <Route path="realtime/tags/:id" element={<TagDetailsPage />} />
-                  
+
                   {/* ========================================
                       🚨 MODULE 3: ALARMS (Events & History)
                       ======================================== */}
-                  <Route path="alarms" element={<ModernAlarmsPage />} />
-                  <Route path="alarms/active" element={<ModernAlarmsPage />} />
-                  <Route path="alarms/history" element={<ModernAlarmsPage />} />
+                  <Route path="alarms" element={<ProfessionalAlarms />} />
+                  <Route path="alarms/classic" element={<ModernAlarmsPage />} />
+                  <Route path="alarms/active" element={<ProfessionalAlarms />} />
+                  <Route path="alarms/history" element={<ProfessionalAlarms />} />
 
                   {/* ========================================
                       🤖 MODULE 4: ANALYTICS (ML Insights)
