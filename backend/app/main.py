@@ -19,7 +19,8 @@ import psutil
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry
 
 from app.core.config import settings
-from app.api.v1.api import api_router
+from app.api.v1.api import api_router as api_router_v1
+from app.api.v2.api import api_router as api_router_v2
 from app.api.routes.simulator import router as simulator_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.ai_agent import router as ai_agent_router
@@ -40,9 +41,14 @@ import app.services.dlq_processor
 from app.middleware.timeout import TimeoutMiddleware
 from app.middleware.circuit_breaker import CircuitBreakerMiddleware
 from app.middleware.prometheus_middleware import PrometheusMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.versioning import VersioningMiddleware
 from app.services.prometheus_metrics import init_metrics, get_metrics
 from app.core.security_layer import init_security, audit_logger
 from app.services.mat_view_refresher import start_mat_view_refresher, stop_mat_view_refresher
+from app.services.rate_limiter import init_rate_limiter, shutdown_rate_limiter
+from app.core.tracing import init_tracing, shutdown_tracing
+from app.core.advanced_cache import get_advanced_cache
 
 # Configure logging
 logging.basicConfig(
@@ -374,7 +380,16 @@ async def lifespan(app: FastAPI):
                     f"❌ Database initialization failed after {max_retries} attempts: {e}"
                 )
                 raise
-    
+
+    # Initialize Distributed Tracing (PDCA #25)
+    try:
+        from app.db.session import engine
+        init_tracing(app, engine)
+        logger.info("✅ Distributed tracing initialized (OpenTelemetry + Jaeger)")
+    except Exception as e:
+        logger.warning(f"⚠️  Distributed tracing initialization failed: {e}")
+        logger.warning("⚠️  System will continue without distributed tracing")
+
     # Initialize autonomous AI agent
     # Re-enabled after session management refactoring
     try:
@@ -430,6 +445,81 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Alarm monitoring initialization failed: {e}")
         logger.warning("⚠️  System will continue without automatic alarm monitoring")
+
+    # Initialize InfluxDB retention policies and continuous queries (PDCA #10)
+    try:
+        from app.services.influxdb_setup import InfluxDBSetupService
+
+        influx_setup = InfluxDBSetupService()
+
+        # Setup buckets with retention policies
+        await influx_setup.setup_buckets_and_retention()
+        logger.info("✅ InfluxDB buckets configured successfully")
+
+        # Setup continuous queries for data rollups
+        await influx_setup.setup_continuous_queries()
+        logger.info("✅ InfluxDB continuous queries configured successfully")
+
+        # Verify setup
+        verification = await influx_setup.verify_setup()
+        if verification['all_ok']:
+            logger.info("✅ InfluxDB initialization complete and verified")
+        else:
+            logger.warning(f"⚠️  InfluxDB setup partially failed: {verification}")
+
+    except Exception as e:
+        logger.error(f"❌ InfluxDB setup failed: {e}")
+        logger.warning("⚠️  System will continue but without optimized InfluxDB retention/rollups")
+        logger.warning("⚠️  This may cause storage growth and performance degradation over time")
+
+    # Initialize Database Pool Monitor (PDCA #13)
+    try:
+        from app.services.db_pool_monitor import init_pool_monitor
+        from app.db.session import engine
+
+        pool_monitor = init_pool_monitor(engine)
+        logger.info("✅ Database connection pool monitor initialized")
+
+        # Log initial pool status
+        initial_status = pool_monitor.get_pool_status()
+        logger.info(
+            f"📊 Connection pool: {initial_status['connections_in_use']}/{initial_status['pool_size']} "
+            f"in use ({initial_status['usage_percent']:.1f}%)"
+        )
+
+    except Exception as e:
+        logger.warning(f"⚠️  Database pool monitor initialization failed: {e}")
+        logger.warning("⚠️  System will continue without pool monitoring")
+
+    # Initialize WebSocket Connection Pool (PDCA #18)
+    try:
+        from app.core.websocket_pool import init_websocket_pool
+
+        await init_websocket_pool()
+        logger.info("✅ WebSocket connection pool initialized (max: 1000 connections)")
+
+    except Exception as e:
+        logger.warning(f"⚠️  WebSocket pool initialization failed: {e}")
+        logger.warning("⚠️  System will continue without WebSocket pooling")
+
+    # Initialize Rate Limiter (PDCA #21)
+    try:
+        await init_rate_limiter()
+        logger.info("✅ Rate limiter initialized (10/s, 100/min, 1000/h, 10k/day)")
+
+    except Exception as e:
+        logger.warning(f"⚠️  Rate limiter initialization failed: {e}")
+        logger.warning("⚠️  System will continue without rate limiting")
+
+    # Initialize Advanced Cache (PDCA #26)
+    try:
+        cache = get_advanced_cache()
+        stats = cache.get_stats()
+        logger.info("✅ Advanced multi-layer cache initialized (L1: memory, L2: Redis)")
+        logger.info(f"📊 Cache L1 max size: {stats['l1']['max_size']} entries")
+    except Exception as e:
+        logger.warning(f"⚠️  Advanced cache initialization failed: {e}")
+        logger.warning("⚠️  System will continue without advanced caching")
 
     # Initialize Kafka consumer for time-series data to InfluxDB
     try:
@@ -556,6 +646,20 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Kafka producer cleaned up")
     except Exception as e:
         logger.warning(f"⚠️  Kafka producer cleanup warning: {e}")
+
+    # Shutdown Rate Limiter (PDCA #21)
+    try:
+        await shutdown_rate_limiter()
+        logger.info("✅ Rate limiter shutdown")
+    except Exception as e:
+        logger.warning(f"⚠️  Rate limiter cleanup warning: {e}")
+
+    # Shutdown Distributed Tracing (PDCA #25)
+    try:
+        shutdown_tracing()
+        logger.info("✅ Distributed tracing shutdown")
+    except Exception as e:
+        logger.warning(f"⚠️  Distributed tracing cleanup warning: {e}")
 
 
 # ========================================
@@ -697,12 +801,26 @@ app.add_middleware(TimeoutMiddleware, timeout_seconds=settings.REQUEST_TIMEOUT_S
 # Circuit breaker middleware - handle cascading failures
 app.add_middleware(CircuitBreakerMiddleware)
 
+# Rate limiting middleware - enforce per-user and per-IP limits (PDCA #21)
+app.add_middleware(RateLimitMiddleware)
+logger.info("✅ Rate limiting middleware added to FastAPI")
+
+# API versioning middleware - handle version negotiation and headers (PDCA #22)
+app.add_middleware(VersioningMiddleware)
+logger.info("✅ API versioning middleware added to FastAPI")
+
 # Prometheus metrics middleware - must be added BEFORE routes are registered
 app.add_middleware(PrometheusMiddleware)
 logger.info("✅ Prometheus middleware added to FastAPI")
 
-# Include API router
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+# Include API routers
+# V1 API (legacy, will be deprecated)
+app.include_router(api_router_v1, prefix=settings.API_V1_PREFIX)
+logger.info(f"✅ API v1 registered at {settings.API_V1_PREFIX}")
+
+# V2 API (current, recommended)
+app.include_router(api_router_v2, prefix="/api/v2")
+logger.info("✅ API v2 registered at /api/v2")
 
 # Include Simulator router (no authentication required for demo)
 app.include_router(simulator_router, prefix="/api/v1")
