@@ -848,6 +848,12 @@ from app.api.v1.endpoints.metrics import router as metrics_router
 app.include_router(metrics_router, tags=["monitoring"])
 logger.info("✅ Metrics endpoint registered at /metrics")
 
+# Include GraphQL endpoint (PDCA #27)
+from app.graphql.schema import graphql_router
+app.include_router(graphql_router, prefix="/graphql", tags=["graphql"])
+logger.info("✅ GraphQL endpoint registered at /graphql")
+logger.info("✅ GraphQL Playground available at /graphql (development)")
+
 
 @app.get("/")
 @limiter.limit("100/minute")

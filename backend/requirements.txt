@@ -108,3 +108,7 @@ lz4==4.3.2  # Kafka compression support
 # Caching
 fastapi-cache2[redis]==0.2.1  # Backend response caching
 evidently==0.4.15  # ML model drift detection
+
+# GraphQL (PDCA #27)
+strawberry-graphql[fastapi]==0.216.1  # GraphQL for FastAPI
+strawberry-graphql[debug-server]==0.216.1  # GraphQL Playground
