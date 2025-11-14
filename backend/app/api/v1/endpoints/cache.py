@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
 from app.services.cache_service import cache_service
 from app.core.advanced_cache import get_advanced_cache
-from app.core.auth import get_current_superuser
+from app.core.deps import get_current_active_superuser
 from app.models.user import User
 import logging
 
@@ -96,7 +96,7 @@ async def cache_health_check():
 
 @router.get("/advanced/stats")
 async def get_advanced_cache_stats(
-    current_user: User = Depends(get_current_superuser)
+    current_user: User = Depends(get_current_active_superuser)
 ) -> Dict[str, Any]:
     """
     Get advanced cache statistics (admin only).
@@ -133,7 +133,7 @@ async def get_advanced_cache_stats(
 
 @router.post("/advanced/warm")
 async def warm_advanced_cache(
-    current_user: User = Depends(get_current_superuser)
+    current_user: User = Depends(get_current_active_superuser)
 ) -> Dict[str, Any]:
     """
     Warm cache with frequently accessed data (admin only).
@@ -219,7 +219,7 @@ async def warm_advanced_cache(
 @router.delete("/advanced/key/{key}")
 async def invalidate_advanced_key(
     key: str,
-    current_user: User = Depends(get_current_superuser)
+    current_user: User = Depends(get_current_active_superuser)
 ) -> Dict[str, str]:
     """
     Invalidate specific cache key from multi-layer cache (admin only).
@@ -254,7 +254,7 @@ async def invalidate_advanced_key(
 @router.delete("/advanced/pattern/{pattern}")
 async def invalidate_advanced_pattern(
     pattern: str,
-    current_user: User = Depends(get_current_superuser)
+    current_user: User = Depends(get_current_active_superuser)
 ) -> Dict[str, str]:
     """
     Invalidate all cache keys matching pattern (admin only).
