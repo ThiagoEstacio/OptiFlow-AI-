@@ -9,15 +9,18 @@ from strawberry.fastapi import GraphQLRouter
 from typing import Optional
 
 from app.graphql.resolvers import Query, Mutation
+from app.graphql.middleware import get_graphql_extensions
 from app.db.session import AsyncSessionLocal
 from app.core.deps import get_current_user
 from fastapi import Depends, Request
 
 
-# Create Strawberry schema
+# Create Strawberry schema with extensions
+# Integrates PDCA #25 (Tracing), #26 (Cache), and Prometheus metrics
 schema = strawberry.Schema(
     query=Query,
-    mutation=Mutation
+    mutation=Mutation,
+    extensions=get_graphql_extensions()
 )
 
 
