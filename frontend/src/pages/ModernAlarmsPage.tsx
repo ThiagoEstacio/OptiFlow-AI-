@@ -11,7 +11,8 @@
  * - Visual charts and graphs
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   alarmsApi,
   AlarmEvent,
@@ -28,7 +29,18 @@ import { showToast } from '../utils/toast';
 type TabType = 'active' | 'history' | 'statistics';
 
 export const ModernAlarmsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('active');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Determine initial tab from URL path
+  const getInitialTab = (): TabType => {
+    const path = location.pathname;
+    if (path.includes('/history')) return 'history';
+    if (path.includes('/statistics')) return 'statistics';
+    return 'active';
+  };
+  
+  const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
   const [loading, setLoading] = useState(false);
   
   // Active alarms
@@ -49,6 +61,16 @@ export const ModernAlarmsPage: React.FC = () => {
 
   // Filters for active alarms
   const [activeSeverityFilter, setActiveSeverityFilter] = useState('');
+
+  // Navigation helper
+  const navigateToTab = (tab: TabType) => {
+    const basePath = '/alarms';
+    if (tab === 'active') {
+      navigate(basePath);
+    } else {
+      navigate(`${basePath}/${tab}`);
+    }
+  };
 
   // ========================================
   // 📡 DATA FETCHING
@@ -72,13 +94,22 @@ export const ModernAlarmsPage: React.FC = () => {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      const data = await alarmsApi.getHistory({
-        start_date: historyFilters.start_date,
-        end_date: historyFilters.end_date,
+      // Only include date filters if they're set
+      const params: any = {
         severity: historyFilters.severity || undefined,
         state: historyFilters.state || undefined,
         limit: 100,
-      });
+      };
+      
+      // Convert dates to ISO datetime format (backend expects datetime with time)
+      if (historyFilters.start_date) {
+        params.start_date = `${historyFilters.start_date}T00:00:00`;
+      }
+      if (historyFilters.end_date) {
+        params.end_date = `${historyFilters.end_date}T23:59:59`;
+      }
+      
+      const data = await alarmsApi.getHistory(params);
       setHistoryAlarms(data);
     } catch (error) {
       console.error('Error fetching alarm history:', error);
@@ -137,6 +168,14 @@ export const ModernAlarmsPage: React.FC = () => {
   // ========================================
   // 🎣 EFFECTS
   // ========================================
+
+  // Update tab when URL changes
+  useEffect(() => {
+    const newTab = getInitialTab();
+    if (newTab !== activeTab) {
+      setActiveTab(newTab);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (activeTab === 'active') {
@@ -553,7 +592,9 @@ export const ModernAlarmsPage: React.FC = () => {
                   <div className="border-l-4 border-blue-500 pl-4">
                     <p className="text-sm text-gray-600">Average Duration</p>
                     <p className="text-3xl font-bold text-blue-600 mt-1">
-                      {statistics.average_duration_minutes.toFixed(1)} min
+                      {statistics.average_duration_minutes !== null 
+                        ? `${statistics.average_duration_minutes.toFixed(1)} min`
+                        : 'N/A'}
                     </p>
                   </div>
                   <div className="mt-4">
@@ -646,7 +687,7 @@ export const ModernAlarmsPage: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="flex -mb-px">
             <button
-              onClick={() => setActiveTab('active')}
+              onClick={() => navigateToTab('active')}
               className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'active'
                   ? 'border-blue-500 text-blue-600'
@@ -664,7 +705,7 @@ export const ModernAlarmsPage: React.FC = () => {
               </span>
             </button>
             <button
-              onClick={() => setActiveTab('history')}
+              onClick={() => navigateToTab('history')}
               className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'history'
                   ? 'border-blue-500 text-blue-600'
@@ -677,7 +718,7 @@ export const ModernAlarmsPage: React.FC = () => {
               </span>
             </button>
             <button
-              onClick={() => setActiveTab('statistics')}
+              onClick={() => navigateToTab('statistics')}
               className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'statistics'
                   ? 'border-blue-500 text-blue-600'

@@ -18,6 +18,7 @@ import {
   alpha
 } from '@mui/material';
 import { Grid } from '../components/GridWrapper';
+import apiClient from '../api/client';
 import {
   Psychology,
   TrendingUp,
@@ -31,7 +32,6 @@ import {
 import { StatWidget } from '../components/professional/StatWidget';
 import { AnalyticsCard } from '../components/professional/AnalyticsCard';
 import { ChartWidget } from '../components/professional/ChartWidget';
-import apiClient from '../api/client';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -118,9 +118,9 @@ export const ProfessionalAnalytics: React.FC = () => {
 
   const loadModels = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/ml/models');
-      if (response.ok) {
-        const modelsList: MLModel[] = await response.json();
+      const response = await apiClient.get('/api/v1/ml/models/');
+      const modelsList: MLModel[] = response.data;
+      if (Array.isArray(modelsList)) {
         setModels(modelsList);
 
         // Extract metrics from each model
@@ -203,10 +203,9 @@ export const ProfessionalAnalytics: React.FC = () => {
   const loadAnomalies = async () => {
     try {
       // Load anomalies from alarm statistics
-      const response = await fetch('http://localhost:8000/api/v1/alarms/statistics');
-      if (response.ok) {
-        const alarmStats = await response.json();
-
+      const response = await apiClient.get('/api/v1/alarms/statistics');
+      const alarmStats = response.data;
+      if (alarmStats) {
         // Set anomaly count from alarm statistics
         setMlStats(prev => ({
           ...prev,

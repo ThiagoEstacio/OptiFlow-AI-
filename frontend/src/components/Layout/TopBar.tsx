@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppSelector } from '../../store';
 import { ThemeToggle } from '../professional/ThemeToggle';
+import apiClient from '../../api/client';
 
 export const TopBar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -16,8 +17,9 @@ export const TopBar: React.FC = () => {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/health');
-        if (response.ok) {
+        const response = await apiClient.get('/api/health');
+        const health = response.data as { status?: string; timestamp?: number };
+        if (health && health.status === 'healthy') {
           setBackendStatus('online');
         } else {
           setBackendStatus('offline');

@@ -21,7 +21,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit("5/minute")  # 🔒 CRITICAL: Only 5 login attempts per minute
+# @limiter.limit("5/minute")  # Temporarily disabled - using middleware rate limit instead
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),

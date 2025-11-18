@@ -1,0 +1,200 @@
+{
+  "dashboard": {
+    "title": "OptiFlow Backup & DR",
+    "tags": ["backup", "disaster-recovery", "optiflow"],
+    "timezone": "utc",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Backup Status Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "optiflow_backup_success_total",
+            "legendFormat": "Successful Backups"
+          },
+          {
+            "expr": "optiflow_backup_failed_total",
+            "legendFormat": "Failed Backups"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Last Backup Time",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "time() - optiflow_backup_last_success_timestamp",
+            "legendFormat": "Hours Since Last Backup"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 86400, "color": "yellow"},
+                {"value": 172800, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Backup Duration by Service",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "optiflow_backup_duration_seconds{service=~\".*\"}",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Duration"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Backup Size by Service",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "optiflow_backup_size_bytes{service=~\".*\"}",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "bytes",
+            "label": "Size"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Backup Success Rate (7 days)",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "(sum(increase(optiflow_backup_success_total[7d])) / sum(increase(optiflow_backup_total[7d]))) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 95, "color": "yellow"},
+                {"value": 99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Backup Disk Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "optiflow_backup_disk_used_bytes",
+            "legendFormat": "Used"
+          },
+          {
+            "expr": "optiflow_backup_disk_free_bytes",
+            "legendFormat": "Free"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 85, "color": "yellow"},
+                {"value": 95, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Backup Timeline",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "optiflow_backup_last_success_timestamp * 1000",
+            "format": "table",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "service": 0,
+                "Value": 1
+              },
+              "renameByName": {
+                "service": "Service",
+                "Value": "Last Backup"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Retention Policy Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "time() - optiflow_backup_last_cleanup_timestamp",
+            "legendFormat": "Days Since Last Cleanup"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 604800, "color": "yellow"},
+                {"value": 1209600, "color": "red"}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    }
+  }
+}

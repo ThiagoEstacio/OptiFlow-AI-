@@ -14,6 +14,8 @@ import time
 import asyncio
 import async_timeout
 import psutil
+import signal
+import sys
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry
@@ -26,6 +28,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.ai_agent import router as ai_agent_router
 from app.api.routes.health import router as health_router
 from app.api.v1.endpoints.websocket import router as websocket_router
+from app.api.v1.endpoints.websocket_simulator import router as websocket_simulator_router
 from app.db.session import init_db, get_db, check_db_health
 from app.services.autonomous_agent import init_autonomous_agent
 from app.services.kafka_producer import init_kafka_producer, cleanup_kafka_producer
@@ -56,6 +59,34 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ========================================
+# Graceful Shutdown Handler (Production)
+# ========================================
+# Handles SIGTERM (docker stop) and SIGINT (Ctrl+C) for clean shutdown
+
+def signal_handler(signum, frame):
+    """
+    Handle shutdown signals gracefully.
+    
+    This function is called when the process receives:
+    - SIGTERM: Sent by Docker/Kubernetes when stopping container
+    - SIGINT: Sent when user presses Ctrl+C
+    
+    The lifespan context manager will handle actual cleanup.
+    """
+    signal_name = signal.Signals(signum).name
+    logger.warning(f"🛑 Received {signal_name} signal - initiating graceful shutdown...")
+    logger.info("⏱️  Grace period: 30 seconds to complete in-flight requests")
+    
+    # The lifespan context manager's __aexit__ will handle cleanup
+    # We just need to exit gracefully to trigger it
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+logger.info("✅ Signal handlers registered (SIGTERM, SIGINT)")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -558,19 +589,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Failed to start mat view refresher: {e}")
 
+    # Warmup Ollama GPU model for fast inference
+    # Disabled for now - causing startup issues
+    # Model will warm up on first request (~10s penalty)
+    logger.info("ℹ️  Ollama warmup disabled (first query will be slower)")
+
     # Auto-start simulator for demo/development
-    logger.info("🔧 Attempting to auto-start simulator...")
-    try:
-        from app.services.lightweight_simulator import get_simulator
-        simulator = get_simulator()
-        logger.info(f"🔧 Simulator instance obtained, running={simulator.running}")
-        if not simulator.running:
-            simulator.start()
-            logger.info("✅ Simulator auto-started for demo mode")
-        else:
-            logger.info("ℹ️  Simulator already running")
-    except Exception as e:
-        logger.warning(f"⚠️  Failed to auto-start simulator: {e}", exc_info=True)
+    # TEMPORARILY DISABLED: Simulator saturates backend (100+ queries/sec)
+    # Causes gateway buffer overflow (10k messages) and blocks all chat queries
+    # Enable manually via API: POST /api/v1/simulator/start
+    logger.info("🔧 Simulator auto-start DISABLED (manual start required)")
+    # try:
+    #     from app.services.lightweight_simulator import get_simulator
+    #     simulator = get_simulator()
+    #     logger.info(f"🔧 Simulator instance obtained, running={simulator.running}")
+    #     if not simulator.running:
+    #         simulator.start()
+    #         logger.info("✅ Simulator auto-started for demo mode")
+    #     else:
+    #         logger.info("ℹ️  Simulator already running")
+    # except Exception as e:
+    #     logger.warning(f"⚠️  Failed to auto-start simulator: {e}", exc_info=True)
 
     # Auto-start Gateway Service for PLC → Kafka bridge
     logger.info("🔧 Attempting to auto-start Gateway Service...")
@@ -833,6 +872,8 @@ app.include_router(ai_agent_router, prefix="/api/v1/agent", tags=["ai-agent"])
 
 # Include WebSocket router for real-time streaming
 app.include_router(websocket_router, prefix="/api/v1")
+app.include_router(websocket_simulator_router, prefix="/api/v1")
+logger.info("✅ WebSocket endpoints registered (OPC UA + Simulator)")
 
 # Include Gateway router for industrial protocol bridge
 from app.api.routes.gateway import router as gateway_router

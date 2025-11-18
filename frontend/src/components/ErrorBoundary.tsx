@@ -13,6 +13,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  errorCount: number;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -22,6 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      errorCount: 0,
     };
   }
 
@@ -34,10 +36,34 @@ export class ErrorBoundary extends Component<Props, State> {
     // Log error to console (in production, send to monitoring service)
     console.error('ErrorBoundary caught an error:', error, errorInfo);
 
-    this.setState({
+    this.setState(prev => ({
       error,
       errorInfo,
-    });
+      errorCount: prev.errorCount + 1,
+    }));
+
+    // Store error for debugging
+    this.logErrorToStorage(error, errorInfo);
+  }
+
+  private logErrorToStorage(error: Error, errorInfo: ErrorInfo) {
+    try {
+      const errorData = {
+        message: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+      };
+
+      const errors = JSON.parse(localStorage.getItem('optiflow_errors') || '[]');
+      errors.push(errorData);
+      // Keep only last 20 errors
+      while (errors.length > 20) errors.shift();
+      localStorage.setItem('optiflow_errors', JSON.stringify(errors));
+    } catch (e) {
+      console.warn('Failed to log error to storage:', e);
+    }
   }
 
   handleReset = () => {
@@ -135,6 +161,71 @@ export class ErrorBoundary extends Component<Props, State> {
                 <li>Checking your internet connection</li>
               </ul>
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+/**
+ * Widget-specific Error Boundary
+ * Smaller fallback UI for individual widget failures
+ */
+export class WidgetErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+    errorCount: 0,
+  };
+
+  public static getDerivedStateFromError(error: Error): Partial<State> {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Widget error:', error.message);
+    this.setState({ errorInfo });
+  }
+
+  private resetError = () => {
+    this.setState({
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    });
+  };
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-full w-full flex items-center justify-center bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+          <div className="text-center">
+            <svg
+              className="w-8 h-8 text-red-500 mx-auto mb-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">
+              Widget Error
+            </p>
+            <button
+              onClick={this.resetError}
+              className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+            >
+              Retry
+            </button>
           </div>
         </div>
       );

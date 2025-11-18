@@ -31,9 +31,12 @@ import { websocketService } from './services/websocket';
 import { ModernDashboard } from './pages/ModernDashboard';
 import { ProfessionalDashboard } from './pages/ProfessionalDashboard';
 import { ProfessionalAnalytics } from './pages/ProfessionalAnalytics';
+import { MLAnalyticsDashboard } from './pages/MLAnalyticsDashboard';
 import { ProfessionalRealtime } from './pages/ProfessionalRealtime';
 import { ProfessionalAlarms } from './pages/ProfessionalAlarms';
 import RealtimeTagPage from './pages/RealtimeTagPage';
+import RealtimeTagsMonitor from './pages/RealtimeTagsMonitor';
+import EquipmentStatistics from './pages/EquipmentStatistics';
 import { ModernAlarmsPage } from './pages/ModernAlarmsPage';
 import { AnalyticsHub } from './pages/AnalyticsHub';
 import { SettingsPage } from './pages/SettingsPage';
@@ -113,7 +116,10 @@ function App() {
                   <Route index element={<ProfessionalDashboard />} />
                   <Route path="dashboard" element={<ProfessionalDashboard />} />
                   <Route path="dashboard/classic" element={<ModernDashboard />} />
+                  <Route path="dashboard/executive" element={<ExecutiveDashboard />} />
                   <Route path="dashboards" element={<DashboardsList />} />
+                  <Route path="dashboards/builder" element={<DashboardBuilderPage />} />
+                  <Route path="dashboards/new" element={<DashboardBuilder />} />
                   <Route path="dashboards/:id" element={<DashboardBuilder />} />
                   <Route path="dashboards/:id/edit" element={<DashboardBuilder />} />
 
@@ -122,23 +128,27 @@ function App() {
                       ======================================== */}
                   <Route path="realtime" element={<ProfessionalRealtime />} />
                   <Route path="realtime/classic" element={<RealtimeTagPage />} />
-                  <Route path="realtime/tags" element={<ExtendedTagsPage />} />
+                  <Route path="realtime/tags" element={<RealtimeTagsMonitor />} />
                   <Route path="realtime/tags/:id" element={<TagDetailsPage />} />
+                  <Route path="realtime/extended" element={<ExtendedTagsPage />} />
 
                   {/* ========================================
                       🚨 MODULE 3: ALARMS (Events & History)
                       ======================================== */}
-                  <Route path="alarms" element={<ProfessionalAlarms />} />
-                  <Route path="alarms/classic" element={<ModernAlarmsPage />} />
-                  <Route path="alarms/active" element={<ProfessionalAlarms />} />
-                  <Route path="alarms/history" element={<ProfessionalAlarms />} />
+                  <Route path="alarms" element={<ModernAlarmsPage />} />
+                  <Route path="alarms/active" element={<ModernAlarmsPage />} />
+                  <Route path="alarms/history" element={<ModernAlarmsPage />} />
+                  <Route path="alarms/statistics" element={<ModernAlarmsPage />} />
+                  <Route path="alarms/professional" element={<ProfessionalAlarms />} />
 
                   {/* ========================================
                       🤖 MODULE 4: ANALYTICS (ML Insights)
                       ======================================== */}
-                  <Route path="analytics" element={<ProfessionalAnalytics />} />
-                  <Route path="analytics/classic" element={<AnalyticsHub />} />
-                  <Route path="analytics/ml-insights" element={<ProfessionalAnalytics />} />
+                  <Route path="analytics" element={<MLAnalyticsDashboard />} />
+                  <Route path="analytics/statistics" element={<EquipmentStatistics />} />
+                  <Route path="analytics/hub" element={<AnalyticsHub />} />
+                  <Route path="analytics/ml-insights" element={<MLAnalyticsDashboard />} />
+                  <Route path="analytics/professional" element={<ProfessionalAnalytics />} />
                   <Route path="analytics/ai-monitoring" element={<AIMonitoringDashboard />} />
                   <Route path="analytics/chat" element={<ChatPage />} />
 
@@ -192,7 +202,7 @@ function App() {
                   <Route path="asset-health-hub" element={<Navigate to="/analytics" replace />} />
                   <Route path="asset-health" element={<Navigate to="/analytics" replace />} />
                   <Route path="health-trends" element={<Navigate to="/analytics" replace />} />
-                  <Route path="dashboard-builder" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="dashboard-builder" element={<Navigate to="/dashboards/builder" replace />} />
                   <Route path="classic-dashboard" element={<Navigate to="/dashboard" replace />} />
                 </Route>
 

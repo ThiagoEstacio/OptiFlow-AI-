@@ -21,6 +21,7 @@ import {
   TableChart,
   CheckCircle
 } from '@mui/icons-material';
+import apiClient from '../api/client';
 
 interface DashboardExportButtonProps {
   dashboardId: string;
@@ -84,33 +85,14 @@ export const DashboardExportButton: React.FC<DashboardExportButtonProps> = ({
         throw new Error('Nenhum widget encontrado no dashboard');
       }
 
-      // Get auth token
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      // Call export API
-      const response = await fetch('http://localhost:8000/api/v1/reports/export-dashboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          dashboard_id: dashboardId,
-          dashboard_name: dashboardName,
-          format: format,
-          widgets: widgetsData
-        })
+      // Call export API using apiClient (handles auth automatically)
+      const response = await apiClient.post('/api/v1/reports/export-dashboard', {
+        dashboard_id: dashboardId,
+        dashboard_name: dashboardName,
+        format: format,
+        widgets: widgetsData
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Erro ao exportar dashboard');
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       // Auto download
       if (data.filename) {

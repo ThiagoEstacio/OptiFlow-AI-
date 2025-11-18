@@ -1,7 +1,9 @@
 /**
- * ChatMessage component - Renders a single chat message
+ * ChatMessage component - Renders a single chat message with Markdown support
  */
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Message, MessageRole } from '../types/chat';
 import { Bot, User } from 'lucide-react';
 
@@ -43,9 +45,25 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
               : 'bg-gray-100 text-gray-900 rounded-tl-none border border-gray-200'
           }`}
         >
-          <div className="whitespace-pre-wrap break-words">
-            {message.content}
-          </div>
+          {/* Render Markdown for assistant messages, plain text for user */}
+          {isAssistant ? (
+            <div className="prose prose-sm max-w-none
+              prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-2
+              prose-h2:text-lg prose-h3:text-base prose-h4:text-sm
+              prose-p:my-1 prose-p:leading-relaxed
+              prose-strong:font-semibold prose-strong:text-gray-900
+              prose-ul:my-2 prose-ul:pl-4 prose-li:my-0.5
+              prose-a:text-blue-600 prose-a:underline hover:prose-a:text-blue-800
+              [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <div className="whitespace-pre-wrap break-words">
+              {message.content}
+            </div>
+          )}
         </div>
 
         {/* Timestamp */}

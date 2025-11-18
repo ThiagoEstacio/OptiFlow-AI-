@@ -19,6 +19,7 @@ import {
   useTheme
 } from '@mui/material';
 import { Grid } from '../components/GridWrapper';
+import apiClient from '../api/client';
 import {
   Dashboard as DashboardIcon,
   Memory,
@@ -39,7 +40,6 @@ import { StatWidget } from '../components/professional/StatWidget';
 import { AnalyticsCard } from '../components/professional/AnalyticsCard';
 import { ChartWidget } from '../components/professional/ChartWidget';
 import { useRealtimeData, useWebSocketStatus, SimulatorUpdate } from '../hooks/useRealtimeData';
-import apiClient from '../api/client';
 
 export const ProfessionalDashboard: React.FC = () => {
   const theme = useTheme();
@@ -121,13 +121,11 @@ export const ProfessionalDashboard: React.FC = () => {
 
   const loadMLModels = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/ml/models');
-      if (response.ok) {
-        const models = await response.json();
-        // Update ML predictions count from model metrics
-        if (models.length > 0) {
-          setStats(prev => ({ ...prev, mlPredictions: models.length * 5140 }));
-        }
+      const response = await apiClient.get('/api/v1/ml/models/');
+      const models = response.data;
+      // Update ML predictions count from model metrics
+      if (Array.isArray(models) && models.length > 0) {
+        setStats(prev => ({ ...prev, mlPredictions: models.length * 5140 }));
       }
     } catch (error) {
       console.error('Error loading ML models:', error);
@@ -137,25 +135,22 @@ export const ProfessionalDashboard: React.FC = () => {
   const loadPerformanceChart = async () => {
     try {
       // Load last 24 hours of warehouse level data
-      const response = await fetch(
-        'http://localhost:8000/api/v1/tags/timeseries/WAREHOUSE_LEVEL_PCT_PV?start_minutes_ago=1440'
+      const result = await apiClient.get(
+        '/api/v1/tags/timeseries/WAREHOUSE_LEVEL_PCT_PV?start_minutes_ago=1440'
       );
-      if (response.ok) {
-        const result = await response.json();
-        if (result.data && result.data.length > 0) {
-          // Sample every 4 hours (6 points)
-          const step = Math.floor(result.data.length / 6);
-          const samples = result.data.filter((_: any, i: number) => i % step === 0).slice(0, 7);
+      if (result && result.data && result.data.length > 0) {
+        // Sample every 4 hours (6 points)
+        const step = Math.floor(result.data.length / 6);
+        const samples = result.data.filter((_: any, i: number) => i % step === 0).slice(0, 7);
 
-          const chartData = samples.map((point: any) => ({
-            time: new Date(point.timestamp).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit'
-            }),
-            value: point.value
-          }));
-          setPerformanceData(chartData);
-        }
+        const chartData = samples.map((point: any) => ({
+          time: new Date(point.timestamp).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          value: point.value
+        }));
+        setPerformanceData(chartData);
       }
     } catch (error) {
       console.error('Error loading performance chart:', error);
@@ -165,25 +160,22 @@ export const ProfessionalDashboard: React.FC = () => {
   const loadEnergyChart = async () => {
     try {
       // Load last 12 hours of power consumption
-      const response = await fetch(
-        'http://localhost:8000/api/v1/tags/timeseries/SLD01_POWER_KW_PV?start_minutes_ago=720'
+      const result = await apiClient.get(
+        '/api/v1/tags/timeseries/SLD01_POWER_KW_PV?start_minutes_ago=720'
       );
-      if (response.ok) {
-        const result = await response.json();
-        if (result.data && result.data.length > 0) {
-          // Sample every 2 hours (6 points)
-          const step = Math.floor(result.data.length / 6);
-          const samples = result.data.filter((_: any, i: number) => i % step === 0).slice(0, 7);
+      if (result && result.data && result.data.length > 0) {
+        // Sample every 2 hours (6 points)
+        const step = Math.floor(result.data.length / 6);
+        const samples = result.data.filter((_: any, i: number) => i % step === 0).slice(0, 7);
 
-          const chartData = samples.map((point: any) => ({
-            hour: new Date(point.timestamp).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit'
-            }),
-            consumption: point.value
-          }));
-          setEnergyData(chartData);
-        }
+        const chartData = samples.map((point: any) => ({
+          hour: new Date(point.timestamp).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          consumption: point.value
+        }));
+        setEnergyData(chartData);
       }
     } catch (error) {
       console.error('Error loading energy chart:', error);
@@ -193,23 +185,20 @@ export const ProfessionalDashboard: React.FC = () => {
   const loadProductionChart = async () => {
     try {
       // Load last 7 days of production data
-      const response = await fetch(
-        'http://localhost:8000/api/v1/tags/timeseries/SLD01_FLOW_TPH_PV?start_minutes_ago=10080'
+      const result = await apiClient.get(
+        '/api/v1/tags/timeseries/SLD01_FLOW_TPH_PV?start_minutes_ago=10080'
       );
-      if (response.ok) {
-        const result = await response.json();
-        if (result.data && result.data.length > 0) {
-          // Sample daily (7 points)
-          const step = Math.floor(result.data.length / 7);
-          const samples = result.data.filter((_: any, i: number) => i % step === 0).slice(0, 7);
+      if (result && result.data && result.data.length > 0) {
+        // Sample daily (7 points)
+        const step = Math.floor(result.data.length / 7);
+        const samples = result.data.filter((_: any, i: number) => i % step === 0).slice(0, 7);
 
-          const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-          const chartData = samples.map((point: any, index: number) => ({
-            day: days[index % 7],
-            units: point.value
-          }));
-          setProductionData(chartData);
-        }
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const chartData = samples.map((point: any, index: number) => ({
+          day: days[index % 7],
+          units: point.value
+        }));
+        setProductionData(chartData);
       }
     } catch (error) {
       console.error('Error loading production chart:', error);

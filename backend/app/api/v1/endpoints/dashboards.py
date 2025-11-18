@@ -5,6 +5,7 @@ Provides CRUD operations for dashboards, widgets, templates, and sharing
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from uuid import UUID
 
@@ -73,10 +74,15 @@ async def create_dashboard(
                 refresh_interval=widget_data.refresh_interval
             )
             db.add(widget)
-    
+
     await db.commit()
-    await db.refresh(dashboard)
-    
+
+    # Re-fetch with eager loading of widgets to avoid lazy loading issues
+    result = await db.execute(
+        select(Dashboard).options(selectinload(Dashboard.widgets)).where(Dashboard.id == dashboard.id)
+    )
+    dashboard = result.scalar_one()
+
     return dashboard
 
 

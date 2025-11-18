@@ -37,7 +37,7 @@ import { PORT_GRAIN_TERMINAL_TAGS, type Tag as PortTag } from '../data/portGrain
 
 export interface Widget {
   id: string;
-  type: 'gauge' | 'timeseries' | 'value' | 'chart' | 'kpi' | 'status' | 'table' | 'progress' | 'sparkline' | 'pie' | 'bar' | 'heatmap';
+  type: 'gauge' | 'timeseries' | 'value' | 'chart' | 'kpi' | 'status' | 'table' | 'progress' | 'sparkline' | 'pie' | 'bar' | 'heatmap' | 'alarm' | 'map' | 'text' | 'image' | 'video';
   position: { x: number; y: number };
   size: { width: number; height: number };
   config: {
@@ -70,6 +70,10 @@ export interface Widget {
     showTrend?: boolean;
     // Table specific
     columns?: any[];
+    // Text/Media specific
+    content?: string;
+    imageUrl?: string;
+    videoUrl?: string;
     // General
     theme?: 'default' | 'minimal' | 'modern' | 'industrial';
     size?: 'sm' | 'md' | 'lg';
@@ -152,6 +156,16 @@ export const DashboardBuilderPage: React.FC = () => {
           return { width: 280, height: 280 };
         case 'value':
           return { width: 220, height: 180 };
+        case 'alarm':
+          return { width: 350, height: 300 };
+        case 'text':
+          return { width: 400, height: 200 };
+        case 'image':
+          return { width: 400, height: 300 };
+        case 'video':
+          return { width: 480, height: 360 };
+        case 'map':
+          return { width: 500, height: 400 };
         default:
           return { width: 250, height: 250 };
       }
@@ -375,16 +389,27 @@ export const DashboardBuilderPage: React.FC = () => {
     <DndProvider backend={HTML5Backend}>
       <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+        <div className="bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 border-b border-gray-200/80 dark:border-gray-700 px-6 py-4 shadow-sm">
           <div className="flex items-center justify-between">
             {/* Left side - Title and name */}
             <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Dashboard Builder</h1>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg">
+                  <Layout className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                    Dashboard Builder
+                  </h1>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Drag & Drop Interface</p>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-gray-300 dark:bg-gray-600" />
               <input
                 type="text"
                 value={dashboardName}
                 onChange={(e) => setDashboardName(e.target.value)}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all font-medium min-w-[200px]"
                 placeholder="Dashboard name"
               />
             </div>
@@ -566,20 +591,42 @@ export const DashboardBuilderPage: React.FC = () => {
         </div>
 
         {/* Status Bar */}
-        <div className="bg-gray-800 dark:bg-gray-900 text-white px-4 py-2 text-sm flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <span>Widgets: {widgets.length}</span>
-            <span>Tags: {displayTags.length}</span>
-            {selectedWidget && <span>• Selected: {selectedWidgetObj?.type}</span>}
-            <span>• Grid: {showGrid ? 'ON' : 'OFF'}</span>
-            <span>• Snap: {gridSnapping.isSnapping ? 'ON' : 'OFF'}</span>
-            <span className="flex items-center">
-              <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-              Live
-            </span>
+        <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-950 dark:to-gray-900 text-white px-6 py-3 text-sm flex items-center justify-between border-t border-gray-700/50">
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center gap-2 px-3 py-1 bg-gray-700/50 rounded-lg">
+              <span className="text-gray-400 text-xs">Widgets</span>
+              <span className="font-semibold text-blue-400">{widgets.length}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1 bg-gray-700/50 rounded-lg">
+              <span className="text-gray-400 text-xs">Tags</span>
+              <span className="font-semibold text-green-400">{displayTags.length}</span>
+            </div>
+            {selectedWidget && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+                <span className="text-gray-300 text-xs">Selected</span>
+                <span className="font-semibold text-blue-400 capitalize">{selectedWidgetObj?.type}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-3 text-xs">
+              <span className={`flex items-center gap-1.5 ${showGrid ? 'text-green-400' : 'text-gray-500'}`}>
+                <Grid3X3 className="w-3.5 h-3.5" />
+                Grid {showGrid ? 'ON' : 'OFF'}
+              </span>
+              <span className={`flex items-center gap-1.5 ${gridSnapping.isSnapping ? 'text-blue-400' : 'text-gray-500'}`}>
+                Snap {gridSnapping.isSnapping ? 'ON' : 'OFF'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1 bg-green-600/20 border border-green-500/30 rounded-lg">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              <span className="text-xs font-medium text-green-400">LIVE</span>
+            </div>
           </div>
-          <div className="text-gray-400">
-            💡 Tip: Use Templates for quick start • Right-click widgets for options
+          <div className="text-gray-400 text-xs flex items-center gap-2">
+            <span className="text-yellow-400">💡</span>
+            <span>Use Templates for quick start • Drag tags to widgets • Double-click to edit titles</span>
           </div>
         </div>
 
@@ -629,7 +676,13 @@ export const DashboardBuilderPage: React.FC = () => {
             availableTags={displayTags}
             currentWidgets={widgets}
             onAddWidgets={(newWidgets) => {
-              setWidgets(prev => [...prev, ...newWidgets]);
+              console.log('Receiving widgets from AI:', newWidgets);
+              console.log('Current widgets before:', widgets.length);
+              setWidgets(prev => {
+                const updated = [...prev, ...newWidgets];
+                console.log('Widgets after adding:', updated.length);
+                return updated;
+              });
             }}
             onClose={() => setShowAIAssistant(false)}
           />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import apiClient from '../api/client';
 import {
   Box,
   Container,
@@ -104,32 +105,37 @@ const AdminPage: React.FC = () => {
     setLoading(true);
     try {
       // Fetch system metrics
-      const metricsResponse = await fetch('http://localhost:8000/api/v1/admin/system/metrics');
-      if (metricsResponse.ok) {
-        const metricsData = await metricsResponse.json();
-        setSystemMetrics(metricsData);
+      try {
+        const metricsData = await apiClient.get('/api/v1/admin/system/metrics');
+        if (metricsData) {
+          setSystemMetrics(metricsData);
+        }
+      } catch (err) {
+        console.warn('System metrics endpoint not available');
       }
 
       // Fetch Docker containers
-      const containersResponse = await fetch('http://localhost:8000/api/v1/admin/docker/containers');
-      if (containersResponse.ok) {
-        const containersData = await containersResponse.json();
-        const formattedContainers = containersData.map((c: any) => ({
-          name: c.name,
-          status: c.health,
-          health: c.health,
-          ports: c.ports,
-          image: c.image,
-          created: c.created,
-        }));
-        setContainers(formattedContainers);
+      try {
+        const containersData = await apiClient.get('/api/v1/admin/docker/containers');
+        if (Array.isArray(containersData)) {
+          const formattedContainers = containersData.map((c: any) => ({
+            name: c.name,
+            status: c.health,
+            health: c.health,
+            ports: c.ports,
+            image: c.image,
+            created: c.created,
+          }));
+          setContainers(formattedContainers);
+        }
+      } catch (err) {
+        console.warn('Docker containers endpoint not available');
       }
 
       // Fetch GPU info
-      const gpuResponse = await fetch('http://localhost:8000/api/v1/admin/gpu/info');
-      if (gpuResponse.ok) {
-        const gpuData = await gpuResponse.json();
-        if (gpuData.available) {
+      try {
+        const gpuData = await apiClient.get('/api/v1/admin/gpu/info');
+        if (gpuData && gpuData.available) {
           setGPUInfo({
             available: true,
             name: gpuData.name,
@@ -141,29 +147,33 @@ const AdminPage: React.FC = () => {
         } else {
           setGPUInfo({ available: false });
         }
+      } catch (err) {
+        console.warn('GPU info endpoint not available');
       }
 
       // Fetch services health
-      const servicesResponse = await fetch('http://localhost:8000/api/v1/admin/services/health');
-      if (servicesResponse.ok) {
-        const servicesData = await servicesResponse.json();
-        setServices(servicesData.map((s: any) => ({
-          name: s.name,
-          status: s.status,
-          url: s.url,
-          version: '1.0.0',
-          uptime: '2h 15m',
-        })));
+      try {
+        const servicesData = await apiClient.get('/api/v1/admin/services/health');
+        if (Array.isArray(servicesData)) {
+          setServices(servicesData.map((s: any) => ({
+            name: s.name,
+            status: s.status,
+            url: s.url,
+            version: '1.0.0',
+            uptime: '2h 15m',
+          })));
+        }
+      } catch (err) {
+        console.warn('Services health endpoint not available');
       }
 
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error fetching system status:', error);
-      
+
       // Fallback to simulator GPU info
       try {
-        const simResponse = await fetch('http://localhost:8000/api/v1/simulator/status');
-        const simData = await simResponse.json();
+        const simData = await apiClient.get('/api/v1/simulator/status');
 
         if (simData.dem_physics?.gpu_info) {
           setGPUInfo({

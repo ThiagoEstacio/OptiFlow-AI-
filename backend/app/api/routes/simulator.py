@@ -196,7 +196,13 @@ async def set_gate_setpoint(gate_id: int, request: SetpointRequest):
             raise HTTPException(status_code=400, detail="Setpoint deve ser entre 0 e 100%")
 
         sim = get_simulator()
-        sim.set_gate_manual(gate_id, request.value)
+        # Use set_gate_setpoint for LightweightGrainTerminalSimulator
+        # or set_gate_manual for GrainTerminalSimulator
+        if hasattr(sim, 'set_gate_setpoint'):
+            # LightweightGrainTerminalSimulator uses 0-based index
+            sim.set_gate_setpoint(gate_id - 1, request.value)
+        else:
+            sim.set_gate_manual(gate_id, request.value)
 
         return CommandResponse(
             success=True,
@@ -216,8 +222,12 @@ async def set_all_gates_setpoint(request: SetpointRequest):
             raise HTTPException(status_code=400, detail="Setpoint deve ser entre 0 e 100%")
 
         sim = get_simulator()
-        for gate in sim.gates:
-            sim.set_gate_manual(gate.id, request.value)
+        # Use set_all_gates_setpoint for LightweightGrainTerminalSimulator
+        if hasattr(sim, 'set_all_gates_setpoint'):
+            sim.set_all_gates_setpoint(request.value)
+        else:
+            for gate in sim.gates:
+                sim.set_gate_manual(gate.id, request.value)
 
         return CommandResponse(
             success=True,

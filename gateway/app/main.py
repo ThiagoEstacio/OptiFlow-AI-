@@ -158,7 +158,54 @@ class Gateway:
 
                             device_count += 1
                         else:
+                            # No tags configured - try auto-discovery for OPC UA gateways
                             logger.warning(f"⚠️  Gateway '{gateway_config['name']}' has no tags configured")
+                            
+                            if gateway_config['gateway_type'].lower() == 'opcua':
+                                logger.info(f"   Attempting OPC UA auto-discovery...")
+                                
+                                try:
+                                    # Extract endpoint from connection_config
+                                    connection_config = gateway_config.get('connection_config', {})
+                                    if isinstance(connection_config, str):
+                                        import json
+                                        connection_config = json.loads(connection_config)
+                                    
+                                    endpoint = connection_config.get('endpoint')
+                                    namespace_index = int(connection_config.get('namespace', connection_config.get('namespace_index', 2)))
+                                    
+                                    if endpoint:
+                                        logger.info(f"   Discovering tags from {endpoint}...")
+                                        
+                                        # Remove the device that was added without tags
+                                        await self.device_manager.remove_device(device_config["device_id"])
+                                        
+                                        # Use device manager's discovery method with gateway_id
+                                        discovery_result = await self.device_manager.add_opcua_device_with_discovery(
+                                            device_id=device_config["device_id"],
+                                            endpoint=endpoint,
+                                            gateway_id=str(gateway_config['id']),  # Pass gateway UUID for tag registration
+                                            namespace_index=namespace_index,
+                                            tag_filter=None,  # Discover ALL tags
+                                            scan_rate=device_config["scan_rate"]
+                                        )
+                                        
+                                        if discovery_result["success"]:
+                                            logger.info(f"✅ Auto-discovered {discovery_result['tag_count']} tags")
+                                            logger.info(f"   Sample tags:")
+                                            for tag in discovery_result['tags'][:5]:
+                                                logger.info(f"     - {tag['tag_name']}")
+                                            if discovery_result['tag_count'] > 5:
+                                                logger.info(f"     ... and {discovery_result['tag_count'] - 5} more")
+                                            device_count += 1
+                                        else:
+                                            logger.error(f"   Discovery failed: {discovery_result.get('error')}")
+                                    else:
+                                        logger.error(f"   No endpoint found in connection_config")
+                                except Exception as e:
+                                    logger.error(f"   Auto-discovery failed: {str(e)}")
+                                    import traceback
+                                    logger.error(traceback.format_exc())
                     else:
                         logger.error(f"❌ Failed to add gateway '{gateway_config['name']}'")
 

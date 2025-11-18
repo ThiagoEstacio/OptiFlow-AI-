@@ -71,7 +71,7 @@ export function useRealtimeData<T = any>(
   connect: () => void;
   disconnect: () => void;
 } {
-  const { autoConnect = true, url = 'ws://localhost:8000/ws' } = options;
+  const { autoConnect = true, url = 'ws://localhost:8000/api/v1/ws/simulator/stream' } = options;
 
   const [data, setData] = useState<T | null>(null);
   const [isConnected, setIsConnected] = useState(false);

@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client';
+import { getCircuitBreaker, CircuitBreakerError } from '../utils/circuitBreaker';
 
 interface LiveTagData {
   value: number | string | boolean | null;
@@ -14,6 +15,12 @@ interface LiveTagData {
   loading: boolean;
   error: string | null;
 }
+
+// Global circuit breaker for tag data fetching
+const tagDataCircuitBreaker = getCircuitBreaker('tagData', {
+  failureThreshold: 3,
+  resetTimeout: 15000, // 15 seconds
+});
 
 interface UseLiveTagDataOptions {
   tagId?: string;
@@ -49,10 +56,7 @@ export const useLiveTagData = (
     error: null,
   });
 
-  const wsRef = useRef<WebSocket | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const wsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const receivedDataRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!tagId) {
@@ -67,120 +71,6 @@ export const useLiveTagData = (
     }
 
     setData(prev => ({ ...prev, loading: true, error: null }));
-    receivedDataRef.current = false;
-
-    // Try WebSocket first
-    const connectWebSocket = () => {
-      try {
-        // Use localhost for browser WebSocket connections (not backend service name)
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname;
-        const port = '8000'; // Backend port
-        const wsUrl = `${protocol}//${host}:${port}`;
-        const ws = new WebSocket(`${wsUrl}/api/v1/analytics/ws/stream?token=dummy`);
-
-        ws.onopen = () => {
-          console.log(`WebSocket connected for tag ${tagId}`);
-
-          // Subscribe to tag
-          ws.send(JSON.stringify({
-            query: {
-              tag_ids: [tagId],
-              range: '1m',
-            },
-            refresh_interval: 1, // 1 second
-            mode: 'continuous',
-          }));
-
-          setData(prev => ({ ...prev, loading: false }));
-
-          // Set timeout: if no data received in 3 seconds, fall back to simulation
-          wsTimeoutRef.current = setTimeout(() => {
-            if (!receivedDataRef.current) {
-              console.log(`No data received from WebSocket for tag ${tagId}, falling back to simulation`);
-              ws.close();
-              startPolling();
-            }
-          }, 3000);
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-
-            if (message.type === 'data' && message.data) {
-              receivedDataRef.current = true;
-
-              // Clear timeout since we received data
-              if (wsTimeoutRef.current) {
-                clearTimeout(wsTimeoutRef.current);
-                wsTimeoutRef.current = null;
-              }
-
-              // Extract value from response
-              const result = message.data;
-              if (result.data && result.data.length > 0) {
-                const latest = result.data[result.data.length - 1];
-                setData({
-                  value: latest.value,
-                  timestamp: latest.timestamp,
-                  quality: latest.quality || 'good',
-                  loading: false,
-                  error: null,
-                });
-              }
-            }
-          } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-          }
-        };
-
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          setData(prev => ({ ...prev, error: 'WebSocket connection error' }));
-
-          // Clear timeout
-          if (wsTimeoutRef.current) {
-            clearTimeout(wsTimeoutRef.current);
-            wsTimeoutRef.current = null;
-          }
-
-          // Fallback to polling
-          startPolling();
-        };
-
-        ws.onclose = () => {
-          console.log('WebSocket closed, falling back to polling');
-
-          // Clear timeout
-          if (wsTimeoutRef.current) {
-            clearTimeout(wsTimeoutRef.current);
-            wsTimeoutRef.current = null;
-          }
-
-          startPolling();
-        };
-
-        wsRef.current = ws;
-
-      } catch (error) {
-        console.error('Failed to create WebSocket:', error);
-        startPolling();
-      }
-    };
-
-    // Polling fallback
-    const startPolling = () => {
-      if (pollingIntervalRef.current) return;
-
-      // Initial fetch
-      fetchLatestValue();
-
-      // Poll every 2 seconds
-      pollingIntervalRef.current = setInterval(() => {
-        fetchLatestValue();
-      }, 2000);
-    };
 
     const generateSimulatedValue = () => {
       // Generate realistic simulated value with some variation
@@ -197,9 +87,25 @@ export const useLiveTagData = (
     };
 
     const fetchLatestValue = async () => {
+      // Check circuit breaker before making request
+      if (!tagDataCircuitBreaker.canExecute()) {
+        // Circuit is open, use simulated data
+        const simValue = generateSimulatedValue();
+        setData({
+          value: simValue,
+          timestamp: new Date().toISOString(),
+          quality: 'simulated-offline',
+          loading: false,
+          error: null,
+        });
+        return;
+      }
+
       try {
-        // Try to get latest value from Redis cache or last value endpoint
-        const response = await apiClient.getLatestValue(tagId);
+        // Execute with circuit breaker protection
+        const response = await tagDataCircuitBreaker.execute(() =>
+          apiClient.getLatestValue(tagId)
+        );
         setData({
           value: response.value,
           timestamp: response.timestamp,
@@ -208,37 +114,45 @@ export const useLiveTagData = (
           error: null,
         });
       } catch (error) {
-        console.error('Error fetching latest value:', error);
-        // Generate demo data with realistic values
-        setData(prev => ({
-          ...prev,
-          value: generateSimulatedValue(),
+        // Generate demo data with realistic values (silent fallback)
+        const simValue = generateSimulatedValue();
+        const isCircuitOpen = error instanceof CircuitBreakerError;
+        setData({
+          value: simValue,
           timestamp: new Date().toISOString(),
-          quality: 'simulated',
+          quality: isCircuitOpen ? 'simulated-offline' : 'simulated',
           loading: false,
-        }));
+          error: null,
+        });
       }
     };
 
-    // Start connection
-    connectWebSocket();
+    // Start polling immediately - generate initial simulated value right away
+    const initialValue = generateSimulatedValue();
+    setData({
+      value: initialValue,
+      timestamp: new Date().toISOString(),
+      quality: 'simulated',
+      loading: false,
+      error: null,
+    });
+
+    // Then try to fetch from API
+    fetchLatestValue();
+
+    // Poll every 2 seconds for live updates
+    pollingIntervalRef.current = setInterval(() => {
+      fetchLatestValue();
+    }, 2000);
 
     // Cleanup
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
-      if (wsTimeoutRef.current) {
-        clearTimeout(wsTimeoutRef.current);
-        wsTimeoutRef.current = null;
-      }
     };
-  }, [tagId]);
+  }, [tagId, min, max]);
 
   return data;
 };

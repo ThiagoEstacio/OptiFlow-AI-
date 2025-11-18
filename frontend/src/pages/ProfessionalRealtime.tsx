@@ -105,21 +105,19 @@ export const ProfessionalRealtime: React.FC = () => {
 
   const loadHistoricalData = async () => {
     try {
-      const response = await fetch(
-        'http://localhost:8000/api/v1/tags/timeseries/SLD01_FLOW_TPH_PV?start_minutes_ago=5'
+      const response = await apiClient.get(
+        '/api/v1/tags/timeseries/SLD01_FLOW_TPH_PV?start_minutes_ago=5'
       );
-      if (response.ok) {
-        const result = await response.json();
-        if (result.data && result.data.length > 0) {
-          const historicalPoints = result.data.map((point: any) => ({
-            time: new Date(point.timestamp).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit'
-            }),
-            value: point.value
-          }));
-          setChartData(historicalPoints.slice(-20)); // Keep last 20 points
-        }
+      const result = response.data;
+      if (result && result.data && result.data.length > 0) {
+        const historicalPoints = result.data.map((point: any) => ({
+          time: new Date(point.timestamp).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          value: point.value
+        }));
+        setChartData(historicalPoints.slice(-20)); // Keep last 20 points
       }
     } catch (error) {
       console.error('Error loading historical data:', error);

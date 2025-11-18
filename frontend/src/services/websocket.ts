@@ -36,11 +36,13 @@ class WebSocketService {
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          const { type, data } = message;
+          const { type, ...data } = message; // Extract type and rest of message as data
 
           const handlers = this.messageHandlers.get(type);
           if (handlers) {
-            handlers.forEach((handler) => handler(data));
+            // If message has explicit 'data' property, use it; otherwise use the rest of message
+            const payload = message.data !== undefined ? message.data : data;
+            handlers.forEach((handler) => handler(payload));
           }
 
           // Also call wildcard handlers

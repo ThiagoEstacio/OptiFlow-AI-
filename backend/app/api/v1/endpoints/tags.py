@@ -66,6 +66,66 @@ async def create_tag(
     return tag
 
 
+@router.post("/batch", status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")  # 🔒 Limit batch operations
+async def create_tags_batch(
+    request: Request,
+    tags_in: List[TagCreate],
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create multiple tags in a single operation.
+    Used by gateway for auto-discovery.
+    """
+    created_tags = []
+    skipped_tags = []
+    
+    for tag_in in tags_in:
+        try:
+            # Map schema fields to model fields
+            tag_data = tag_in.model_dump()
+            
+            # Rename fields to match database column names
+            if 'scale_factor' in tag_data:
+                tag_data['scale'] = tag_data.pop('scale_factor')
+            if 'enabled' in tag_data:
+                tag_data['is_active'] = tag_data.pop('enabled')
+            if 'log_enabled' in tag_data:
+                tag_data['enable_quality_check'] = tag_data.pop('log_enabled')
+            
+            # Check if tag already exists
+            stmt = select(Tag).where(Tag.name == tag_data['name'])
+            result = await db.execute(stmt)
+            existing = result.scalar_one_or_none()
+            
+            if existing:
+                skipped_tags.append({
+                    "name": tag_data['name'],
+                    "reason": "Tag already exists"
+                })
+                continue
+            
+            tag = Tag(**tag_data)
+            db.add(tag)
+            created_tags.append(tag_data['name'])
+        except Exception as e:
+            skipped_tags.append({
+                "name": tag_data.get('name', 'unknown'),
+                "reason": str(e)
+            })
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "created_count": len(created_tags),
+        "skipped_count": len(skipped_tags),
+        "created_tags": created_tags[:10],  # Return first 10
+        "skipped_tags": skipped_tags[:10],  # Return first 10
+        "total_requested": len(tags_in)
+    }
+
+
 @router.get("/{tag_id}", response_model=TagResponse)
 async def get_tag(
     tag_id: UUID,
@@ -269,7 +329,7 @@ async def get_realtime_tag_values_batch(tag_names: List[str]):
 @router.get("/timeseries/{tag_name}")
 async def get_tag_timeseries(
     tag_name: str,
-    start_minutes_ago: int = Query(default=60, ge=1, le=1440, description="Minutes ago to start query"),
+    start_minutes_ago: int = Query(default=60, ge=1, le=525600, description="Minutes ago to start query (max: 525600 = 1 year)"),
     aggregation: Optional[str] = Query(default=None, description="Aggregation function: mean, min, max, sum, count"),
     interval: Optional[str] = Query(default=None, description="Aggregation interval (e.g., '1m', '5m', '1h')"),
 ):
@@ -280,7 +340,7 @@ async def get_tag_timeseries(
 
     Parameters:
     - tag_name: Name of the tag (e.g., 'TEST_COUNTER_PV')
-    - start_minutes_ago: How many minutes back to query (default: 60, max: 1440 = 24h)
+    - start_minutes_ago: How many minutes back to query (default: 60, max: 525600 = 1 year)
     - aggregation: Optional aggregation function (mean, min, max, sum, count)
     - interval: Aggregation interval (e.g., '1m' for 1 minute, '5m', '1h')
 
@@ -322,7 +382,7 @@ async def get_tag_timeseries(
 @router.post("/timeseries/batch")
 async def get_multiple_tags_timeseries(
     tag_names: List[str],
-    start_minutes_ago: int = Query(default=60, ge=1, le=1440),
+    start_minutes_ago: int = Query(default=60, ge=1, le=525600),
     aggregation: Optional[str] = Query(default=None),
     interval: Optional[str] = Query(default=None),
 ):

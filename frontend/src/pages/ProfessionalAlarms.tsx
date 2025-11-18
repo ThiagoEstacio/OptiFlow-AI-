@@ -21,6 +21,7 @@ import {
   Button
 } from '@mui/material';
 import { Grid } from '../components/GridWrapper';
+import apiClient from '../api/client';
 import {
   Notifications,
   Error,
@@ -126,9 +127,9 @@ export const ProfessionalAlarms: React.FC = () => {
 
   const loadAlarmStatistics = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/alarms/statistics');
-      if (response.ok) {
-        const data = await response.json();
+      const response = await apiClient.get('/api/v1/alarms/statistics');
+      const data = response.data;
+      if (data) {
         setStats(data);
       }
     } catch (error) {
@@ -138,9 +139,9 @@ export const ProfessionalAlarms: React.FC = () => {
 
   const loadActiveAlarms = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/alarms/active');
-      if (response.ok) {
-        const data: BackendAlarmEvent[] = await response.json();
+      const response = await apiClient.get('/api/v1/alarms/active');
+      const data: BackendAlarmEvent[] = response.data;
+      if (Array.isArray(data)) {
         const events = convertToTimelineEvents(data);
         setActiveAlarms(events);
       }
@@ -151,9 +152,9 @@ export const ProfessionalAlarms: React.FC = () => {
 
   const loadAlarmHistory = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/alarms/history?limit=50');
-      if (response.ok) {
-        const data: BackendAlarmEvent[] = await response.json();
+      const response = await apiClient.get('/api/v1/alarms/history?limit=50');
+      const data: BackendAlarmEvent[] = response.data;
+      if (Array.isArray(data)) {
         const events = convertToTimelineEvents(data.filter(a => a.state === 'CLEARED'));
         setHistoryAlarms(events);
       }
@@ -209,16 +210,11 @@ export const ProfessionalAlarms: React.FC = () => {
 
   const handleAcknowledge = async (alarmId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/alarms/events/${alarmId}/acknowledge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ comment: 'Acknowledged from frontend' })
+      await apiClient.post(`/api/v1/alarms/events/${alarmId}/acknowledge`, {
+        comment: 'Acknowledged from frontend'
       });
-
-      if (response.ok) {
-        // Reload data
-        loadData();
-      }
+      // Reload data
+      loadData();
     } catch (error) {
       console.error('Error acknowledging alarm:', error);
     }

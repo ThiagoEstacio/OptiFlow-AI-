@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Layout, Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
-import 'react-grid-layout/css/resizable.css';
+// // import 'react-grid-layout/css/resizable.css'; // CSS file not found // CSS file not found - resizable styles included in main styles.css
 
 import * as dashboardAPI from '../services/dashboards.api';
 import WidgetLibrary from '../components/Dashboard/WidgetLibrary';

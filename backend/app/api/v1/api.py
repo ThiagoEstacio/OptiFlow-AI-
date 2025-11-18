@@ -36,6 +36,13 @@ from app.api.v1.endpoints import (
     opcua_tags,
     reports,
     data_quality,
+    health,
+    database_monitor,
+    alarm_partitions,
+    websocket_monitor,
+    prometheus,
+    rate_limits,
+    demo,
 )
 
 api_router = APIRouter()
@@ -72,4 +79,11 @@ api_router.include_router(dashboards.router, prefix="/dashboards", tags=["Dashbo
 api_router.include_router(opcua_tags.router, prefix="/opcua", tags=["OPC UA Tag Browser"])
 api_router.include_router(reports.router, prefix="/reports", tags=["Reports & Export"])
 api_router.include_router(data_quality.router, prefix="/data-quality", tags=["Data Quality Analytics"])
+api_router.include_router(health.router, prefix="/health", tags=["Health Checks"])
+api_router.include_router(database_monitor.router, prefix="/database", tags=["Database Monitoring & Circuit Breakers"])
+api_router.include_router(alarm_partitions.router, prefix="/alarm-partitions", tags=["Alarm Partition Management"])
+api_router.include_router(websocket_monitor.router, prefix="/websocket-monitor", tags=["WebSocket Connection Pool Monitoring"])
+api_router.include_router(prometheus.router, prefix="/prometheus", tags=["Prometheus Metrics Export"])
+api_router.include_router(rate_limits.router, prefix="/rate-limits", tags=["Rate Limiting & Throttling"])
+api_router.include_router(demo.router, prefix="/demo", tags=["Demo & Development Helpers"])
 api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics

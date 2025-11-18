@@ -1,0 +1,6 @@
+# Force rebuild ter 18 nov 2025 06:57:12 -03
+# Bugfix 1763460189
+# GPU fix 1763460861
+# Speed optimizations 1763461578
+# Disable simulator auto-start 1763462668
+# Ollama GPU warmup 1763463763

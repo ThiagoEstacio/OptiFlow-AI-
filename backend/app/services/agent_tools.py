@@ -368,7 +368,9 @@ class AgentToolkit:
         return await self.data_service.calculate_statistics(tag_id, duration)
     
     async def _search_tags(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """Search for tags"""
+        """Search for tags (max 50 results to prevent overload)"""
+        # PROTECTION: Limit max results to prevent memory issues
+        limit = min(limit, 50)
         return await self.data_service.search_tags(query, limit)
     
     async def _compare_tags(self, tag_ids: List[str], duration: str = "24h") -> Dict[str, Any]:
@@ -645,8 +647,11 @@ class AgentToolkit:
 
     async def _get_all_tags(self, limit: int = 50, active_only: bool = True) -> Dict[str, Any]:
         """
-        Get list of all available tags in the system
+        Get list of all available tags in the system (max 50 to prevent overload)
         """
+        # PROTECTION: Enforce max limit to prevent memory/CPU issues
+        limit = min(limit, 50)
+        
         try:
             tags = await self.data_service.get_all_tags(limit=limit, active_only=active_only)
 
@@ -674,46 +679,62 @@ class AgentToolkit:
         Get list of currently active alarms
         """
         try:
-            import httpx
-
-            # Call the alarms API endpoint
-            params = {"limit": limit}
-            if severity:
-                params["severity"] = severity
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "http://localhost:8000/api/v1/alarms/active",
-                    params=params,
-                    timeout=10.0
-                )
-
-                if response.status_code == 200:
-                    alarms_data = response.json()
-
-                    return {
-                        "total_alarms": len(alarms_data),
-                        "alarms": [
-                            {
-                                "alarm_id": alarm.get("id"),
-                                "alarm_name": alarm.get("alarm_name"),
-                                "severity": alarm.get("severity"),
-                                "tag_id": str(alarm.get("tag_id")),
-                                "trigger_value": alarm.get("trigger_value"),
-                                "trigger_timestamp": alarm.get("trigger_timestamp"),
-                                "state": alarm.get("state"),
-                                "description": alarm.get("description"),
-                                "alarm_type": alarm.get("alarm_type")
-                            }
-                            for alarm in alarms_data
-                        ],
+            # Import models directly to query database instead of HTTP call
+            from sqlalchemy import select
+            from app.models.alarm import AlarmEvent, AlarmDefinition, AlarmState, AlarmSeverity
+            from app.db.session import get_db
+            
+            # Get alarms from database directly (more reliable than HTTP from within container)
+            return_value = None
+            async for session in get_db():
+                try:
+                    # Query active alarms with their definitions
+                    stmt = select(AlarmEvent).where(AlarmEvent.state == AlarmState.ACTIVE).order_by(AlarmEvent.trigger_timestamp.desc()).limit(limit)
+                    
+                    if severity:
+                        # Join with definition to filter by severity
+                        severity_enum = AlarmSeverity[severity.upper()]
+                        stmt = stmt.join(AlarmDefinition).where(AlarmDefinition.severity == severity_enum)
+                    
+                    result = await session.execute(stmt)
+                    alarms = result.scalars().all()
+                    
+                    # Get definition details for each alarm
+                    alarm_list = []
+                    for alarm in alarms:
+                        # Get the alarm definition
+                        def_stmt = select(AlarmDefinition).where(AlarmDefinition.id == alarm.definition_id)
+                        def_result = await session.execute(def_stmt)
+                        definition = def_result.scalar_one_or_none()
+                        
+                        if definition:
+                            alarm_list.append({
+                                "alarm_id": str(alarm.id),
+                                "alarm_name": definition.name,
+                                "severity": definition.severity.value if hasattr(definition.severity, 'value') else str(definition.severity),
+                                "tag_id": str(definition.tag_id),
+                                "trigger_value": float(alarm.trigger_value) if alarm.trigger_value is not None else None,
+                                "trigger_timestamp": alarm.trigger_timestamp.isoformat() if alarm.trigger_timestamp else None,
+                                "state": alarm.state.value if hasattr(alarm.state, 'value') else str(alarm.state),
+                                "description": definition.description,
+                                "alarm_type": definition.alarm_type.value if hasattr(definition.alarm_type, 'value') else str(definition.alarm_type)
+                            })
+                    
+                    return_value = {
+                        "total_alarms": len(alarm_list),
+                        "alarms": alarm_list,
                         "filter_applied": f"severity={severity}" if severity else "all severities"
                     }
-                else:
-                    return {"error": f"API returned status {response.status_code}", "alarms": []}
-
+                finally:
+                    await session.close()
+                    break  # Only process first session from generator
+            
+            return return_value
+                
         except Exception as e:
             logger.error(f"Error getting active alarms: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e), "alarms": []}
 
 

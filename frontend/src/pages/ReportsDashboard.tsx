@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import apiClient from '../api/client';
 import {
   Box,
   Container,
@@ -96,9 +97,9 @@ export const ReportsDashboard: React.FC = () => {
 
   const loadTemplates = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/reports/templates');
-      if (response.ok) {
-        const data = await response.json();
+      const response = await apiClient.get('/api/v1/reports/templates');
+      const data = response.data;
+      if (Array.isArray(data)) {
         setTemplates(data);
       }
     } catch (err) {
@@ -108,9 +109,9 @@ export const ReportsDashboard: React.FC = () => {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/reports/history?limit=20');
-      if (response.ok) {
-        const data = await response.json();
+      const response = await apiClient.get('/api/v1/reports/history?limit=20');
+      const data = response.data;
+      if (Array.isArray(data)) {
         setHistory(data);
       }
     } catch (err) {
@@ -126,20 +127,16 @@ export const ReportsDashboard: React.FC = () => {
     setSuccess(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/reports/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          report_type: selectedTemplate.id,
-          start_date: reportConfig.start_date,
-          end_date: reportConfig.end_date,
-          format: reportConfig.format,
-          filters: reportConfig.filters
-        })
+      const response = await apiClient.post('/api/v1/reports/generate', {
+        report_type: selectedTemplate.id,
+        start_date: reportConfig.start_date,
+        end_date: reportConfig.end_date,
+        format: reportConfig.format,
+        filters: reportConfig.filters
       });
+      const data = response.data;
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data) {
         setSuccess(`Relatório gerado com sucesso! Tamanho: ${(data.file_size_bytes / 1024).toFixed(0)} KB`);
         setDialogOpen(false);
         loadHistory();
@@ -149,8 +146,7 @@ export const ReportsDashboard: React.FC = () => {
           handleDownload(data.filename);
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.detail || 'Erro ao gerar relatório');
+        setError('Erro ao gerar relatório');
       }
     } catch (err) {
       setError('Erro de conexão ao gerar relatório');
@@ -170,14 +166,9 @@ export const ReportsDashboard: React.FC = () => {
 
   const handleDelete = async (filename: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/reports/${filename}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        setSuccess('Relatório deletado com sucesso');
-        loadHistory();
-      }
+      await apiClient.delete(`/api/v1/reports/${filename}`);
+      setSuccess('Relatório deletado com sucesso');
+      loadHistory();
     } catch (err) {
       console.error('Error deleting report:', err);
       setError('Erro ao deletar relatório');

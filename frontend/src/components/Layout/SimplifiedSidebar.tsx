@@ -50,6 +50,12 @@ export const SimplifiedSidebar: React.FC = () => {
       path: '/dashboard',
       label: 'Dashboard',
       icon: '📊',
+      children: [
+        { path: '/dashboard', label: 'Principal', icon: '📈' },
+        { path: '/dashboards', label: 'Meus Dashboards', icon: '📋' },
+        { path: '/dashboards/builder', label: 'Builder', icon: '🛠️' },
+        { path: '/dashboard/executive', label: 'Executivo', icon: '💼' },
+      ],
     },
     {
       path: '/realtime',

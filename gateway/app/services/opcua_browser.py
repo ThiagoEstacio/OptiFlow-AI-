@@ -276,7 +276,7 @@ class OPCUABrowser:
                                 max_depth=max_depth,
                                 current_depth=current_depth + 1,
                                 variable_only=variable_only,
-                                parent_node_id=node_id
+                                parent_node_id=child.nodeid.to_string()  # Use child as parent for its descendants
                             )
                             results.extend(child_results)
 
@@ -306,21 +306,69 @@ class OPCUABrowser:
         """
         logger.info("Starting tag discovery...")
 
-        # Browse from Objects folder recursively
+        # Browse from Objects folder recursively - include ALL nodes to build hierarchy
         all_nodes = await self.browse_node(
             node_id="i=85",  # Objects folder
             recursive=True,
             max_depth=10,
-            variable_only=True
+            variable_only=False  # Include Object nodes for hierarchy
         )
 
-        logger.info(f"Browse completed. Found {len(all_nodes)} variable nodes total")
+        logger.info(f"Browse completed. Found {len(all_nodes)} nodes total")
+
+        # Build parent map for hierarchy construction (includes Objects and Variables)
+        parent_map = {}
+        for node in all_nodes:
+            parent_map[node.node_id] = node
+        
+        # Filter only variables for tag creation
+        variable_nodes = [node for node in all_nodes if node.node_class == "Variable"]
+        logger.info(f"Filtered to {len(variable_nodes)} variable nodes")
+
+        # Helper function to build hierarchical path
+        def build_tag_path(node: OPCUANodeInfo, visited=None) -> str:
+            """Build hierarchical tag path (e.g., SILO01.level_pct)"""
+            if visited is None:
+                visited = set()
+            
+            # Avoid infinite loops
+            if node.node_id in visited:
+                return node.browse_name
+            visited.add(node.node_id)
+            
+            # If no parent or parent is Objects/Root, return just the browse_name
+            if not node.parent_node_id or node.parent_node_id in ["i=85", "i=84"]:
+                return node.browse_name
+            
+            # Look up parent node
+            parent_node = parent_map.get(node.parent_node_id)
+            if not parent_node:
+                logger.debug(f"Parent not found for {node.browse_name}, parent_id={node.parent_node_id}")
+                return node.browse_name
+            
+            # Skip generic folder names like "GrainTerminal", "Conveyors", "Silos", "Elevators", "Energy"
+            skip_folders = {"GrainTerminal", "Conveyors", "Silos", "Elevators", "Energy", "Objects"}
+            if parent_node.browse_name in skip_folders:
+                # Skip this level, go to grandparent
+                if parent_node.parent_node_id and parent_node.parent_node_id not in ["i=85", "i=84"]:
+                    grandparent = parent_map.get(parent_node.parent_node_id)
+                    if grandparent and grandparent.browse_name not in skip_folders:
+                        result = f"{grandparent.browse_name}.{node.browse_name}"
+                        logger.debug(f"Built path (skip parent): {result}")
+                        return result
+                return node.browse_name
+            
+            # Recursively build parent path
+            parent_path = parent_node.browse_name
+            result = f"{parent_path}.{node.browse_name}"
+            logger.debug(f"Built path: {result}")
+            return result
 
         tags = []
         filtered_out_namespace = 0
         filtered_out_access = 0
 
-        for node in all_nodes:
+        for node in variable_nodes:
             # Apply namespace filter if specified
             if namespace_filter:
                 # Extract namespace index from node_id (format: ns=X;...)
@@ -338,8 +386,23 @@ class OPCUABrowser:
             is_readable = node.access_level is None or (node.access_level & 1) > 0
 
             if is_readable:
+                # Build hierarchical tag name from parent folder + browse_name
+                # Parent folder is the equipment name (CORR01, SILO01, ELEV01) or category (Energy)
+                parent_node = parent_map.get(node.parent_node_id)
+                skip_folders = ["GrainTerminal", "Conveyors", "Silos", "Elevators", "Objects"]
+                
+                if parent_node and parent_node.browse_name not in skip_folders:
+                    # Parent is equipment name - construct full tag name
+                    tag_name = f"{parent_node.browse_name}_{node.browse_name.upper()}_PV"
+                elif parent_node and parent_node.browse_name == "Energy":
+                    # Special case for Energy folder - use "Energy" as prefix
+                    tag_name = f"Energy_{node.browse_name.upper()}_PV"
+                else:
+                    # Fallback to just browse_name
+                    tag_name = node.browse_name
+                
                 tag = {
-                    "tag_name": node.browse_name,
+                    "tag_name": tag_name,  # Hierarchical name: CORR01_RUNNING_PV, Energy_GRID_POWER_KW_PV
                     "display_name": node.display_name,
                     "address": node.node_id,
                     "data_type": node.data_type,

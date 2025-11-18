@@ -6,6 +6,7 @@ Type definitions for the GraphQL schema.
 
 from typing import Optional, List
 from datetime import datetime
+from enum import Enum
 import strawberry
 
 
@@ -14,7 +15,7 @@ import strawberry
 # ========================================
 
 @strawberry.enum
-class UserRole(str):
+class UserRole(Enum):
     """User role enum."""
     ADMIN = "admin"
     OPERATOR = "operator"
@@ -38,7 +39,7 @@ class User:
 # ========================================
 
 @strawberry.enum
-class AssetType(str):
+class AssetType(Enum):
     """Asset type enum."""
     CONVEYOR = "conveyor"
     CRANE = "crane"
@@ -49,7 +50,7 @@ class AssetType(str):
 
 
 @strawberry.enum
-class AssetStatus(str):
+class AssetStatus(Enum):
     """Asset status enum."""
     OPERATIONAL = "operational"
     DEGRADED = "degraded"
@@ -75,7 +76,7 @@ class Asset:
 # ========================================
 
 @strawberry.enum
-class AlarmSeverity(str):
+class AlarmSeverity(Enum):
     """Alarm severity enum."""
     CRITICAL = "critical"
     HIGH = "high"

@@ -20,7 +20,8 @@ import { DataTable } from '../Widgets/DataTable';
 import { ProgressWidget } from '../Widgets/ProgressWidget';
 import { SparklineWidget } from '../Widgets/SparklineWidget';
 import { useLiveTagData } from '../../hooks/useLiveTagData';
-import { Activity } from 'lucide-react';
+import { Activity, GripVertical, Trash2, Settings, Maximize2, Link2 } from 'lucide-react';
+import { WidgetErrorBoundary } from '../ErrorBoundary';
 
 interface WidgetComponentProps {
   widget: Widget;
@@ -344,6 +345,114 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
           />
         );
 
+      case 'alarm':
+        // Mock alarm data
+        const alarmData = [
+          { id: 1, time: new Date().toISOString(), tag: 'TEMP_01', message: 'High Temperature', severity: 'critical', acked: false },
+          { id: 2, time: new Date(Date.now() - 300000).toISOString(), tag: 'PRESS_02', message: 'Low Pressure', severity: 'warning', acked: true },
+          { id: 3, time: new Date(Date.now() - 600000).toISOString(), tag: 'FLOW_03', message: 'Flow Rate Low', severity: 'warning', acked: false },
+        ];
+
+        return (
+          <div className="h-full overflow-auto">
+            <div className="space-y-2">
+              {alarmData.map((alarm) => (
+                <div
+                  key={alarm.id}
+                  className={`p-3 rounded-lg border-l-4 ${
+                    alarm.severity === 'critical'
+                      ? 'bg-red-50 border-red-500'
+                      : 'bg-yellow-50 border-yellow-500'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-sm">{alarm.message}</p>
+                      <p className="text-xs text-gray-600">{alarm.tag}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      alarm.acked ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {alarm.acked ? 'ACK' : 'NEW'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(alarm.time).toLocaleTimeString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'text':
+        return (
+          <div className="h-full p-4">
+            <div
+              className="text-gray-700 prose prose-sm max-w-none"
+              contentEditable
+              suppressContentEditableWarning
+            >
+              {widget.config.content || 'Double-click to edit text...'}
+            </div>
+          </div>
+        );
+
+      case 'image':
+        return (
+          <div className="h-full flex items-center justify-center bg-gray-50 rounded">
+            {widget.config.imageUrl ? (
+              <img
+                src={widget.config.imageUrl}
+                alt={widget.config.title || 'Image'}
+                className="max-w-full max-h-full object-contain"
+              />
+            ) : (
+              <div className="text-center text-gray-400">
+                <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Add image URL in properties</p>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'video':
+        return (
+          <div className="h-full flex items-center justify-center bg-black rounded">
+            {widget.config.videoUrl ? (
+              <video
+                src={widget.config.videoUrl}
+                controls
+                className="max-w-full max-h-full"
+              />
+            ) : (
+              <div className="text-center text-gray-400">
+                <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Add video URL in properties</p>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'map':
+        return (
+          <div className="h-full flex items-center justify-center bg-blue-50 rounded">
+            <div className="text-center">
+              <div className="w-full h-full bg-gradient-to-br from-blue-100 to-green-100 rounded-lg p-4">
+                <p className="text-blue-600 font-medium">Map Widget</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Geographic visualization coming soon
+                </p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="h-8 bg-blue-200 rounded opacity-50"></div>
+                  <div className="h-8 bg-green-200 rounded opacity-50"></div>
+                  <div className="h-8 bg-blue-200 rounded opacity-50"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -384,54 +493,105 @@ export const WidgetComponent: React.FC<WidgetComponentProps> = ({
           <div
             ref={drop}
             className={`
-              w-full h-full bg-white rounded-lg shadow-md
-              border-2 transition-all
-              ${isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-300'}
-              ${isOver && canDrop ? 'border-green-400 bg-green-50' : ''}
+              w-full h-full rounded-xl shadow-lg backdrop-blur-sm
+              border transition-all duration-300 ease-in-out
+              ${isSelected
+                ? 'border-blue-500/60 shadow-blue-500/20 shadow-xl ring-2 ring-blue-400/30'
+                : 'border-gray-200/60 hover:border-gray-300/80 hover:shadow-xl'}
+              ${isOver && canDrop
+                ? 'border-green-400 bg-green-50/80 shadow-green-500/20'
+                : 'bg-white/95'}
             `}
             style={{
-              backgroundColor: 'white',
               minHeight: '150px',
               minWidth: '200px',
             }}
           >
-            {/* Header */}
-            <div className="widget-handle flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg cursor-move">
-              <div className="flex-1 min-w-0">
+            {/* Modern Header with Glassmorphism */}
+            <div className="widget-handle flex items-center justify-between px-4 py-3 bg-gradient-to-r from-gray-50/90 to-white/90 border-b border-gray-200/50 rounded-t-xl cursor-move backdrop-blur-sm">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <GripVertical className="w-4 h-4 text-gray-400 opacity-60" />
                 {isEditing ? (
                   <input
                     type="text"
                     value={widget.config.title || ''}
                     onChange={(e) => onUpdate({ config: { ...widget.config, title: e.target.value } })}
                     onBlur={() => setIsEditing(false)}
+                    onKeyDown={(e) => e.key === 'Enter' && setIsEditing(false)}
                     autoFocus
-                    className="w-full px-2 py-1 text-sm border border-blue-300 rounded"
+                    className="w-full px-2 py-1 text-sm font-medium border border-blue-400 rounded-md focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                   />
                 ) : (
                   <h3
-                    className="text-sm font-medium text-gray-900 truncate cursor-text"
+                    className="text-sm font-semibold text-gray-800 truncate cursor-text hover:text-blue-600 transition-colors"
                     onDoubleClick={() => setIsEditing(true)}
+                    title="Double-click to edit"
                   >
                     {widget.config.title || 'Untitled Widget'}
                   </h3>
                 )}
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="ml-2 text-gray-400 hover:text-red-600 text-sm"
-                title="Delete widget"
-              >
-                ✕
-              </button>
+
+              {/* Modern Action Buttons */}
+              <div className="flex items-center gap-1 ml-2">
+                {widget.config.tagId && (
+                  <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-md mr-2">
+                    <Link2 className="w-3 h-3 text-blue-500" />
+                    <span className="text-xs font-medium text-blue-600 truncate max-w-[80px]">
+                      {widget.config.tagName || widget.config.tagId}
+                    </span>
+                  </div>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Future: Open settings modal
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-all"
+                  title="Widget settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Future: Maximize widget
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-all"
+                  title="Maximize"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                  title="Delete widget"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Content */}
-            <div className="p-2 h-[calc(100%-48px)]">
-              {renderContent()}
+            {/* Content Area with Better Padding */}
+            <div className="p-3 h-[calc(100%-56px)] overflow-hidden">
+              <WidgetErrorBoundary>
+                {renderContent()}
+              </WidgetErrorBoundary>
             </div>
+
+            {/* Live Status Indicator */}
+            {widget.config.tagId && !loading && (
+              <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span className="text-xs text-gray-400 font-medium">LIVE</span>
+              </div>
+            )}
           </div>
         </ResizableBox>
       </div>

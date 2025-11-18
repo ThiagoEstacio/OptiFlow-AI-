@@ -97,24 +97,35 @@ async def create_alarm_definition(
         )
     
     # Criar definição
-    alarm_def = AlarmDefinition(
-        tag_id=alarm_def_in.tag_id,
-        name=alarm_def_in.name,
-        description=alarm_def_in.description,
-        alarm_type=AlarmType[alarm_def_in.alarm_type.upper()],
-        severity=AlarmSeverity[alarm_def_in.severity.upper()],
-        high_limit=alarm_def_in.high_limit,
-        low_limit=alarm_def_in.low_limit,
-        deadband=alarm_def_in.deadband,
-        delay_seconds=alarm_def_in.delay_seconds or 0,
-        is_active=True
-    )
-    
-    db.add(alarm_def)
-    await db.commit()
-    await db.refresh(alarm_def)
-    
-    return alarm_def
+    try:
+        alarm_def = AlarmDefinition(
+            tag_id=alarm_def_in.tag_id,
+            name=alarm_def_in.name,
+            description=alarm_def_in.description,
+            alarm_type=AlarmType[alarm_def_in.alarm_type.upper()],
+            severity=AlarmSeverity[alarm_def_in.severity.upper()],
+            high_limit=alarm_def_in.high_limit,
+            low_limit=alarm_def_in.low_limit,
+            deadband=alarm_def_in.deadband,
+            delay_seconds=alarm_def_in.delay_seconds or 0,
+            is_active=True,
+            notification_recipients=[],  # Initialize with empty list
+            settings={}  # Initialize with empty dict
+        )
+        
+        db.add(alarm_def)
+        await db.commit()
+        await db.refresh(alarm_def)
+        
+        return alarm_def
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating alarm definition: {str(e)}"
+        )
 
 
 @router.get("/definitions", response_model=List[AlarmDefinitionResponse])

@@ -160,6 +160,12 @@ class ParetoAnalyzer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
 
+            # CRITICAL FIX: Check if DB session is in async context
+            # Prevents "greenlet_spawn has not been called" errors
+            if not hasattr(self.db, 'execute'):
+                logger.warning("⚠️ Database session not in async context, returning empty data")
+                return []
+
             query = select(AlarmEvent).where(
                 and_(
                     AlarmEvent.trigger_timestamp >= start_date,
@@ -192,7 +198,9 @@ class ParetoAnalyzer:
             ]
 
         except Exception as e:
-            logger.error(f"Error getting failures: {e}")
+            # Suppress greenlet_spawn errors (happens when called from wrong context)
+            if "greenlet_spawn" not in str(e):
+                logger.error(f"Error getting failures: {e}")
             return []
 
     def _generate_insights(

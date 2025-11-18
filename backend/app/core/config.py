@@ -90,7 +90,9 @@ class Settings(BaseSettings):
 
     # AI / Ollama (local LLM)
     OLLAMA_BASE_URL: str = "http://ollama:11434"
-    OLLAMA_MODEL: str = "llama3.1:8b"
+    # Qwen2.5:7B - Best for 16GB RAM + RTX 4060 (8GB VRAM)
+    # Superior reasoning and instruction following for industrial applications
+    OLLAMA_MODEL: str = "qwen2.5:7b"
     USE_OLLAMA: bool = True  # Set to True to use Ollama instead of OpenAI
 
     # Gateway
@@ -175,8 +177,8 @@ class Settings(BaseSettings):
     # Deduplication
     CONSUMER_DEDUP_CACHE_SIZE: int = 10000
     
-    # Kafka Configuration
-    KAFKA_BOOTSTRAP_SERVERS: str = "kafka:9092"
+    # Kafka Configuration (PDCA #15: Multi-Broker Cluster)
+    KAFKA_BOOTSTRAP_SERVERS: str = "kafka-1:9092,kafka-2:9093,kafka-3:9096"
     KAFKA_DLQ_TOPIC: str = "raw_tags_dlq"
 
     def __init__(self, **kwargs):

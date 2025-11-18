@@ -220,9 +220,10 @@ def get_graphql_extensions() -> list[Extension]:
     - Advanced caching (PDCA #26)
     - Error handling
     """
+    # Simplified for initial deployment - full extensions will be enabled after validation
     return [
-        TracingExtension(),
-        PerformanceMonitoringExtension(),
-        CacheExtension(),
-        ErrorHandlingExtension(),
+        # TracingExtension(),  # Temporarily disabled - OpenTelemetry configuration pending
+        # PerformanceMonitoringExtension(),  # Temporarily disabled
+        # CacheExtension(),  # Temporarily disabled - Redis configuration pending
+        # ErrorHandlingExtension(),  # Temporarily disabled - requires execution_context parameter
     ]

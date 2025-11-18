@@ -1,0 +1,71 @@
+# Prometheus Alert Rules for Backups (PDCA #23)
+
+groups:
+  - name: backup_alerts
+    interval: 5m
+    rules:
+      # Backup failure alert
+      - alert: BackupFailed
+        expr: optiflow_backup_failed_total > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+        annotations:
+          summary: "Backup failed for {{ $labels.service }}"
+          description: "Backup for {{ $labels.service }} has failed. Total failures: {{ $value }}"
+
+      # No backup in last 25 hours
+      - alert: BackupStale
+        expr: (time() - optiflow_backup_last_success_timestamp) > 90000
+        for: 1h
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "No successful backup in last 25 hours"
+          description: "Last successful backup was {{ $value | humanizeDuration }} ago"
+
+      # Backup taking too long
+      - alert: BackupDurationHigh
+        expr: optiflow_backup_duration_seconds > 600
+        for: 5m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Backup taking longer than expected"
+          description: "Backup for {{ $labels.service }} took {{ $value }}s (threshold: 600s)"
+
+      # Backup size growing rapidly
+      - alert: BackupSizeGrowthHigh
+        expr: rate(optiflow_backup_size_bytes[1d]) > 10737418240  # 10GB/day
+        for: 1h
+        labels:
+          severity: info
+          component: backup
+        annotations:
+          summary: "Backup size growing rapidly"
+          description: "Backup size for {{ $labels.service }} growing at {{ $value | humanize }}B/day"
+
+      # Low disk space for backups
+      - alert: BackupDiskSpaceLow
+        expr: optiflow_backup_disk_free_bytes < 10737418240  # 10GB
+        for: 15m
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Low disk space for backups"
+          description: "Only {{ $value | humanize }}B free for backups"
+
+      # Backup retention policy not enforced
+      - alert: BackupRetentionNotEnforced
+        expr: (time() - optiflow_backup_last_cleanup_timestamp) > 604800  # 7 days
+        for: 1h
+        labels:
+          severity: warning
+          component: backup
+        annotations:
+          summary: "Backup cleanup not running"
+          description: "Last cleanup was {{ $value | humanizeDuration }} ago (should run weekly)"

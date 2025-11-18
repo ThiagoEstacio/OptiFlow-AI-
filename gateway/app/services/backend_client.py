@@ -13,6 +13,11 @@ from ..core.config import settings
 class BackendClient:
     """
     Client for communicating with OptiFlow backend API
+
+    BACKPRESSURE PROTECTION:
+    - Limits concurrent requests to prevent overwhelming backend
+    - Drops oldest data when queue is full (prioritize recent data)
+    - Prevents memory exhaustion (OOM) under high load
     """
 
     def __init__(self, base_url: str = None, api_key: str = None):
@@ -28,6 +33,12 @@ class BackendClient:
 
         self.session: Optional[aiohttp.ClientSession] = None
         self._connected = False
+
+        # BACKPRESSURE: Limit concurrent requests to avoid queue buildup
+        self._request_semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
+        self._pending_points_count = 0
+        self._dropped_points_count = 0
+        self._max_pending_points = 10000  # Drop oldest if exceeds
 
     async def connect(self):
         """Initialize HTTP session"""
@@ -77,7 +88,7 @@ class BackendClient:
 
     async def send_timeseries_batch(self, data_points: List[Dict[str, Any]]) -> bool:
         """
-        Send batch of timeseries data points
+        Send batch of timeseries data points with BACKPRESSURE PROTECTION
 
         Args:
             data_points: List of data point dictionaries with keys:
@@ -89,24 +100,44 @@ class BackendClient:
         Returns:
             True if successful
         """
+        # BACKPRESSURE: Check if we're overwhelmed
+        self._pending_points_count += len(data_points)
+
+        if self._pending_points_count > self._max_pending_points:
+            # Drop this batch to prevent memory exhaustion
+            self._dropped_points_count += len(data_points)
+            self._pending_points_count -= len(data_points)
+            logger.warning(
+                f"⚠️ BACKPRESSURE: Dropped {len(data_points)} points "
+                f"(total dropped: {self._dropped_points_count}, "
+                f"pending: {self._pending_points_count})"
+            )
+            return False
+
         try:
             if not self.session:
                 await self.connect()
 
-            async with self.session.post("/api/v1/timeseries/batch", json=data_points) as response:
-                if response.status in [200, 201]:
-                    logger.debug(f"✓ Sent {len(data_points)} data points to backend")
-                    return True
-                else:
-                    logger.error(f"Failed to send data points: {response.status}")
-                    text = await response.text()
-                    logger.error(f"Response: {text}")
-                    return False
+            # BACKPRESSURE: Use semaphore to limit concurrent requests
+            async with self._request_semaphore:
+                async with self.session.post("/api/v1/timeseries/batch", json=data_points) as response:
+                    self._pending_points_count -= len(data_points)
+
+                    if response.status in [200, 201]:
+                        logger.debug(f"✓ Sent {len(data_points)} data points to backend")
+                        return True
+                    else:
+                        logger.error(f"Failed to send data points: {response.status}")
+                        text = await response.text()
+                        logger.error(f"Response: {text}")
+                        return False
 
         except asyncio.TimeoutError:
+            self._pending_points_count -= len(data_points)
             logger.error("Backend request timeout")
             return False
         except Exception as e:
+            self._pending_points_count -= len(data_points)
             logger.error(f"Failed to send data to backend: {str(e)}")
             return False
 
@@ -185,6 +216,105 @@ class BackendClient:
         except Exception as e:
             logger.error(f"Failed to get device tags: {str(e)}")
             return []
+
+    async def register_tags_batch(self, tags: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Register multiple tags in a single batch operation
+
+        Args:
+            tags: List of tag dictionaries with keys:
+                - name: Tag name
+                - address: Protocol address
+                - data_type: Data type (BOOL, INT, FLOAT, DOUBLE, STRING)
+                - device_id: Device UUID
+                - description: Optional description
+                - unit: Optional engineering unit
+                - enabled: Optional (default True)
+                - log_enabled: Optional (default True)
+
+        Returns:
+            Result dictionary with created/skipped counts
+        """
+        try:
+            if not self.session:
+                await self.connect()
+
+            logger.info(f"Registering {len(tags)} tags in backend...")
+
+            async with self.session.post("/api/v1/tags/batch", json=tags) as response:
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    logger.info(
+                        f"✓ Tag batch registration complete: "
+                        f"{result.get('created_count', 0)} created, "
+                        f"{result.get('skipped_count', 0)} skipped"
+                    )
+                    return result
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Failed to register tags batch: {response.status} - {error_text}")
+                    return {
+                        "success": False,
+                        "error": f"HTTP {response.status}",
+                        "created_count": 0,
+                        "skipped_count": len(tags)
+                    }
+
+        except Exception as e:
+            logger.error(f"Failed to register tags batch: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "created_count": 0,
+                "skipped_count": len(tags)
+            }
+
+    async def create_or_get_device(self, device_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Create a new device or get existing device UUID
+
+        Args:
+            device_data: Device dictionary with keys:
+                - name: Device name
+                - protocol: Protocol (opcua, modbus_tcp, etc)
+                - ip_address: Optional IP address
+                - port: Optional port
+                - description: Optional description
+                - enabled: Optional (default True)
+
+        Returns:
+            Device UUID string or None on failure
+        """
+        try:
+            if not self.session:
+                await self.connect()
+
+            # Try to find existing device by name
+            async with self.session.get(f"/api/v1/devices/?name={device_data['name']}") as response:
+                if response.status == 200:
+                    devices = await response.json()
+                    if devices and len(devices) > 0:
+                        device_id = devices[0]["id"]
+                        logger.info(f"Found existing device: {device_data['name']} ({device_id})")
+                        return device_id
+
+            # Device not found, create new one
+            logger.info(f"Creating new device: {device_data['name']}...")
+            
+            async with self.session.post("/api/v1/devices/", json=device_data) as response:
+                if response.status in [200, 201]:
+                    device = await response.json()
+                    device_id = device["id"]
+                    logger.info(f"✓ Created device: {device_data['name']} ({device_id})")
+                    return device_id
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Failed to create device: {response.status} - {error_text}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"Failed to create/get device: {str(e)}")
+            return None
 
     async def update_device_status(self, device_id: str, status: Dict[str, Any]) -> bool:
         """

@@ -7,6 +7,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, X, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Widget } from '../../pages/DashboardBuilderPage';
+import apiClient from '../../api/client';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -73,26 +74,16 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/v1/agent/dashboard/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage.content,
-          available_tags: availableTags.slice(0, 20),
-          current_widgets: currentWidgets.map(w => ({
-            type: w.type,
-            title: w.config.title,
-          })),
-        }),
+      const response = await apiClient.post('/api/v1/agent/dashboard/chat', {
+        message: userMessage.content,
+        available_tags: availableTags.slice(0, 20),
+        current_widgets: currentWidgets.map(w => ({
+          type: w.type,
+          title: w.config.title,
+        })),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('AI Agent error response:', errorText);
-        throw new Error(`API error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -105,12 +96,13 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
       // Auto-add widgets if generated
       if (data.widgets && data.widgets.length > 0) {
+        const baseTime = Date.now();
         const widgetsToAdd: Widget[] = data.widgets.map((w: any, idx: number) => ({
-          id: `ai-widget-${Date.now()}-${idx}`,
+          id: `ai-widget-${baseTime}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
           type: w.type,
           position: { 
-            x: 100 + (idx * 20), 
-            y: 100 + (idx * 20) 
+            x: 100 + (idx * 30), 
+            y: 100 + (idx * 30) 
           },
           size: { width: 300, height: 250 },
           config: {
@@ -121,6 +113,7 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
           },
         }));
 
+        console.log('Adding AI widgets:', widgetsToAdd);
         onAddWidgets(widgetsToAdd);
       }
 
