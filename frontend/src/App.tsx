@@ -24,6 +24,8 @@ import { AssetProvider } from './contexts/AssetContext';
 import { tagDataSimulator } from './services/tagDataSimulator';
 import { simulatorDataSync } from './services/simulatorDataSync';
 import { websocketService } from './services/websocket';
+import { CriticalAlarmNotification } from './components/CriticalAlarmNotification';
+import { useCriticalAlarms } from './hooks/useCriticalAlarms';
 
 // ========================================
 // 📊 CORE PAGES (5 principais)
@@ -60,6 +62,9 @@ import { TagConfiguration } from './pages/TagConfiguration';
 import { ReportsDashboard } from './pages/ReportsDashboard';
 
 function App() {
+  // PDCA #5: Critical alarm notification system
+  const { currentAlarm, acknowledgeAlarm, dismissAlarm } = useCriticalAlarms();
+
   // 🚀 Start simulator and WebSocket on app initialization
   useEffect(() => {
     console.log('🚀 Starting Grain Terminal Simulator...');
@@ -92,6 +97,12 @@ function App() {
           <MuiThemeWrapper>
             <AssetProvider>
               <Toaster />
+              {/* PDCA #5: Critical alarm notification overlay */}
+              <CriticalAlarmNotification
+                alarm={currentAlarm}
+                onAcknowledge={acknowledgeAlarm}
+                onClose={dismissAlarm}
+              />
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <Routes>
                 {/* ========================================

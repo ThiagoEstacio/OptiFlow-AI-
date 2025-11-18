@@ -84,3 +84,9 @@ temp/
 
 # OS
 Thumbs.db
+
+# PDCA #2: mTLS Certificates (SECURITY: Never commit private keys!)
+certs/*.key
+certs/*.srl
+# Allow .crt files for testing (public certificates only)
+# For production, use Vault PKI backend

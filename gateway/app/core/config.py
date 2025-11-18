@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     BACKEND_URL: str = Field(default="http://backend:8000", env="BACKEND_URL")
     BACKEND_API_KEY: Optional[str] = Field(default=None, env="BACKEND_API_KEY")
 
+    # PDCA #2: mTLS Configuration (Mutual TLS authentication)
+    MTLS_ENABLED: bool = Field(default=False, env="MTLS_ENABLED")
+    MTLS_CERT_PATH: Optional[str] = Field(default="/app/certs/gateway.crt", env="MTLS_CERT_PATH")
+    MTLS_KEY_PATH: Optional[str] = Field(default="/app/certs/gateway.key", env="MTLS_KEY_PATH")
+    MTLS_CA_PATH: Optional[str] = Field(default="/app/certs/ca.crt", env="MTLS_CA_PATH")
+
     # Database for offline buffering
     BUFFER_DB_PATH: str = Field(default="/app/data/buffer.db", env="BUFFER_DB_PATH")
     BUFFER_MAX_SIZE_MB: int = Field(default=100, env="BUFFER_MAX_SIZE_MB")

@@ -13,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U optiflow"]
       interval: 10s
@@ -37,7 +37,7 @@ services:
     ports:
       - "8086:8086"
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 10s
@@ -54,7 +54,7 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
@@ -75,7 +75,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -93,7 +93,7 @@ services:
     ports:
       - "2181:2181"
     networks:
-      - optiflow-network
+      - it-network
     volumes:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_logs:/var/lib/zookeeper/log
@@ -130,7 +130,7 @@ services:
     volumes:
       - kafka_1_data:/var/lib/kafka/data
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 10s
@@ -165,7 +165,7 @@ services:
     volumes:
       - kafka_2_data:/var/lib/kafka/data
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9093"]
       interval: 10s
@@ -200,7 +200,7 @@ services:
     volumes:
       - kafka_3_data:/var/lib/kafka/data
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9096"]
       interval: 10s
@@ -227,7 +227,7 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
       DYNAMIC_CONFIG_ENABLED: 'true'
     networks:
-      - optiflow-network
+      - it-network
     restart: unless-stopped
 
   # Ollama - Local LLM for AI Assistant
@@ -241,7 +241,7 @@ services:
     ports:
       - "11435:11434"  # Container Ollama on 11435, host Ollama can use 11434
     networks:
-      - optiflow-network
+      - it-network
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_NUM_PARALLEL=2
@@ -270,7 +270,7 @@ services:
     ports:
       - "8200:8200"
     networks:
-      - optiflow-network
+      - it-network
     healthcheck:
       test: ["CMD", "vault", "status"]
       interval: 10s
@@ -289,7 +289,7 @@ services:
     ports:
       - "4840:4840"
     networks:
-      - optiflow-network
+      - ot-network  # PDCA #1: Apenas OT (PLCs)
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 4840 || exit 1"]
       interval: 10s
@@ -387,7 +387,7 @@ services:
     #           capabilities: [gpu]
 
     networks:
-      - optiflow-network
+      - it-network  # PDCA #1: Backend apenas em IT network (isolado de OT)
     depends_on:
       vault:
         condition: service_healthy
@@ -436,7 +436,7 @@ services:
       # MLflow (for ML retraining)
       MLFLOW_TRACKING_URI: http://mlflow:5000
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       vault:
         condition: service_healthy
@@ -474,7 +474,7 @@ services:
       CELERY_BROKER_URL: amqp://optiflow:optiflow_password@rabbitmq:5672/
       CELERY_RESULT_BACKEND: redis://:optiflow_redis_password@redis:6379/4
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       - rabbitmq
       - redis
@@ -505,7 +505,9 @@ services:
       API_KEY: secure-gateway-api-key-change-in-production
       LOG_LEVEL: INFO
     networks:
-      - optiflow-network
+      # PDCA #1: Gateway tem acesso a AMBAS as redes (funciona como diodo de dados)
+      - ot-network   # Comunica com PLCs (OPC UA, Modbus, etc)
+      - it-network   # Envia dados para Backend
     depends_on:
       - backend
 
@@ -525,7 +527,7 @@ services:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8000
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       - backend
 
@@ -545,7 +547,7 @@ services:
     ports:
       - "5000:5000"
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -570,7 +572,7 @@ services:
     ports:
       - "9187:9187"
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       - postgres
 
@@ -584,7 +586,7 @@ services:
     ports:
       - "9121:9121"
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       - redis
 
@@ -601,7 +603,7 @@ services:
     ports:
       - "9100:9100"
     networks:
-      - optiflow-network
+      - it-network
 
   # cAdvisor (Container Metrics)
   cadvisor:
@@ -619,7 +621,7 @@ services:
     ports:
       - "8081:8080"
     networks:
-      - optiflow-network
+      - it-network
     restart: unless-stopped
 
   # ========================================
@@ -641,7 +643,7 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - optiflow-network
+      - it-network
     depends_on:
       - postgres-exporter
       - redis-exporter
@@ -664,9 +666,20 @@ services:
     ports:
       - "3001:3000"
     networks:
-      - optiflow-network
+      - it-network
 
 networks:
+  # PDCA #1: Segmentação de Rede OT/IT
+  # OT Network: Gateway ↔ PLCs (isolada, sem acesso externo)
+  ot-network:
+    driver: bridge
+    internal: true  # Sem acesso à internet/rede externa
+
+  # IT Network: Backend ↔ Frontend ↔ Databases
+  it-network:
+    driver: bridge
+
+  # Legacy network (manter para compatibilidade temporária)
   optiflow-network:
     driver: bridge
 
