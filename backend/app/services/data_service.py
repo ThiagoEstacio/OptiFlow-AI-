@@ -16,6 +16,7 @@ import logging
 from influxdb_client import InfluxDBClient
 from app.core.config import settings
 from app.services.influxdb import influxdb_service
+from app.core.advanced_cache import get_advanced_cache
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +49,13 @@ class DataService:
         
     async def get_realtime_value(self, tag_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get current REAL-TIME value using influxdb_service
+        Get current REAL-TIME value using influxdb_service with Redis caching.
 
         QUALITY FILTERING: Returns None for non-"good" quality data to prevent
         analytics from processing communication failures as real values.
+
+        CACHING: 5-second TTL to reduce InfluxDB load for frequent AI Agent queries.
+        Target: Reduce latency from 800ms to <50ms on cache hit (L1 memory = ~2ms, L2 Redis = ~10ms).
 
         Args:
             tag_id: Tag identifier (name, id, or address)
@@ -59,44 +63,65 @@ class DataService:
         Returns:
             Dict with metadata + realtime value, or None if not found OR bad quality
         """
+        cache = get_advanced_cache()
+        cache_key = f"realtime_value:{tag_id}"
+
+        # Define fetch function for cache miss
+        async def _fetch_from_influxdb():
+            """Fetch function for cache miss"""
+            try:
+                logger.info(f"📋 Cache MISS - Getting realtime value for {tag_id} from InfluxDB")
+
+                # Use the influxdb_service that's working for /api/v1/tags/realtime/{tag_name}
+                result = await asyncio.to_thread(influxdb_service.get_latest_value_by_name, tag_id)
+
+                if result is None:
+                    logger.warning(f"⚠️ No realtime data found for tag: {tag_id}")
+                    return None
+
+                # QUALITY FILTER: Only return data with "good" quality
+                # This prevents communication failures (quality="bad") from being treated as real values
+                quality = result.get("quality", "GOOD").lower()
+                if quality != "good":
+                    logger.warning(
+                        f"⚠️ Ignoring {tag_id} due to bad quality: {quality} "
+                        f"(value={result.get('value')} would be discarded)"
+                    )
+                    return None
+
+                logger.info(f"✅ Got realtime value: {result.get('value')} for {tag_id} (quality: {quality})")
+
+                return {
+                    "tag_id": result.get("tag_id", tag_id),
+                    "name": result.get("tag_name", tag_id),
+                    "unit": result.get("unit"),
+                    "data_type": "float",
+                    "description": None,
+                    "value": result.get("value"),
+                    "timestamp": result.get("timestamp"),
+                    "quality": quality.upper(),
+                    "min_value": None,
+                    "max_value": None
+                }
+
+            except Exception as e:
+                logger.error(f"❌ Error getting realtime value for {tag_id}: {e}")
+                return None
+
         try:
-            logger.info(f"📋 Getting realtime value for {tag_id}")
+            # Get value with caching (5-second TTL for realtime data)
+            # L1 (memory) hit: ~2ms, L2 (Redis) hit: ~10ms, InfluxDB miss: ~800ms
+            value = await cache.get(cache_key, fetch_fn=_fetch_from_influxdb, ttl=5)
 
-            # Use the influxdb_service that's working for /api/v1/tags/realtime/{tag_name}
-            result = await asyncio.to_thread(influxdb_service.get_latest_value_by_name, tag_id)
+            if value is not None:
+                logger.debug(f"✅ Cache HIT for {tag_id}")
 
-            if result is None:
-                logger.warning(f"⚠️ No realtime data found for tag: {tag_id}")
-                return None
-
-            # QUALITY FILTER: Only return data with "good" quality
-            # This prevents communication failures (quality="bad") from being treated as real values
-            quality = result.get("quality", "GOOD").lower()
-            if quality != "good":
-                logger.warning(
-                    f"⚠️ Ignoring {tag_id} due to bad quality: {quality} "
-                    f"(value={result.get('value')} would be discarded)"
-                )
-                return None
-
-            logger.info(f"✅ Got realtime value: {result.get('value')} for {tag_id} (quality: {quality})")
-
-            return {
-                "tag_id": result.get("tag_id", tag_id),
-                "name": result.get("tag_name", tag_id),
-                "unit": result.get("unit"),
-                "data_type": "float",
-                "description": None,
-                "value": result.get("value"),
-                "timestamp": result.get("timestamp"),
-                "quality": quality.upper(),
-                "min_value": None,
-                "max_value": None
-            }
+            return value
 
         except Exception as e:
-            logger.error(f"❌ Error getting realtime value for {tag_id}: {e}")
-            return None
+            logger.error(f"❌ Cache error for {tag_id}, falling back to direct fetch: {e}")
+            # Fallback: fetch directly if cache fails
+            return await _fetch_from_influxdb()
     
     async def get_multiple_realtime_values(self, tag_ids: List[str]) -> List[Dict[str, Any]]:
         """
