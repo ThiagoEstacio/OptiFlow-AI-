@@ -50,11 +50,14 @@ class DataService:
         """
         Get current REAL-TIME value using influxdb_service
 
+        QUALITY FILTERING: Returns None for non-"good" quality data to prevent
+        analytics from processing communication failures as real values.
+
         Args:
             tag_id: Tag identifier (name, id, or address)
 
         Returns:
-            Dict with metadata + realtime value, or None if not found
+            Dict with metadata + realtime value, or None if not found OR bad quality
         """
         try:
             logger.info(f"📋 Getting realtime value for {tag_id}")
@@ -66,7 +69,17 @@ class DataService:
                 logger.warning(f"⚠️ No realtime data found for tag: {tag_id}")
                 return None
 
-            logger.info(f"✅ Got realtime value: {result.get('value')} for {tag_id}")
+            # QUALITY FILTER: Only return data with "good" quality
+            # This prevents communication failures (quality="bad") from being treated as real values
+            quality = result.get("quality", "GOOD").lower()
+            if quality != "good":
+                logger.warning(
+                    f"⚠️ Ignoring {tag_id} due to bad quality: {quality} "
+                    f"(value={result.get('value')} would be discarded)"
+                )
+                return None
+
+            logger.info(f"✅ Got realtime value: {result.get('value')} for {tag_id} (quality: {quality})")
 
             return {
                 "tag_id": result.get("tag_id", tag_id),
@@ -76,7 +89,7 @@ class DataService:
                 "description": None,
                 "value": result.get("value"),
                 "timestamp": result.get("timestamp"),
-                "quality": result.get("quality", "GOOD").upper(),
+                "quality": quality.upper(),
                 "min_value": None,
                 "max_value": None
             }
@@ -205,13 +218,15 @@ class DataService:
                 }
             
             # Build Flux query to get data from InfluxDB
-            # Data is stored as: measurement="sensor_data", tag="tag_id", field="value"
+            # Data is stored as: measurement="tag_data", tag="tag_id", field="value"
+            # QUALITY FILTERING: Only include "good" quality data to prevent false positives
             flux_query = f'''
 from(bucket: "{settings.INFLUXDB_BUCKET}")
   |> range(start: {start_time.isoformat()}Z, stop: {end_time.isoformat()}Z)
-  |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+  |> filter(fn: (r) => r["_measurement"] == "tag_data")
   |> filter(fn: (r) => r["tag_id"] == "{tag_id}")
   |> filter(fn: (r) => r["_field"] == "value")
+  |> filter(fn: (r) => r["quality"] == "good")
   |> sort(columns: ["_time"])
             '''
             

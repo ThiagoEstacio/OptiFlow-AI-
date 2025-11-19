@@ -28,6 +28,7 @@ class AlarmType(str, enum.Enum):
     RATE_OF_CHANGE = "rate_of_change"
     DEVIATION = "deviation"
     PREDICTIVE = "predictive"
+    COMMUNICATION_LOSS = "communication_loss"  # OPC-UA quality != "good"
     CUSTOM = "custom"
 
 

@@ -25,6 +25,7 @@ from slowapi.util import get_remote_address
 
 from ...db.session import get_db
 from ...services.data_service import DataService
+from ...services.circuit_breaker import CircuitBreaker
 from ...services.agent_tools import (
     AgentToolkit,
     format_tools_for_prompt,
@@ -46,6 +47,15 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 # Optimized for 16GB RAM + 8GB VRAM (RTX 4060)
 # Alternative: mistral:7b (also excellent)
 MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+
+# Circuit breaker for Ollama (prevent cascade failures when LLM is overloaded)
+ollama_circuit_breaker = CircuitBreaker(
+    failure_threshold=3,      # Open circuit after 3 consecutive Ollama failures
+    success_threshold=2,      # Close circuit after 2 successful calls
+    timeout=30,               # Wait 30s before retrying Ollama
+    half_open_max_calls=2,    # Test with max 2 calls in half-open state
+    name="ollama_llm"
+)
 
 
 class ChatMessage(BaseModel):
@@ -392,6 +402,333 @@ async def pre_execute_tools_from_query(
             else:
                 data_results.append("**Nenhuma tag encontrada**")
 
+    # Pattern 4: Alarm queries (NEW - Applied to ALL equipment)
+    alarm_patterns = [
+        'alarme', 'alarm', 'alerta', 'alert',
+        'problema', 'problem', 'crítico', 'critical',
+        'falha', 'failure', 'erro', 'error',
+        'atenção', 'atencao', 'warning', 'aviso'
+    ]
+
+    if any(pattern in query_lower for pattern in alarm_patterns):
+        logger.error(f"🚨 PRE-EXECUTE: Alarm query detected: '{query}'")
+
+        # Detect severity filter from query
+        severity = None
+        if 'crítico' in query_lower or 'critical' in query_lower:
+            severity = 'critical'
+        elif 'alto' in query_lower or 'high' in query_lower or 'alta' in query_lower:
+            severity = 'high'
+        elif 'médio' in query_lower or 'medio' in query_lower or 'medium' in query_lower:
+            severity = 'medium'
+        elif 'baixo' in query_lower or 'low' in query_lower or 'baixa' in query_lower:
+            severity = 'low'
+
+        # Detect equipment filter using fuzzy matching
+        equipment_filter = None
+        if available_tags:
+            # Try to extract equipment name from query
+            # Common patterns: "alarmes do EL01", "problemas no SILO02", "alertas da correia 1"
+            equipment_keywords = []
+            for word in query_lower.split():
+                clean_word = word.strip('.,?!;:')
+                # Skip common words
+                if clean_word not in ['qual', 'quais', 'a', 'o', 'do', 'da', 'no', 'na', 'de', 'tem', 'há',
+                                       'existe', 'existem', 'mostre', 'liste', 'alarme', 'alarmes',
+                                       'alerta', 'alertas', 'problema', 'problemas']:
+                    if len(clean_word) >= 3:  # Minimum 3 characters
+                        equipment_keywords.append(clean_word)
+
+            logger.error(f"🔍 Equipment keywords extracted: {equipment_keywords}")
+
+            # Try to match equipment name with tags
+            if equipment_keywords:
+                # Get unique equipment prefixes from available tags
+                equipment_names = set()
+                for tag in available_tags:
+                    tag_name = tag.get('name', '')
+                    prefix = tag_name.split('_')[0] if '_' in tag_name else tag_name
+                    equipment_names.add(prefix.lower())
+
+                logger.error(f"🏭 Available equipment: {sorted(equipment_names)}")
+
+                # Fuzzy match equipment name
+                for keyword in equipment_keywords:
+                    for eq_name in equipment_names:
+                        # Fuzzy match: keyword chars in order in equipment name
+                        if len(keyword) >= 2:
+                            keyword_chars = [c for c in keyword if c.isalnum()]
+                            eq_chars = [c for c in eq_name if c.isalnum()]
+
+                            # Check if characters appear in order
+                            idx = 0
+                            match = True
+                            for char in keyword_chars:
+                                found_idx = -1
+                                for i in range(idx, len(eq_chars)):
+                                    if eq_chars[i] == char:
+                                        found_idx = i
+                                        break
+                                if found_idx == -1:
+                                    match = False
+                                    break
+                                idx = found_idx + 1
+
+                            if match:
+                                equipment_filter = eq_name.upper()
+                                logger.error(f"✅ Matched equipment: '{keyword}' → {equipment_filter}")
+                                break
+                    if equipment_filter:
+                        break
+
+        # Execute get_active_alarms tool
+        alarm_args = {"limit": 20}
+        if severity:
+            alarm_args["severity"] = severity
+            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(severity={severity}, limit=20)")
+        else:
+            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(limit=20)")
+
+        result = await toolkit.execute_tool("get_active_alarms", alarm_args)
+
+        if result.success and result.data:
+            alarms = result.data.get('alarms', [])
+
+            # Filter by equipment if detected
+            if equipment_filter and alarms:
+                logger.error(f"🔍 Filtering alarms by equipment: {equipment_filter}")
+                filtered_alarms = []
+                for alarm in alarms:
+                    alarm_name = alarm.get('alarm_name', '').upper()
+                    tag_id = alarm.get('tag_id', '')
+                    # Check if alarm is related to the equipment
+                    if equipment_filter in alarm_name or (tag_id and equipment_filter in str(tag_id).upper()):
+                        filtered_alarms.append(alarm)
+
+                logger.error(f"📊 Filtered {len(filtered_alarms)} alarms from {len(alarms)} total")
+                alarms = filtered_alarms
+
+            if alarms:
+                alarm_count = len(alarms)
+                severity_filter_text = f" ({severity.upper()})" if severity else ""
+                equipment_filter_text = f" do equipamento {equipment_filter}" if equipment_filter else ""
+
+                data_results.append(f"**🚨 Alarmes Ativos{severity_filter_text}{equipment_filter_text}**: {alarm_count} alarme(s)")
+                data_results.append("")
+
+                for i, alarm in enumerate(alarms[:10], 1):  # Show max 10 alarms
+                    alarm_name = alarm.get('alarm_name', 'Alarme desconhecido')
+                    severity_level = alarm.get('severity', 'N/A')
+                    trigger_time = alarm.get('trigger_timestamp', 'N/A')
+                    trigger_value = alarm.get('trigger_value', 'N/A')
+
+                    # Format severity with emoji
+                    severity_emoji = {
+                        'CRITICAL': '🔴',
+                        'HIGH': '🟠',
+                        'MEDIUM': '🟡',
+                        'LOW': '🟢'
+                    }.get(severity_level, '⚪')
+
+                    data_results.append(f"{i}. {severity_emoji} **{alarm_name}**")
+                    data_results.append(f"   - Severidade: {severity_level}")
+                    data_results.append(f"   - Valor: {trigger_value}")
+                    data_results.append(f"   - Desde: {trigger_time}")
+                    data_results.append("")
+
+                if alarm_count > 10:
+                    data_results.append(f"_... e mais {alarm_count - 10} alarme(s)_")
+            else:
+                filter_desc = ""
+                if severity:
+                    filter_desc += f" de severidade {severity.upper()}"
+                if equipment_filter:
+                    filter_desc += f" no equipamento {equipment_filter}"
+                data_results.append(f"✅ **Nenhum alarme ativo{filter_desc}**")
+        else:
+            data_results.append("❌ **Erro ao buscar alarmes ativos**")
+
+    # Pattern 5: Alarm frequency analysis queries (NEW)
+    frequency_patterns = ['frequência', 'frequency', 'chattering', 'flood', 'taxa', 'quantas vezes', 'how often']
+
+    if any(pattern in query_lower for pattern in frequency_patterns) and any(pattern in query_lower for pattern in alarm_patterns):
+        logger.error(f"📊 PRE-EXECUTE: Alarm frequency analysis detected: '{query}'")
+
+        # Detect equipment filter
+        equipment_filter = None
+        if available_tags:
+            equipment_keywords = []
+            for word in query_lower.split():
+                clean_word = word.strip('.,?!;:')
+                if clean_word not in ['qual', 'quais', 'a', 'o', 'do', 'da', 'no', 'na', 'frequência', 'alarme', 'alarmes']:
+                    if len(clean_word) >= 3:
+                        equipment_keywords.append(clean_word)
+
+            if equipment_keywords:
+                equipment_names = set(tag.get('name', '').split('_')[0] for tag in available_tags if '_' in tag.get('name', ''))
+                for keyword in equipment_keywords:
+                    for eq_name in equipment_names:
+                        if all(c in eq_name.lower() for c in keyword):
+                            equipment_filter = eq_name.upper()
+                            break
+                    if equipment_filter:
+                        break
+
+        # Execute frequency analysis
+        result = await toolkit.execute_tool("analyze_alarm_frequency", {
+            "duration": "24h",
+            "equipment_filter": equipment_filter
+        })
+
+        if result.success and result.data:
+            freq_data = result.data
+            summary = freq_data.get('summary', {})
+            top_alarms = freq_data.get('top_frequent_alarms', [])[:5]
+            chattering = freq_data.get('chattering_alarms', [])
+            insights = freq_data.get('insights', [])
+
+            data_results.append(f"**📊 Análise de Frequência de Alarmes (24h)**")
+            data_results.append("")
+            data_results.append(f"- Total de eventos: {summary.get('total_alarm_events', 0)}")
+            data_results.append(f"- Alarmes/hora: {summary.get('alarms_per_hour', 0):.1f}")
+            data_results.append(f"- Alarmes únicos: {summary.get('unique_alarms', 0)}")
+            data_results.append("")
+
+            if top_alarms:
+                data_results.append("**🔝 Alarmes Mais Frequentes:**")
+                for alarm in top_alarms:
+                    data_results.append(f"  - {alarm['alarm_name']}: {alarm['event_count']} eventos ({alarm['percentage']}%)")
+                data_results.append("")
+
+            if chattering:
+                data_results.append(f"**🔄 Alarmes Chattering Detectados:** {len(chattering)}")
+                for alarm in chattering[:3]:
+                    data_results.append(f"  - {alarm['alarm_name']}: {alarm['event_count']} eventos, intervalo médio {alarm['avg_interval_minutes']:.1f} min")
+                data_results.append("")
+
+            if insights:
+                data_results.append("**💡 Insights:**")
+                for insight in insights:
+                    data_results.append(f"  {insight}")
+
+    # Pattern 6: Histogram/distribution queries (NEW)
+    histogram_patterns = ['histograma', 'histogram', 'distribuição', 'distribution', 'faixa', 'range']
+
+    if any(pattern in query_lower for pattern in histogram_patterns):
+        logger.error(f"📊 PRE-EXECUTE: Histogram query detected: '{query}'")
+
+        # Try to find tag from query
+        matched_tag = find_best_matching_tag(query, available_tags) if available_tags else None
+
+        if matched_tag:
+            tag_id = str(matched_tag.get('id'))
+            result = await toolkit.execute_tool("generate_data_histogram", {
+                "tag_id": tag_id,
+                "duration": "24h",
+                "bins": 10
+            })
+
+            if result.success and result.data:
+                hist_data = result.data
+                histogram = hist_data.get('histogram', [])
+                stats = hist_data.get('statistics', {})
+                insights = hist_data.get('insights', [])
+
+                data_results.append(f"**📊 Histograma: {matched_tag.get('name')}**")
+                data_results.append("")
+                data_results.append(f"- Total de amostras: {hist_data.get('total_samples', 0)}")
+                data_results.append(f"- Média: {stats.get('mean', 0):.2f}")
+                data_results.append(f"- Desvio padrão: {stats.get('stddev', 0):.2f}")
+                data_results.append("")
+
+                data_results.append("**Distribuição:**")
+                for bin_data in histogram[:5]:  # Show top 5 bins
+                    data_results.append(f"  {bin_data['range_start']:.1f} - {bin_data['range_end']:.1f}: {bin_data['count']} ({bin_data['percentage']}%)")
+                data_results.append("")
+
+                if insights:
+                    data_results.append("**💡 Insights:**")
+                    for insight in insights:
+                        data_results.append(f"  {insight}")
+
+    # Pattern 7: Trend detection queries (NEW)
+    trend_patterns = ['tendência', 'trend', 'crescendo', 'diminuindo', 'increasing', 'decreasing', 'subindo', 'caindo']
+
+    if any(pattern in query_lower for pattern in trend_patterns):
+        logger.error(f"📈 PRE-EXECUTE: Trend analysis detected: '{query}'")
+
+        matched_tag = find_best_matching_tag(query, available_tags) if available_tags else None
+
+        if matched_tag:
+            tag_id = str(matched_tag.get('id'))
+            result = await toolkit.execute_tool("detect_trends", {
+                "tag_id": tag_id,
+                "duration": "24h",
+                "sensitivity": "medium"
+            })
+
+            if result.success and result.data:
+                trend_data = result.data
+                insights = trend_data.get('insights', [])
+
+                data_results.append(f"**📈 Análise de Tendência: {matched_tag.get('name')}**")
+                data_results.append("")
+                data_results.append(f"- {trend_data.get('trend_description', '')}")
+                data_results.append(f"- Valor inicial: {trend_data.get('start_value', 0):.2f}")
+                data_results.append(f"- Valor final: {trend_data.get('end_value', 0):.2f}")
+                data_results.append(f"- Variação: {trend_data.get('change', 0):.2f} ({trend_data.get('change_percentage', 0):.1f}%)")
+                data_results.append(f"- Confiança (R²): {trend_data.get('r_squared', 0):.3f}")
+                data_results.append("")
+
+                if insights:
+                    data_results.append("**💡 Insights:**")
+                    for insight in insights:
+                        data_results.append(f"  {insight}")
+
+    # Pattern 8: Insights/recommendations queries (NEW)
+    insight_patterns = ['insight', 'insights', 'análise', 'analysis', 'recomendação', 'recommendation', 'resumo', 'summary']
+
+    if any(pattern in query_lower for pattern in insight_patterns):
+        logger.error(f"💡 PRE-EXECUTE: Insights generation detected: '{query}'")
+
+        # Determine scope
+        scope = "system"
+        if 'alarme' in query_lower or 'alarm' in query_lower:
+            scope = "alarms"
+
+        result = await toolkit.execute_tool("generate_insights", {
+            "scope": scope,
+            "duration": "24h"
+        })
+
+        if result.success and result.data:
+            insight_data = result.data
+            insights = insight_data.get('insights', [])
+            alerts = insight_data.get('alerts', [])
+            recommendations = insight_data.get('recommendations', [])
+
+            data_results.append(f"**💡 Insights do Sistema**")
+            data_results.append("")
+
+            if insights:
+                data_results.append("**Principais Observações:**")
+                for insight in insights:
+                    data_results.append(f"  {insight}")
+                data_results.append("")
+
+            if alerts:
+                data_results.append(f"**⚠️ Alertas ({len(alerts)}):**")
+                for alert in alerts[:5]:
+                    data_results.append(f"  - [{alert.get('severity', 'info').upper()}] {alert.get('message', '')}")
+                    if alert.get('action'):
+                        data_results.append(f"    → {alert['action']}")
+                data_results.append("")
+
+            if recommendations:
+                data_results.append("**📋 Recomendações:**")
+                for rec in recommendations:
+                    data_results.append(f"  {rec}")
+
     if data_results:
         return "\n".join(data_results)
 
@@ -402,8 +739,21 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
     """
     Call Ollama API for chat completion with tool support.
     Optimized for MAXIMUM SPEED with GPU - Target: 3-8 seconds.
+    Protected by circuit breaker to prevent cascade failures.
     """
-    try:
+    # Check circuit breaker BEFORE attempting Ollama call
+    if ollama_circuit_breaker.is_open:
+        logger.warning(
+            f"⚡ Circuit breaker OPEN - Ollama unavailable "
+            f"(will retry after {ollama_circuit_breaker.config.timeout}s)"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="AI service temporarily unavailable due to high load. Please try again in a moment."
+        )
+
+    async def _ollama_request():
+        """Inner function for circuit breaker wrapping"""
         logger.error(f"🔍 DEBUG: Calling Ollama at {OLLAMA_BASE_URL}")
         # Increased timeout to 120s for first model load
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -428,15 +778,17 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
                 }
             )
             logger.error(f"🔍 DEBUG: Ollama response received - Status: {response.status_code}")
-            
+
             if response.status_code == 200:
                 result = response.json()
                 return result["message"]["content"]
             else:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Ollama API error: {response.text}"
-                )
+                raise Exception(f"Ollama API error: {response.text}")
+
+    try:
+        # Execute through circuit breaker
+        result = ollama_circuit_breaker.call(_ollama_request)
+        return result
     except httpx.ConnectError:
         raise HTTPException(
             status_code=503,
@@ -1462,13 +1814,25 @@ async def chat_with_agent_stream(
                 'me mostre o valor', 'mostre a temperatura', 'mostre a pressão'
             ]
 
-            use_fallback_realtime = any(keyword in message_lower for keyword in realtime_value_keywords)
+            # ALARM queries - Use PRE-EXECUTE for alarm data (NEW)
+            alarm_keywords = [
+                'alarme', 'alarm', 'alerta', 'alert',
+                'problema', 'problem', 'crítico', 'critical',
+                'falha', 'failure', 'erro', 'error',
+                'atenção', 'atencao', 'warning', 'aviso'
+            ]
 
-            # PRIORITY: Realtime queries use PRE-EXECUTE with data-driven prompts
-            if use_fallback_realtime:
+            use_fallback_realtime = any(keyword in message_lower for keyword in realtime_value_keywords)
+            use_fallback_alarms = any(keyword in message_lower for keyword in alarm_keywords)
+
+            # PRIORITY: Realtime and Alarm queries use PRE-EXECUTE with data-driven prompts
+            if use_fallback_realtime or use_fallback_alarms:
                 use_fallback = False
                 use_qwen = True
-                logger.info("⚡ STREAMING REALTIME QUERY detected → Using PRE-EXECUTE for data fetching")
+                if use_fallback_realtime:
+                    logger.info("⚡ STREAMING REALTIME QUERY detected → Using PRE-EXECUTE for data fetching")
+                if use_fallback_alarms:
+                    logger.error("🚨 STREAMING ALARM QUERY detected → Using PRE-EXECUTE for alarm data")
 
             logger.info(f"🌊 Streaming query: fallback={use_fallback}, qwen={use_qwen}, realtime={use_fallback_realtime}")
 
@@ -1480,8 +1844,8 @@ async def chat_with_agent_stream(
                 yield f"data: {json.dumps({'chunk': response.response, 'done': True, 'metadata': metadata})}\n\n"
                 return
 
-            # === PRE-EXECUTE MODE (for realtime queries) ===
-            if use_fallback_realtime:
+            # === PRE-EXECUTE MODE (for realtime and alarm queries) ===
+            if use_fallback_realtime or use_fallback_alarms:
                 logger.error(f"🔍 PRE-EXECUTING tools for streaming realtime query... Query={chat_request.message}, Tags count={len(chat_request.available_tags) if chat_request.available_tags else 0}")
                 pre_fetched_data = await pre_execute_tools_from_query(
                     query=chat_request.message,
@@ -1547,6 +1911,22 @@ async def chat_with_agent_stream(
 
             if any(word in message_lower for word in ["padrão", "pattern", "frequência", "frequency"]):
                 core_tool_names.append("analyze_alarm_patterns")
+
+            # NEW: Advanced analytics tools
+            if any(word in message_lower for word in ["frequência", "frequency", "chattering", "flood", "taxa"]):
+                core_tool_names.append("analyze_alarm_frequency")
+
+            if any(word in message_lower for word in ["histograma", "histogram", "distribuição", "distribution"]):
+                core_tool_names.append("generate_data_histogram")
+
+            if any(word in message_lower for word in ["correlação", "correlation", "relação", "relationship"]):
+                core_tool_names.append("calculate_correlation")
+
+            if any(word in message_lower for word in ["tendência", "trend", "crescendo", "diminuindo", "increasing", "decreasing"]):
+                core_tool_names.append("detect_trends")
+
+            if any(word in message_lower for word in ["insight", "insights", "análise", "analysis", "recomendação", "recommendation"]):
+                core_tool_names.append("generate_insights")
 
             relevant_tools = [t for t in all_tools if t.get("name") in set(core_tool_names)]
 
