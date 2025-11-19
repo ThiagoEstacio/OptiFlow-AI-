@@ -125,23 +125,56 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
     query_lower = query.lower()
     logger.error(f"🔍 find_best_matching_tag called with query: {query}")
 
-    # Identify measurement type from query
+    # Identify measurement type from query - EXPANDED for all industrial variables
     measurement_type = None
     if 'temperatura' in query_lower or 'temp' in query_lower:
         measurement_type = 'temp'
-    elif 'pressão' in query_lower or 'pressure' in query_lower:
+    elif 'pressão' in query_lower or 'pressure' in query_lower or 'pressao' in query_lower:
         measurement_type = 'press'
-    elif 'corrente' in query_lower or 'current' in query_lower:
+    elif 'corrente' in query_lower or 'current' in query_lower or 'ampere' in query_lower:
         measurement_type = 'current'
-    elif 'potência' in query_lower or 'power' in query_lower:
+    elif 'potência' in query_lower or 'power' in query_lower or 'potencia' in query_lower:
         measurement_type = 'power'
     elif 'velocidade' in query_lower or 'speed' in query_lower:
         measurement_type = 'speed'
+    elif 'nível' in query_lower or 'nivel' in query_lower or 'level' in query_lower:
+        measurement_type = 'level'
+    elif 'vazão' in query_lower or 'vazao' in query_lower or 'flow' in query_lower:
+        measurement_type = 'flow'
+    elif 'vibração' in query_lower or 'vibracao' in query_lower or 'vibration' in query_lower or 'vib' in query_lower:
+        measurement_type = 'vib'
+    elif 'umidade' in query_lower or 'humidity' in query_lower or 'humid' in query_lower:
+        measurement_type = 'humid'
+    elif 'ph' in query_lower:
+        measurement_type = 'ph'
+    elif 'densidade' in query_lower or 'density' in query_lower:
+        measurement_type = 'dens'
+    elif 'torque' in query_lower:
+        measurement_type = 'torque'
+    elif 'rpm' in query_lower or 'rotação' in query_lower or 'rotacao' in query_lower or 'rotation' in query_lower:
+        measurement_type = 'rpm'
+    elif 'força' in query_lower or 'forca' in query_lower or 'force' in query_lower:
+        measurement_type = 'force'
+    elif 'posição' in query_lower or 'posicao' in query_lower or 'position' in query_lower:
+        measurement_type = 'pos'
+    elif 'tensão' in query_lower or 'tensao' in query_lower or 'voltage' in query_lower or 'volt' in query_lower:
+        measurement_type = 'volt'
+    elif 'frequência' in query_lower or 'frequencia' in query_lower or 'frequency' in query_lower or 'freq' in query_lower:
+        measurement_type = 'freq'
 
     logger.error(f"🎯 Detected measurement_type: {measurement_type}")
 
     # Extract keywords from query (remove common words AND measurement type words)
-    measurement_words = ['temperatura', 'temp', 'pressão', 'pressure', 'corrente', 'current', 'potência', 'power', 'velocidade', 'speed']
+    measurement_words = [
+        'temperatura', 'temp', 'pressão', 'pressao', 'pressure', 'press',
+        'corrente', 'current', 'ampere', 'potência', 'potencia', 'power',
+        'velocidade', 'speed', 'nível', 'nivel', 'level',
+        'vazão', 'vazao', 'flow', 'vibração', 'vibracao', 'vibration', 'vib',
+        'umidade', 'humidity', 'humid', 'ph', 'densidade', 'density', 'dens',
+        'torque', 'rpm', 'rotação', 'rotacao', 'rotation',
+        'força', 'forca', 'force', 'posição', 'posicao', 'position', 'pos',
+        'tensão', 'tensao', 'voltage', 'volt', 'frequência', 'frequencia', 'frequency', 'freq'
+    ]
     keywords = []
     for word in query_lower.split():
         # Remove punctuation from word
@@ -208,17 +241,37 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
 
         logger.error(f"⚠️ No tags found with measurement_type={measurement_type} in {len(matching_tags)} candidates")
 
-    # Try partial match (e.g., "el01" matches "ELEV01_TEMP_C_PV")
+    # Try partial match with fuzzy logic (e.g., "el01" matches "ELEV01_TEMP_C_PV")
+    logger.error(f"⚠️ No measurement type detected, trying fuzzy fallback with keywords: {keywords}")
     for keyword in keywords:
         for tag in available_tags:
             tag_name = tag.get('name', '').lower()
             tag_id = tag.get('id', '').lower()
 
-            # Check if keyword is part of tag name
+            # Exact match first
             if keyword in tag_name or keyword in tag_id:
+                logger.error(f"✅ FALLBACK exact match: keyword '{keyword}' in tag '{tag.get('name')}'")
                 return tag
 
-    # Fallback: return first tag
+            # Fuzzy match as fallback
+            if len(keyword) >= 3:
+                keyword_parts = [c for c in keyword if c.isalnum()]
+                tag_name_clean = ''.join([c for c in tag_name if c.isalnum()])
+
+                if all(char in tag_name_clean for char in keyword_parts):
+                    # Check if characters appear in order
+                    idx = 0
+                    for char in keyword_parts:
+                        new_idx = tag_name_clean.find(char, idx)
+                        if new_idx == -1:
+                            break
+                        idx = new_idx + 1
+                    else:
+                        logger.error(f"✅ FALLBACK fuzzy match: keyword '{keyword}' → tag '{tag.get('name')}'")
+                        return tag
+
+    # Last resort: return first tag
+    logger.error(f"⚠️ No matches found, returning first tag: {available_tags[0].get('name') if available_tags else 'None'}")
     return available_tags[0]
 
 
