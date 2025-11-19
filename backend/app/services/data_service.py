@@ -15,6 +15,7 @@ import asyncio
 import logging
 from influxdb_client import InfluxDBClient
 from app.core.config import settings
+from app.services.influxdb import influxdb_service
 
 logger = logging.getLogger(__name__)
 
@@ -47,54 +48,41 @@ class DataService:
         
     async def get_realtime_value(self, tag_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get current value of a tag from the database
-        
+        Get current REAL-TIME value using influxdb_service
+
         Args:
-            tag_id: Tag identifier
-            
+            tag_id: Tag identifier (name, id, or address)
+
         Returns:
-            Dict with value, timestamp, quality, or None if not found
+            Dict with metadata + realtime value, or None if not found
         """
         try:
-            query = text("""
-                SELECT 
-                    t.id,
-                    t.name,
-                    t.address,
-                    t.data_type,
-                    t.description,
-                    t.unit,
-                    t.min_value,
-                    t.max_value,
-                    t.current_value,
-                    t.updated_at
-                FROM tags t
-                WHERE t.name = :tag_id OR t.address = :tag_id OR CAST(t.id AS TEXT) = :tag_id
-                LIMIT 1
-            """)
-            
-            result = await self.db.execute(query, {"tag_id": tag_id})
-            row = result.fetchone()
-            
-            if not row:
+            logger.info(f"📋 Getting realtime value for {tag_id}")
+
+            # Use the influxdb_service that's working for /api/v1/tags/realtime/{tag_name}
+            result = await asyncio.to_thread(influxdb_service.get_latest_value_by_name, tag_id)
+
+            if result is None:
+                logger.warning(f"⚠️ No realtime data found for tag: {tag_id}")
                 return None
-                
+
+            logger.info(f"✅ Got realtime value: {result.get('value')} for {tag_id}")
+
             return {
-                "tag_id": row[1],  # name
-                "tag_address": row[2],
-                "data_type": row[3],
-                "description": row[4],
-                "unit": row[5],
-                "min_value": float(row[6]) if row[6] is not None else 0,
-                "max_value": float(row[7]) if row[7] is not None else 100,
-                "value": row[8],  # current_value
-                "timestamp": row[9].isoformat() if row[9] else datetime.now().isoformat(),
-                "quality": "good"
+                "tag_id": result.get("tag_id", tag_id),
+                "name": result.get("tag_name", tag_id),
+                "unit": result.get("unit"),
+                "data_type": "float",
+                "description": None,
+                "value": result.get("value"),
+                "timestamp": result.get("timestamp"),
+                "quality": result.get("quality", "GOOD").upper(),
+                "min_value": None,
+                "max_value": None
             }
-            
+
         except Exception as e:
-            logger.error(f"Error getting realtime value for {tag_id}: {e}")
-            await self.db.rollback()
+            logger.error(f"❌ Error getting realtime value for {tag_id}: {e}")
             return None
     
     async def get_multiple_realtime_values(self, tag_ids: List[str]) -> List[Dict[str, Any]]:

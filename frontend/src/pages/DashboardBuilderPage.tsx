@@ -678,6 +678,8 @@ export const DashboardBuilderPage: React.FC = () => {
             onAddWidgets={(newWidgets) => {
               console.log('Receiving widgets from AI:', newWidgets);
               console.log('Current widgets before:', widgets.length);
+              console.log('🔍 DashboardBuilderPage - displayTags count:', displayTags.length);
+              console.log('🔍 DashboardBuilderPage - tagsFromStore count:', tagsFromStore.length);
               setWidgets(prev => {
                 const updated = [...prev, ...newWidgets];
                 console.log('Widgets after adding:', updated.length);

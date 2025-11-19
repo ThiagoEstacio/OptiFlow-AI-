@@ -15,7 +15,15 @@ export default defineConfig({
       '@hooks': path.resolve(__dirname, './src/hooks'),
       '@utils': path.resolve(__dirname, './src/utils'),
       '@types': path.resolve(__dirname, './src/types'),
+      // Polyfills for Node.js modules in browser
+      'buffer': 'buffer',
+      'stream': 'stream-browserify',
+      'assert': 'assert',
     },
+  },
+  define: {
+    // Fix for buffer polyfill
+    'global': 'globalThis',
   },
   server: {
     port: 3000,
@@ -53,12 +61,18 @@ export default defineConfig({
       '@reduxjs/toolkit',
       'react-redux',
       'axios',
-      'date-fns'
+      'date-fns',
+      'buffer',
+      'stream-browserify',
+      'assert'
     ],
     exclude: ['@mui/icons-material'],
     esbuildOptions: {
       loader: {
         '.js': 'jsx',
+      },
+      define: {
+        global: 'globalThis'
       },
     },
   },

@@ -552,6 +552,15 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️  Advanced cache initialization failed: {e}")
         logger.warning("⚠️  System will continue without advanced caching")
 
+    # Warm AI Agent cache with common queries
+    try:
+        from app.core.ai_cache import warm_cache_with_common_queries
+        await warm_cache_with_common_queries()
+        logger.info("✅ AI Agent cache warmed with common queries")
+    except Exception as e:
+        logger.warning(f"⚠️  AI cache warmup failed: {e}")
+        logger.warning("⚠️  System will continue - cache will populate on demand")
+
     # Initialize Kafka consumer for time-series data to InfluxDB
     try:
         await start_timeseries_consumer()

@@ -7,7 +7,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, X, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Widget } from '../../pages/DashboardBuilderPage';
-import apiClient from '../../api/client';
+import { FORCE_RELOAD_VERSION } from '../../version';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -70,63 +70,156 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const userInput = input.trim();
     setInput('');
     setIsLoading(true);
 
+    // Create placeholder for streaming response
+    const streamingMessageIndex = messages.length + 1;
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+    }]);
+
     try {
-      const response = await apiClient.post('/api/v1/agent/dashboard/chat', {
-        message: userMessage.content,
+      // Get auth token from localStorage
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Não autenticado. Faça login novamente.');
+      }
+
+      // Use EventSource for SSE streaming
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+      // DEBUG: Log available tags
+      console.log('='.repeat(80));
+      console.log('🔍 AIAssistantPanel - VERSION:', FORCE_RELOAD_VERSION);
+      console.log('🔍 AIAssistantPanel - availableTags count:', availableTags.length);
+      console.log('🔍 AIAssistantPanel - First 3 tags:', availableTags.slice(0, 3));
+      console.log('🔍 AIAssistantPanel - RELOAD TEST:', Date.now());
+      console.log('='.repeat(80));
+      // alert removed - was blocking streaming
+
+      // Create request body
+      const requestBody = {
+        message: userInput,
         available_tags: availableTags.slice(0, 20),
         current_widgets: currentWidgets.map(w => ({
           type: w.type,
           title: w.config.title,
         })),
-      });
-
-      const data = response.data;
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: data.response,
-        widgets: data.widgets,
-        timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      // Use fetch with streaming for POST + SSE
+      const response = await fetch(`${baseURL}/api/v1/agent/dashboard/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-      // Auto-add widgets if generated
-      if (data.widgets && data.widgets.length > 0) {
-        const baseTime = Date.now();
-        const widgetsToAdd: Widget[] = data.widgets.map((w: any, idx: number) => ({
-          id: `ai-widget-${baseTime}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
-          type: w.type,
-          position: { 
-            x: 100 + (idx * 30), 
-            y: 100 + (idx * 30) 
-          },
-          size: { width: 300, height: 250 },
-          config: {
-            title: w.title,
-            tagId: w.tagId,
-            tagIds: w.tagIds,
-            ...w.config,
-          },
-        }));
-
-        console.log('Adding AI widgets:', widgetsToAdd);
-        onAddWidgets(widgetsToAdd);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('Streaming not supported');
+      }
+
+      let accumulatedContent = '';
+      let toolsExecuted: any[] = [];
+      let isDone = false;
+
+      while (!isDone) {
+        const { value, done } = await reader.read();
+
+        if (done) {
+          isDone = true;
+          break;
+        }
+
+        // Decode chunk
+        const chunk = decoder.decode(value, { stream: true });
+
+        // Process SSE messages
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6); // Remove "data: " prefix
+
+            try {
+              const data = JSON.parse(dataStr);
+
+              if (data.chunk) {
+                // Append chunk to accumulated content
+                accumulatedContent += data.chunk;
+
+                // Update message in real-time
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  newMessages[streamingMessageIndex] = {
+                    ...newMessages[streamingMessageIndex],
+                    content: accumulatedContent,
+                  };
+                  return newMessages;
+                });
+              }
+
+              if (data.tools_executed) {
+                toolsExecuted = data.tools_executed;
+                // Show tools being executed
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  const toolsInfo = `\n\n🔧 Ferramentas executadas: ${toolsExecuted.map(t => t.tool).join(', ')}`;
+                  newMessages[streamingMessageIndex] = {
+                    ...newMessages[streamingMessageIndex],
+                    content: accumulatedContent + toolsInfo,
+                  };
+                  return newMessages;
+                });
+              }
+
+              if (data.done) {
+                isDone = true;
+                console.log('✅ Streaming completed', data.metadata);
+              }
+
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+              if (e instanceof SyntaxError) continue;
+              throw e;
+            }
+          }
+        }
+      }
+
+      // TODO: Handle widgets if returned (would need backend modification to include in metadata)
+
     } catch (error) {
-      console.error('AI Assistant error:', error);
-      
+      console.error('AI Assistant streaming error:', error);
+
       const errorMessage: Message = {
         role: 'assistant',
         content: `❌ Erro ao processar sua solicitação.\n\n${error instanceof Error ? error.message : 'Erro desconhecido'}\n\nDicas:\n• Aguarde alguns segundos e tente novamente (primeira requisição pode demorar)\n• Verifique se o Ollama está rodando: docker logs optiflow-ollama\n• Verifique os logs: docker logs optiflow-backend`,
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[streamingMessageIndex] = errorMessage;
+        return newMessages;
+      });
     } finally {
       setIsLoading(false);
     }
