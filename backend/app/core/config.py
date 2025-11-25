@@ -50,15 +50,18 @@ class Settings(BaseSettings):
     INFLUXDB_BUCKET_DOWNSAMPLED: str = "downsampled"
 
     # Database - Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_URL: str = "redis://redis:6379/0"
     REDIS_CACHE_DB: int = 1
     REDIS_SESSION_DB: int = 2
     REDIS_REALTIME_DB: int = 3
 
     # Message Queue - RabbitMQ
-    RABBITMQ_URL: str = "amqp://optiflow:optiflow_password@localhost:5672/"
-    CELERY_BROKER_URL: str = "amqp://optiflow:optiflow_password@localhost:5672/"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/4"
+    RABBITMQ_URL: str = "amqp://optiflow:optiflow_password@rabbitmq:5672/"
+    CELERY_BROKER_URL: str = "amqp://optiflow:optiflow_password@rabbitmq:5672/"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/4"
 
     # Security
     JWT_SECRET_KEY: str = secrets.token_urlsafe(32)

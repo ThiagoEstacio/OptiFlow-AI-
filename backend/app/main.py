@@ -27,6 +27,7 @@ from app.api.routes.simulator import router as simulator_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.ai_agent import router as ai_agent_router
 from app.api.routes.health import router as health_router
+from app.api.routes.consumer_metrics import router as consumer_metrics_router
 from app.api.v1.endpoints.websocket import router as websocket_router
 from app.api.v1.endpoints.websocket_simulator import router as websocket_simulator_router
 from app.db.session import init_db, get_db, check_db_health
@@ -34,11 +35,10 @@ from app.services.autonomous_agent import init_autonomous_agent
 from app.services.kafka_producer import init_kafka_producer, cleanup_kafka_producer
 from app.services.timeseries_consumer import start_timeseries_consumer, stop_timeseries_consumer
 from app.services.dlq_processor import start_dlq_processor, stop_dlq_processor
-from app.services.gateway_service import get_gateway
 from app.services.cache_service import cache_service
 
 # Import service modules to register their Prometheus metrics
-import app.services.gateway_service
+# NOTE: gateway_service removed - using standalone Gateway microservice
 import app.services.timeseries_consumer
 import app.services.dlq_processor
 from app.middleware.timeout import TimeoutMiddleware
@@ -223,18 +223,10 @@ tag_calculations_total = Counter(
     ['formula_id', 'success']
 )
 
-# Gateway Metrics
-gateway_tags_total = Gauge(
-    'gateway_tags_total',
-    'Total tags per gateway',
-    ['gateway_id', 'gateway_name']
-)
-
-gateway_connection_status = Gauge(
-    'gateway_connection_status',
-    'Gateway connection status (1=connected, 0=disconnected)',
-    ['gateway_id', 'gateway_name']
-)
+# Gateway Metrics - Removed (now in standalone Gateway microservice)
+# Gateway exposes its own metrics at port 8080/metrics
+# gateway_tags_total = Gauge(...)
+# gateway_connection_status = Gauge(...)
 
 # AI Agent Metrics
 ai_agent_interactions_total = Counter(
@@ -620,19 +612,10 @@ async def lifespan(app: FastAPI):
     # except Exception as e:
     #     logger.warning(f"⚠️  Failed to auto-start simulator: {e}", exc_info=True)
 
-    # Auto-start Gateway Service for PLC → Kafka bridge
-    logger.info("🔧 Attempting to auto-start Gateway Service...")
-    try:
-        from app.services.gateway_service import get_gateway
-        gateway = get_gateway()
-        logger.info(f"🔧 Gateway instance obtained, running={gateway.running}")
-        if not gateway.running:
-            await gateway.start()
-            logger.info("✅ Gateway Service auto-started (PLC → Kafka bridge)")
-        else:
-            logger.info("ℹ️  Gateway Service already running")
-    except Exception as e:
-        logger.warning(f"⚠️  Failed to auto-start Gateway Service: {e}", exc_info=True)
+    # Gateway Service is now a standalone microservice
+    # Data flows: Gateway microservice → Kafka → Backend (timeseries_consumer)
+    logger.info("ℹ️  Using standalone Gateway microservice (not embedded)")
+    logger.info("📊 Backend consumes data via Kafka (timeseries_consumer)")
 
     yield
 
@@ -649,15 +632,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Failed to stop alarm monitoring: {e}")
 
-    # Stop Gateway Service
-    try:
-        from app.services.gateway_service import get_gateway
-        gateway = get_gateway()
-        if gateway.running:
-            await gateway.stop()
-            logger.info("✅ Gateway Service stopped")
-    except Exception as e:
-        logger.warning(f"⚠️  Failed to stop Gateway Service: {e}")
+    # Gateway Service is now a standalone microservice - no shutdown needed here
+    logger.info("ℹ️  Gateway microservice runs independently")
     
     # Stop mat view refresher
     if mat_view_task:
@@ -884,14 +860,17 @@ app.include_router(websocket_router, prefix="/api/v1")
 app.include_router(websocket_simulator_router, prefix="/api/v1")
 logger.info("✅ WebSocket endpoints registered (OPC UA + Simulator)")
 
-# Include Gateway router for industrial protocol bridge
-from app.api.routes.gateway import router as gateway_router
-app.include_router(gateway_router, prefix="/api/v1")
-logger.info("✅ Gateway endpoint registered at /api/v1/gateway")
+# Gateway routes removed - now a standalone microservice
+# Gateway microservice has its own API at port 8080
+logger.info("ℹ️  Gateway API available at standalone Gateway microservice (port 8080)")
 
 # Include health check router
 app.include_router(health_router)
 logger.info("✅ Health endpoints registered at /api/health and /api/readiness")
+
+# Include consumer metrics router
+app.include_router(consumer_metrics_router)
+logger.info("✅ Consumer metrics registered at /metrics/consumer and /metrics/pipeline")
 
 # Include metrics endpoint (Prometheus)
 from app.api.v1.endpoints.metrics import router as metrics_router
@@ -1128,17 +1107,9 @@ async def metrics(request: Request):
     AI agent interactions, and custom OptiFlow metrics.
     """
     try:
-        # Ensure Gateway, Consumer, and DLQ metrics are registered
-        # by importing the metric variables (triggers module execution)
+        # Ensure Consumer and DLQ metrics are registered
+        # (Gateway metrics now come from standalone Gateway microservice)
         try:
-            from app.services.gateway_service import (
-                gateway_messages_published_total,
-                gateway_publish_latency_seconds,
-                gateway_buffer_size,
-                gateway_circuit_breaker_state,
-                gateway_tags_discovered,
-                gateway_transformations_applied
-            )
             from app.services.timeseries_consumer import (
                 consumer_messages_consumed_total,
                 consumer_messages_written_total,

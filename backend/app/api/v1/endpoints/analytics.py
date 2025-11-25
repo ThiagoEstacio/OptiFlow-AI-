@@ -461,19 +461,17 @@ async def detect_anomalies(
     
     # Query usando OptimizedInfluxDB (auto-seleciona bucket baseado em time range)
     # Para ML, sempre usamos dados brutos para máxima precisão
-    start_str = start_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-    end_str = end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-    
+
     # Coletar dados de todos os tags necessários
     all_data = []
     for tag_name in TAGS_ORDER:
         try:
             # Usando OptimizedInfluxDB com auto-bucket selection
+            # Note: tag_name é usado como tag_id no InfluxDB para este caso
             data = await optimized_influxdb_service.query_tag_data(
-                tag_name=tag_name,
-                start_time=start_str,
-                end_time=end_str,
-                limit=limit
+                tag_id=tag_name,  # tag_name atua como identificador no InfluxDB
+                start=start_dt,
+                end=end_dt
             )
             if data:
                 all_data.extend(data)

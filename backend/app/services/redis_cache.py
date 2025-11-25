@@ -388,11 +388,14 @@ class RedisCacheService:
             return False
 
 
-# Global singleton instance
+# Global singleton instance (initialized lazily from settings)
+import os
+
 redis_cache_service = RedisCacheService(
-    host='localhost',  # Will be overridden by config
-    port=6379,
-    db=0
+    host=os.getenv('REDIS_HOST', 'redis'),  # Use Docker service name by default
+    port=int(os.getenv('REDIS_PORT', '6379')),
+    db=int(os.getenv('REDIS_DB', '0')),
+    password=os.getenv('REDIS_PASSWORD', 'optiflow_redis_password')
 )
 
 
