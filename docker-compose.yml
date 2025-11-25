@@ -298,6 +298,26 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # ========================================
+  # Modbus TCP Simulator (Pump Station)
+  # ========================================
+  modbus-simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile.modbus
+    container_name: optiflow-modbus-simulator
+    ports:
+      - "502:502"
+    networks:
+      - ot-network
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 502)); s.close()\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   # Backend API
   backend:
     build:

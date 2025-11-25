@@ -43,6 +43,11 @@ try:
 except ImportError:
     tags_automation = None  # Automation routes optional
 
+try:
+    from app.api.routes import websocket
+except ImportError:
+    websocket = None  # WebSocket routes optional
+
 
 # Pydantic models
 class BrowseRequest(BaseModel):
@@ -101,6 +106,11 @@ if tags_advanced:
 
 if tags_automation:
     app.include_router(tags_automation.router, prefix="/api/automation", tags=["automation"])
+
+# WebSocket Routes for real-time streaming
+if websocket:
+    app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
+    logger.info("✅ WebSocket routes mounted at /ws")
 
 # Mount static files for UI
 static_path = Path(__file__).parent / "static"

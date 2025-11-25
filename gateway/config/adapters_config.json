@@ -26,6 +26,59 @@
           "batch_size": 16384
         }
       }
+    },
+    {
+      "adapter_id": "modbus-pump-station-001",
+      "adapter_name": "Pump Station Modbus PLC",
+      "protocol_type": "modbus",
+      "enabled": true,
+      "host": "modbus-simulator",
+      "port": 502,
+      "scan_rate_ms": 1000,
+      "timeout": 5.0,
+      "retry_interval": 10.0,
+      "extra_config": {
+        "unit_id": 1,
+        "byte_order": "big",
+        "word_order": "big"
+      },
+      "tags": [
+        {"tag_id": "pump1_flow", "address": "40001", "data_type": "uint16", "name": "Pump 1 Flow", "unit": "L/min"},
+        {"tag_id": "pump1_pressure", "address": "40002", "data_type": "uint16", "name": "Pump 1 Pressure", "unit": "bar", "scale": 0.1},
+        {"tag_id": "pump1_current", "address": "40003", "data_type": "uint16", "name": "Pump 1 Current", "unit": "A", "scale": 0.1},
+        {"tag_id": "pump1_speed", "address": "40004", "data_type": "uint16", "name": "Pump 1 Speed", "unit": "RPM"},
+        {"tag_id": "pump1_temp", "address": "40005", "data_type": "uint16", "name": "Pump 1 Temperature", "unit": "°C", "scale": 0.1},
+        {"tag_id": "pump2_flow", "address": "40006", "data_type": "uint16", "name": "Pump 2 Flow", "unit": "L/min"},
+        {"tag_id": "pump2_pressure", "address": "40007", "data_type": "uint16", "name": "Pump 2 Pressure", "unit": "bar", "scale": 0.1},
+        {"tag_id": "pump2_current", "address": "40008", "data_type": "uint16", "name": "Pump 2 Current", "unit": "A", "scale": 0.1},
+        {"tag_id": "pump2_speed", "address": "40009", "data_type": "uint16", "name": "Pump 2 Speed", "unit": "RPM"},
+        {"tag_id": "pump2_temp", "address": "40010", "data_type": "uint16", "name": "Pump 2 Temperature", "unit": "°C", "scale": 0.1},
+        {"tag_id": "tank1_level", "address": "40011", "data_type": "uint16", "name": "Tank 1 Level", "unit": "%"},
+        {"tag_id": "tank2_level", "address": "40012", "data_type": "uint16", "name": "Tank 2 Level", "unit": "%"},
+        {"tag_id": "tank3_level", "address": "40013", "data_type": "uint16", "name": "Tank 3 Level", "unit": "%"},
+        {"tag_id": "tank1_temp", "address": "40014", "data_type": "uint16", "name": "Tank 1 Temperature", "unit": "°C", "scale": 0.1},
+        {"tag_id": "tank2_temp", "address": "40015", "data_type": "uint16", "name": "Tank 2 Temperature", "unit": "°C", "scale": 0.1},
+        {"tag_id": "valve1_pos", "address": "40016", "data_type": "uint16", "name": "Valve 1 Position", "unit": "%"},
+        {"tag_id": "valve2_pos", "address": "40017", "data_type": "uint16", "name": "Valve 2 Position", "unit": "%"},
+        {"tag_id": "valve3_pos", "address": "40018", "data_type": "uint16", "name": "Valve 3 Position", "unit": "%"},
+        {"tag_id": "valve4_pos", "address": "40019", "data_type": "uint16", "name": "Valve 4 Position", "unit": "%"},
+        {"tag_id": "valve5_pos", "address": "40020", "data_type": "uint16", "name": "Valve 5 Position", "unit": "%"},
+        {"tag_id": "total_power", "address": "40021", "data_type": "uint16", "name": "Total Power", "unit": "kW", "scale": 0.1},
+        {"tag_id": "daily_energy", "address": "40022", "data_type": "uint16", "name": "Daily Energy", "unit": "kWh"},
+        {"tag_id": "power_factor", "address": "40023", "data_type": "uint16", "name": "Power Factor", "unit": "", "scale": 0.01},
+        {"tag_id": "voltage", "address": "40024", "data_type": "uint16", "name": "Voltage", "unit": "V"},
+        {"tag_id": "frequency", "address": "40025", "data_type": "uint16", "name": "Frequency", "unit": "Hz", "scale": 0.1}
+      ],
+      "kafka_config": {
+        "topic": "raw_tags",
+        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096",
+        "producer_config": {
+          "acks": "1",
+          "compression_type": "lz4",
+          "linger_ms": 100,
+          "batch_size": 16384
+        }
+      }
     }
   ]
 }

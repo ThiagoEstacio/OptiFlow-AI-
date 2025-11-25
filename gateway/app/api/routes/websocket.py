@@ -334,3 +334,304 @@ async def get_websocket_status():
         "endpoint": "/ws/alarms",
         "status": "operational"
     }
+
+
+# === REAL-TIME TAG VALUES WEBSOCKET ===
+
+class TagValueConnectionManager:
+    """
+    Manages WebSocket connections for real-time tag value streaming
+
+    Features:
+    - Subscribe to specific tags or all tags
+    - Multiple concurrent clients with different subscriptions
+    - Automatic value broadcasting on change
+    """
+
+    def __init__(self):
+        self.active_connections: Dict[WebSocket, Set[str]] = {}  # websocket -> subscribed tag names
+        self._lock = asyncio.Lock()
+        self._broadcast_task: Optional[asyncio.Task] = None
+        self._running = False
+
+    async def connect(self, websocket: WebSocket, tag_names: Optional[List[str]] = None):
+        """Accept new WebSocket connection with optional tag subscription"""
+        await websocket.accept()
+
+        async with self._lock:
+            self.active_connections[websocket] = set(tag_names) if tag_names else set()
+
+        logger.info(f"✅ Tag values WebSocket connected. Total: {len(self.active_connections)}")
+
+        # Start broadcast task if not running
+        if not self._running:
+            self._running = True
+            self._broadcast_task = asyncio.create_task(self._broadcast_loop())
+
+    async def disconnect(self, websocket: WebSocket):
+        """Remove WebSocket connection"""
+        async with self._lock:
+            self.active_connections.pop(websocket, None)
+
+        logger.info(f"❌ Tag values WebSocket disconnected. Total: {len(self.active_connections)}")
+
+        # Stop broadcast task if no connections
+        if not self.active_connections and self._running:
+            self._running = False
+            if self._broadcast_task:
+                self._broadcast_task.cancel()
+
+    async def subscribe(self, websocket: WebSocket, tag_names: List[str]):
+        """Subscribe client to specific tags"""
+        async with self._lock:
+            if websocket in self.active_connections:
+                self.active_connections[websocket].update(tag_names)
+
+    async def unsubscribe(self, websocket: WebSocket, tag_names: List[str]):
+        """Unsubscribe client from specific tags"""
+        async with self._lock:
+            if websocket in self.active_connections:
+                self.active_connections[websocket] -= set(tag_names)
+
+    async def _broadcast_loop(self):
+        """Background task to broadcast tag values at regular intervals"""
+        # Try to get protocol_manager from the active main module
+        protocol_manager = None
+        try:
+            from app.main_kafka import protocol_manager
+        except ImportError:
+            try:
+                from app.main_hybrid import protocol_manager
+            except ImportError:
+                pass
+
+        while self._running:
+            try:
+                if not self.active_connections:
+                    await asyncio.sleep(1)
+                    continue
+
+                # Get all subscribed tags from clients
+                all_subscribed_tags: Set[str] = set()
+                for tags in self.active_connections.values():
+                    all_subscribed_tags.update(tags)
+
+                # Get tag values from all adapters
+                tag_values = {}
+                if protocol_manager:
+                    # Get values from all adapters
+                    for adapter_id, adapter in protocol_manager.get_all_adapters().items():
+                        try:
+                            # Get cached values from adapter's last_values
+                            if hasattr(adapter, 'last_values') and adapter.last_values:
+                                for address, cached_value in adapter.last_values.items():
+                                    # Find tag name from config
+                                    tag_name = address  # default to address
+                                    unit = ''
+                                    for tag_config in adapter.config.tags:
+                                        if tag_config.get('address') == address:
+                                            tag_name = tag_config.get('name', address)
+                                            unit = tag_config.get('unit', '')
+                                            break
+
+                                    # If no specific subscriptions, include all tags
+                                    # Otherwise only include subscribed tags
+                                    if not all_subscribed_tags or tag_name in all_subscribed_tags or address in all_subscribed_tags:
+                                        tag_values[tag_name] = {
+                                            'value': cached_value.get('value'),
+                                            'quality': cached_value.get('quality', 'good'),
+                                            'timestamp': cached_value.get('timestamp', datetime.utcnow().isoformat()),
+                                            'unit': unit,
+                                            'adapter_id': adapter_id
+                                        }
+                        except Exception as e:
+                            logger.warning(f"Failed to get values from adapter {adapter_id}: {e}")
+
+                if not tag_values:
+                    await asyncio.sleep(1)
+                    continue
+
+                # Broadcast to each connected client
+                dead_connections = set()
+                for websocket, subscribed_tags in list(self.active_connections.items()):
+                    try:
+                        # Filter values for this client
+                        client_values = {}
+                        if subscribed_tags:
+                            for tag_name in subscribed_tags:
+                                if tag_name in tag_values:
+                                    client_values[tag_name] = tag_values[tag_name]
+                        else:
+                            # Send all values if no specific subscription
+                            client_values = tag_values
+
+                        if client_values:
+                            await websocket.send_json({
+                                "type": "tag_values",
+                                "timestamp": datetime.utcnow().isoformat(),
+                                "count": len(client_values),
+                                "values": client_values
+                            })
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to send tag values: {e}")
+                        dead_connections.add(websocket)
+
+                # Cleanup dead connections
+                if dead_connections:
+                    async with self._lock:
+                        for ws in dead_connections:
+                            self.active_connections.pop(ws, None)
+
+                # Wait before next broadcast (500ms for real-time feel)
+                await asyncio.sleep(0.5)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"❌ Broadcast loop error: {e}")
+                await asyncio.sleep(1)
+
+    def get_connection_count(self) -> int:
+        """Get number of active connections"""
+        return len(self.active_connections)
+
+
+# Global tag value connection manager
+tag_value_manager = TagValueConnectionManager()
+
+
+@router.websocket("/tags")
+async def websocket_tag_values(
+    websocket: WebSocket,
+    tags: Optional[str] = Query(None, description="Comma-separated list of tag names to subscribe to")
+):
+    """
+    WebSocket endpoint for real-time tag value streaming
+
+    **Connection URL**:
+    ```
+    ws://gateway:8080/ws/tags
+    ws://gateway:8080/ws/tags?tags=Pump%201%20Flow,Tank%201%20Level
+    ```
+
+    **Message Types**:
+
+    1. **Connected** (sent on connection):
+    ```json
+    {
+      "type": "connected",
+      "message": "Connected to tag value stream",
+      "subscribed_tags": ["Pump 1 Flow", "Tank 1 Level"]
+    }
+    ```
+
+    2. **Tag Values** (pushed every 500ms):
+    ```json
+    {
+      "type": "tag_values",
+      "timestamp": "2025-01-19T10:30:45.123Z",
+      "count": 2,
+      "values": {
+        "Pump 1 Flow": {"value": 150, "quality": "good", "timestamp": "...", "unit": "L/min"},
+        "Tank 1 Level": {"value": 75, "quality": "good", "timestamp": "...", "unit": "%"}
+      }
+    }
+    ```
+
+    3. **Subscribe/Unsubscribe** (client can send):
+    ```json
+    {"type": "subscribe", "tags": ["Pump 2 Flow", "Pump 2 Pressure"]}
+    {"type": "unsubscribe", "tags": ["Pump 1 Flow"]}
+    ```
+
+    **Client Example** (JavaScript):
+    ```javascript
+    const ws = new WebSocket('ws://gateway:8080/ws/tags?tags=Pump%201%20Flow');
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'tag_values') {
+        for (const [tagName, tagData] of Object.entries(data.values)) {
+          updateDashboard(tagName, tagData.value);
+        }
+      }
+    };
+
+    // Subscribe to more tags dynamically
+    ws.send(JSON.stringify({type: 'subscribe', tags: ['Tank 1 Level']}));
+    ```
+    """
+    # Parse comma-separated tag names
+    tag_names = None
+    if tags:
+        tag_names = [t.strip() for t in tags.split(',')]
+
+    await tag_value_manager.connect(websocket, tag_names)
+
+    try:
+        # Send initial connection confirmation
+        await websocket.send_json({
+            "type": "connected",
+            "message": "Connected to OptiFlow Gateway tag value stream",
+            "timestamp": datetime.utcnow().isoformat(),
+            "subscribed_tags": tag_names or [],
+            "total_connections": tag_value_manager.get_connection_count()
+        })
+
+        # Listen for client messages (subscribe/unsubscribe)
+        while True:
+            try:
+                data = await websocket.receive_text()
+                message = json.loads(data)
+
+                if message.get("type") == "subscribe":
+                    new_tags = message.get("tags", [])
+                    await tag_value_manager.subscribe(websocket, new_tags)
+                    await websocket.send_json({
+                        "type": "subscribed",
+                        "tags": new_tags,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+                elif message.get("type") == "unsubscribe":
+                    remove_tags = message.get("tags", [])
+                    await tag_value_manager.unsubscribe(websocket, remove_tags)
+                    await websocket.send_json({
+                        "type": "unsubscribed",
+                        "tags": remove_tags,
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+                elif message.get("type") == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Invalid JSON format"
+                })
+
+    except WebSocketDisconnect:
+        logger.info("Tag values client disconnected normally")
+        await tag_value_manager.disconnect(websocket)
+
+    except Exception as e:
+        logger.error(f"❌ Tag values WebSocket error: {e}", exc_info=True)
+        await tag_value_manager.disconnect(websocket)
+
+
+@router.get("/tags/status")
+async def get_tag_websocket_status():
+    """
+    Get tag values WebSocket connection statistics
+    """
+    return {
+        "active_connections": tag_value_manager.get_connection_count(),
+        "service": "websocket_tag_values",
+        "endpoint": "/ws/tags",
+        "status": "operational"
+    }
