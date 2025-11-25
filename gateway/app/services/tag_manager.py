@@ -1,0 +1,536 @@
+"""
+Advanced Tag Manager Service
+Enterprise tag management with historization, scaling, deadband, and more
+"""
+import asyncio
+import json
+import math
+from typing import Dict, List, Optional, Any, Set
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from app.core.logger import logger
+from app.models.tag_config import (
+    TagConfig, TagGroup, TagTemplate, TagBrowseResult,
+    DataType, QualityCode, ScalingMode, DeadbandType,
+    HistorianMode, PREDEFINED_TEMPLATES
+)
+
+
+class TagManager:
+    """
+    Enterprise Tag Manager
+    Manages tag configuration, transformation, filtering, and historization
+    """
+
+    def __init__(self, config_path: str = "/app/config/tags_config.json"):
+        self.config_path = config_path
+        self.tags: Dict[str, TagConfig] = {}
+        self.groups: Dict[str, TagGroup] = {}
+        self.templates: Dict[str, TagTemplate] = {}
+
+        # Runtime state
+        self.tag_values: Dict[str, Any] = {}  # Current values
+        self.last_published: Dict[str, datetime] = {}  # Last time published
+
+        # Statistics
+        self.total_reads = 0
+        self.total_writes = 0
+        self.total_transformations = 0
+        self.total_deadband_filtered = 0
+
+        # Load predefined templates
+        self.templates.update(PREDEFINED_TEMPLATES)
+
+    async def initialize(self):
+        """Initialize tag manager"""
+        try:
+            await self._load_config()
+            logger.info(f"✅ Tag Manager initialized - {len(self.tags)} tags, {len(self.groups)} groups, {len(self.templates)} templates")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Tag Manager: {e}", exc_info=True)
+            raise
+
+    async def _load_config(self):
+        """Load tag configuration from file"""
+        config_file = Path(self.config_path)
+
+        if not config_file.exists():
+            logger.warning(f"Tag config file not found: {self.config_path}, creating default")
+            await self._save_config()
+            return
+
+        try:
+            with open(config_file, 'r') as f:
+                data = json.load(f)
+
+            # Load tags
+            for tag_data in data.get('tags', []):
+                tag = TagConfig(**tag_data)
+                self.tags[tag.tag_id] = tag
+
+            # Load groups
+            for group_data in data.get('groups', []):
+                group = TagGroup(**group_data)
+                self.groups[group.group_id] = group
+
+            # Load custom templates
+            for template_data in data.get('templates', []):
+                template = TagTemplate(**template_data)
+                self.templates[template.template_id] = template
+
+            logger.info(f"Loaded {len(self.tags)} tags, {len(self.groups)} groups, {len(self.templates)} templates")
+
+        except Exception as e:
+            logger.error(f"Failed to load tag config: {e}", exc_info=True)
+            raise
+
+    async def _save_config(self):
+        """Save tag configuration to file"""
+        try:
+            config_file = Path(self.config_path)
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+
+            data = {
+                'tags': [tag.dict() for tag in self.tags.values()],
+                'groups': [group.dict() for group in self.groups.values()],
+                'templates': [
+                    template.dict()
+                    for template_id, template in self.templates.items()
+                    if template_id not in PREDEFINED_TEMPLATES  # Don't save predefined
+                ],
+                'metadata': {
+                    'version': '1.0',
+                    'updated_at': datetime.utcnow().isoformat()
+                }
+            }
+
+            with open(config_file, 'w') as f:
+                json.dump(data, f, indent=2, default=str)
+
+            logger.info(f"Saved tag configuration to {self.config_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to save tag config: {e}", exc_info=True)
+            raise
+
+    # ==================== Tag CRUD ====================
+
+    async def create_tag(self, tag: TagConfig) -> TagConfig:
+        """Create new tag"""
+        if tag.tag_id in self.tags:
+            raise ValueError(f"Tag {tag.tag_id} already exists")
+
+        self.tags[tag.tag_id] = tag
+        await self._save_config()
+
+        logger.info(f"✅ Created tag: {tag.tag_id} ({tag.tag_name})")
+        return tag
+
+    async def update_tag(self, tag_id: str, updates: Dict[str, Any]) -> TagConfig:
+        """Update tag configuration"""
+        if tag_id not in self.tags:
+            raise ValueError(f"Tag {tag_id} not found")
+
+        tag = self.tags[tag_id]
+
+        # Update fields
+        for key, value in updates.items():
+            if hasattr(tag, key):
+                setattr(tag, key, value)
+
+        tag.updated_at = datetime.utcnow()
+
+        await self._save_config()
+
+        logger.info(f"✅ Updated tag: {tag_id}")
+        return tag
+
+    async def delete_tag(self, tag_id: str):
+        """Delete tag"""
+        if tag_id not in self.tags:
+            raise ValueError(f"Tag {tag_id} not found")
+
+        del self.tags[tag_id]
+
+        # Remove from groups
+        for group in self.groups.values():
+            if tag_id in group.tags:
+                group.tags.remove(tag_id)
+
+        await self._save_config()
+
+        logger.info(f"✅ Deleted tag: {tag_id}")
+
+    async def get_tag(self, tag_id: str) -> Optional[TagConfig]:
+        """Get tag by ID"""
+        return self.tags.get(tag_id)
+
+    async def get_tags_by_adapter(self, adapter_id: str) -> List[TagConfig]:
+        """Get all tags for an adapter"""
+        return [tag for tag in self.tags.values() if tag.adapter_id == adapter_id]
+
+    async def get_tags_by_group(self, group_id: str) -> List[TagConfig]:
+        """Get all tags in a group"""
+        group = self.groups.get(group_id)
+        if not group:
+            return []
+
+        return [self.tags[tag_id] for tag_id in group.tags if tag_id in self.tags]
+
+    # ==================== Data Transformation ====================
+
+    def apply_scaling(self, tag: TagConfig, raw_value: float) -> float:
+        """Apply scaling transformation to raw value"""
+        if not tag.scaling or tag.scaling.mode == ScalingMode.NONE:
+            return raw_value
+
+        try:
+            scaled_value = raw_value
+
+            if tag.scaling.mode == ScalingMode.LINEAR:
+                # Linear scaling: y = (x - raw_min) * (eng_max - eng_min) / (raw_max - raw_min) + eng_min
+                raw_min = tag.scaling.raw_min or 0
+                raw_max = tag.scaling.raw_max or 100
+                eng_min = tag.scaling.eng_min or 0
+                eng_max = tag.scaling.eng_max or 100
+
+                raw_range = raw_max - raw_min
+                eng_range = eng_max - eng_min
+
+                if raw_range != 0:
+                    scaled_value = ((raw_value - raw_min) * eng_range / raw_range) + eng_min
+
+            elif tag.scaling.mode == ScalingMode.SQUARE_ROOT:
+                # Square root extraction (for flow from differential pressure)
+                raw_min = tag.scaling.raw_min or 0
+                raw_max = tag.scaling.raw_max or 100
+                eng_min = tag.scaling.eng_min or 0
+                eng_max = tag.scaling.eng_max or 100
+
+                # Normalize to 0-1
+                normalized = (raw_value - raw_min) / (raw_max - raw_min) if (raw_max - raw_min) != 0 else 0
+                normalized = max(0, normalized)  # Clamp to positive
+
+                # Apply square root
+                sqrt_value = math.sqrt(normalized)
+
+                # Scale to engineering units
+                scaled_value = (sqrt_value * (eng_max - eng_min)) + eng_min
+
+            elif tag.scaling.mode == ScalingMode.CUSTOM_EXPRESSION:
+                # Custom Python expression
+                if tag.scaling.expression:
+                    # Create safe environment
+                    safe_dict = {
+                        'x': raw_value,
+                        'math': math,
+                        'abs': abs,
+                        'min': min,
+                        'max': max
+                    }
+                    scaled_value = eval(tag.scaling.expression, {"__builtins__": {}}, safe_dict)
+
+            # Apply clamping if configured
+            if tag.scaling.clamp_low is not None:
+                scaled_value = max(scaled_value, tag.scaling.clamp_low)
+            if tag.scaling.clamp_high is not None:
+                scaled_value = min(scaled_value, tag.scaling.clamp_high)
+
+            self.total_transformations += 1
+            return scaled_value
+
+        except Exception as e:
+            logger.error(f"Scaling error for tag {tag.tag_id}: {e}")
+            return raw_value  # Return original value on error
+
+    def apply_deadband(self, tag: TagConfig, new_value: float) -> bool:
+        """
+        Check if value change exceeds deadband
+        Returns True if value should be published
+        """
+        if not tag.deadband or tag.deadband.type == DeadbandType.NONE:
+            return True
+
+        # Get last published value
+        last_value = self.tag_values.get(tag.tag_id)
+        if last_value is None:
+            return True  # First value, always publish
+
+        try:
+            if tag.deadband.type == DeadbandType.ABSOLUTE:
+                # Absolute deadband
+                delta = abs(new_value - last_value)
+                if delta >= tag.deadband.value:
+                    return True
+                else:
+                    self.total_deadband_filtered += 1
+                    return False
+
+            elif tag.deadband.type == DeadbandType.PERCENTAGE:
+                # Percentage deadband
+                range_min = tag.deadband.range_min or 0
+                range_max = tag.deadband.range_max or 100
+                range_span = range_max - range_min
+
+                if range_span == 0:
+                    return True
+
+                delta = abs(new_value - last_value)
+                delta_percent = (delta / range_span) * 100
+
+                if delta_percent >= tag.deadband.value:
+                    return True
+                else:
+                    self.total_deadband_filtered += 1
+                    return False
+
+        except Exception as e:
+            logger.error(f"Deadband error for tag {tag.tag_id}: {e}")
+            return True  # On error, publish
+
+        return True
+
+    def should_historize(self, tag: TagConfig, new_value: Any) -> bool:
+        """
+        Check if value should be stored in historian
+        Based on historization mode and deadband
+        """
+        if not tag.historian.enabled:
+            return False
+
+        now = datetime.utcnow()
+
+        if tag.historian.mode == HistorianMode.DISABLED:
+            return False
+
+        elif tag.historian.mode == HistorianMode.ON_CHANGE:
+            # Only historize if value changed (considering deadband)
+            if tag.data_type in [DataType.FLOAT, DataType.DOUBLE]:
+                if tag.historian.exception_deadband:
+                    # Use exception deadband for historian
+                    return self._check_deadband(
+                        tag.tag_id,
+                        new_value,
+                        tag.historian.exception_deadband
+                    )
+                else:
+                    # Use tag's main deadband
+                    return self.apply_deadband(tag, new_value)
+            else:
+                # For non-numeric types, compare directly
+                return self.tag_values.get(tag.tag_id) != new_value
+
+        elif tag.historian.mode == HistorianMode.PERIODIC:
+            # Historize at fixed interval
+            last_published = self.last_published.get(tag.tag_id)
+            if not last_published:
+                return True
+
+            elapsed_ms = (now - last_published).total_seconds() * 1000
+            return elapsed_ms >= tag.historian.interval_ms
+
+        elif tag.historian.mode == HistorianMode.ON_CHANGE_AND_PERIODIC:
+            # Hybrid: historize on change OR at interval (whichever comes first)
+            on_change = self.apply_deadband(tag, new_value) if isinstance(new_value, (int, float)) else True
+
+            last_published = self.last_published.get(tag.tag_id)
+            periodic = True
+            if last_published:
+                elapsed_ms = (now - last_published).total_seconds() * 1000
+                periodic = elapsed_ms >= tag.historian.interval_ms
+
+            return on_change or periodic
+
+        return True
+
+    def _check_deadband(self, tag_id: str, new_value: float, deadband_config) -> bool:
+        """Helper to check deadband"""
+        last_value = self.tag_values.get(tag_id)
+        if last_value is None:
+            return True
+
+        if deadband_config.type == DeadbandType.ABSOLUTE:
+            return abs(new_value - last_value) >= deadband_config.value
+        elif deadband_config.type == DeadbandType.PERCENTAGE:
+            range_span = (deadband_config.range_max or 100) - (deadband_config.range_min or 0)
+            if range_span == 0:
+                return True
+            delta_percent = (abs(new_value - last_value) / range_span) * 100
+            return delta_percent >= deadband_config.value
+
+        return True
+
+    # ==================== Tag Processing ====================
+
+    async def process_tag_value(
+        self,
+        tag_id: str,
+        raw_value: Any,
+        timestamp: Optional[datetime] = None,
+        quality: QualityCode = QualityCode.GOOD
+    ) -> Dict[str, Any]:
+        """
+        Process tag value through complete pipeline:
+        1. Scaling/transformation
+        2. Deadband filtering
+        3. Historization decision
+        4. Update internal state
+
+        Returns processed value data ready for Kafka
+        """
+        tag = self.tags.get(tag_id)
+        if not tag or not tag.enabled:
+            return None
+
+        timestamp = timestamp or datetime.utcnow()
+
+        # Apply scaling if numeric
+        processed_value = raw_value
+        if tag.data_type in [DataType.FLOAT, DataType.DOUBLE, DataType.INT16, DataType.INT32]:
+            if isinstance(raw_value, (int, float)):
+                processed_value = self.apply_scaling(tag, raw_value)
+
+        # Check deadband for publishing
+        should_publish = True
+        if tag.data_type in [DataType.FLOAT, DataType.DOUBLE]:
+            if isinstance(processed_value, (int, float)):
+                should_publish = self.apply_deadband(tag, processed_value)
+
+        # Check if should historize
+        should_store = self.should_historize(tag, processed_value)
+
+        # Update internal state
+        if should_publish:
+            self.tag_values[tag_id] = processed_value
+            self.last_published[tag_id] = timestamp
+
+        # Update tag statistics
+        tag.current_value = processed_value
+        tag.current_value_timestamp = timestamp
+        tag.quality = quality
+        tag.read_count += 1
+
+        if quality == QualityCode.GOOD:
+            tag.last_good_value = processed_value
+            tag.last_change_timestamp = timestamp
+
+        self.total_reads += 1
+
+        # Prepare data for Kafka
+        if should_publish or should_store:
+            return {
+                'tag_id': tag_id,
+                'tag_name': tag.tag_name,
+                'address': tag.address,
+                'raw_value': raw_value,
+                'value': processed_value,
+                'data_type': tag.data_type,
+                'quality': quality,
+                'timestamp': timestamp.isoformat(),
+                'adapter_id': tag.adapter_id,
+                'engineering_units': tag.metadata.engineering_units,
+                'should_historize': should_store,
+                'metadata': {
+                    'asset_id': tag.metadata.asset_id,
+                    'location': tag.metadata.location,
+                    'group_path': tag.group_path
+                }
+            }
+
+        return None  # Filtered by deadband
+
+    # ==================== Templates ====================
+
+    async def create_template(self, template: TagTemplate) -> TagTemplate:
+        """Create tag template"""
+        self.templates[template.template_id] = template
+        await self._save_config()
+        logger.info(f"✅ Created template: {template.template_id}")
+        return template
+
+    async def apply_template(self, tag_id: str, template_id: str) -> TagConfig:
+        """Apply template to tag"""
+        tag = self.tags.get(tag_id)
+        template = self.templates.get(template_id)
+
+        if not tag:
+            raise ValueError(f"Tag {tag_id} not found")
+        if not template:
+            raise ValueError(f"Template {template_id} not found")
+
+        # Apply template configuration
+        tag.scaling = template.scaling
+        tag.deadband = template.deadband
+        tag.historian = template.historian
+        tag.alarm = template.alarm
+
+        # Merge metadata (don't overwrite existing)
+        if template.metadata.engineering_units and not tag.metadata.engineering_units:
+            tag.metadata.engineering_units = template.metadata.engineering_units
+
+        tag.updated_at = datetime.utcnow()
+        template.usage_count += 1
+
+        await self._save_config()
+
+        logger.info(f"✅ Applied template {template_id} to tag {tag_id}")
+        return tag
+
+    # ==================== Groups ====================
+
+    async def create_group(self, group: TagGroup) -> TagGroup:
+        """Create tag group"""
+        self.groups[group.group_id] = group
+        await self._save_config()
+        logger.info(f"✅ Created group: {group.group_id}")
+        return group
+
+    async def add_tag_to_group(self, tag_id: str, group_id: str):
+        """Add tag to group"""
+        if tag_id not in self.tags:
+            raise ValueError(f"Tag {tag_id} not found")
+        if group_id not in self.groups:
+            raise ValueError(f"Group {group_id} not found")
+
+        group = self.groups[group_id]
+        if tag_id not in group.tags:
+            group.tags.append(tag_id)
+
+        tag = self.tags[tag_id]
+        tag.group_path = group.path
+
+        await self._save_config()
+
+    # ==================== Statistics ====================
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get tag manager statistics"""
+        enabled_tags = sum(1 for tag in self.tags.values() if tag.enabled)
+        historized_tags = sum(1 for tag in self.tags.values() if tag.historian.enabled)
+
+        return {
+            'total_tags': len(self.tags),
+            'enabled_tags': enabled_tags,
+            'disabled_tags': len(self.tags) - enabled_tags,
+            'historized_tags': historized_tags,
+            'total_groups': len(self.groups),
+            'total_templates': len(self.templates),
+            'total_reads': self.total_reads,
+            'total_writes': self.total_writes,
+            'total_transformations': self.total_transformations,
+            'total_deadband_filtered': self.total_deadband_filtered,
+            'deadband_filter_rate': f"{(self.total_deadband_filtered / max(self.total_reads, 1)) * 100:.1f}%"
+        }
+
+
+# Global instance
+tag_manager: Optional[TagManager] = None
+
+
+def get_tag_manager() -> TagManager:
+    """Get global tag manager instance"""
+    global tag_manager
+    if not tag_manager:
+        tag_manager = TagManager()
+    return tag_manager

@@ -1,0 +1,383 @@
+# ============================================================================
+# Grafana Dashboards - ConfigMap
+# ============================================================================
+#
+# Pre-configured dashboards for OptiFlow platform monitoring
+# These dashboards are automatically loaded into Grafana on startup
+# ============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    app: grafana
+    component: dashboards
+data:
+  # Dashboard JSON files will be mounted here
+  # In production, these should be loaded from the monitoring/grafana/dashboards/ directory
+
+  # Example: Platform Overview Dashboard
+  platform-overview.json: |
+    {
+      "dashboard": {
+        "title": "OptiFlow - Platform Overview",
+        "tags": ["optiflow", "overview"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Services Health",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=~\"optiflow-.*\"}",
+                "legendFormat": "{{ job }}"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 2,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=~\"optiflow-.*\"}[5m])) by (job)",
+                "legendFormat": "{{ job }}"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 3,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=~\"optiflow-.*\",status=~\"5..\"}[5m])) by (job)",
+                "legendFormat": "{{ job }} errors"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8}
+          },
+          {
+            "id": 4,
+            "title": "Response Time (p95)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=~\"optiflow-.*\"}[5m])) by (job, le))",
+                "legendFormat": "{{ job }} p95"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8}
+          }
+        ],
+        "refresh": "10s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        }
+      }
+    }
+
+  # Gateway Metrics Dashboard
+  gateway-metrics.json: |
+    {
+      "dashboard": {
+        "title": "OptiFlow - Gateway Metrics",
+        "tags": ["optiflow", "gateway", "edge"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "PLC Connection Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "gateway_plc_connected",
+                "legendFormat": "{{ adapter_id }}"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6}
+          },
+          {
+            "id": 2,
+            "title": "Tags Published Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(gateway_tags_published_total[5m])",
+                "legendFormat": "{{ adapter_id }}"
+              }
+            ],
+            "gridPos": {"x": 8, "y": 0, "w": 16, "h": 6}
+          },
+          {
+            "id": 3,
+            "title": "Gateway API Latency",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(gateway_api_latency_seconds_bucket[5m]))",
+                "legendFormat": "p95 latency"
+              },
+              {
+                "expr": "histogram_quantile(0.99, rate(gateway_api_latency_seconds_bucket[5m]))",
+                "legendFormat": "p99 latency"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 6, "w": 12, "h": 8}
+          },
+          {
+            "id": 4,
+            "title": "Buffer Utilization",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "gateway_buffer_size_bytes / gateway_buffer_capacity_bytes * 100",
+                "legendFormat": "{{ adapter_id }} buffer %"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 6, "w": 12, "h": 8},
+            "alert": {
+              "conditions": [
+                {
+                  "evaluator": {"type": "gt", "params": [90]},
+                  "operator": {"type": "and"},
+                  "query": {"params": ["A", "5m", "now"]},
+                  "reducer": {"type": "avg"},
+                  "type": "query"
+                }
+              ],
+              "name": "Gateway Buffer High"
+            }
+          },
+          {
+            "id": 5,
+            "title": "Kafka Publish Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(gateway_kafka_published_success_total[5m])) / sum(rate(gateway_kafka_published_total[5m])) * 100",
+                "legendFormat": "Success %"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 14, "w": 8, "h": 6}
+          },
+          {
+            "id": 6,
+            "title": "Network Traffic",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(gateway_network_bytes_sent_total[5m])",
+                "legendFormat": "Bytes sent/s"
+              },
+              {
+                "expr": "rate(gateway_network_bytes_received_total[5m])",
+                "legendFormat": "Bytes received/s"
+              }
+            ],
+            "gridPos": {"x": 8, "y": 14, "w": 16, "h": 6}
+          }
+        ],
+        "refresh": "5s",
+        "time": {
+          "from": "now-15m",
+          "to": "now"
+        }
+      }
+    }
+
+  # Backend Metrics Dashboard
+  backend-metrics.json: |
+    {
+      "dashboard": {
+        "title": "OptiFlow - Backend Metrics",
+        "tags": ["optiflow", "backend"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "API Requests/sec",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=\"optiflow-backend\"}[5m])) by (method, endpoint)",
+                "legendFormat": "{{ method }} {{ endpoint }}"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 2,
+            "title": "Kafka Consumer Lag",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kafka_consumer_lag",
+                "legendFormat": "{{ topic }} - {{ partition }}"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+            "alert": {
+              "conditions": [
+                {
+                  "evaluator": {"type": "gt", "params": [10000]},
+                  "operator": {"type": "and"},
+                  "query": {"params": ["A", "5m", "now"]},
+                  "reducer": {"type": "avg"},
+                  "type": "query"
+                }
+              ],
+              "name": "High Kafka Consumer Lag"
+            }
+          },
+          {
+            "id": 3,
+            "title": "Database Connection Pool",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "db_connection_pool_active",
+                "legendFormat": "Active connections"
+              },
+              {
+                "expr": "db_connection_pool_size",
+                "legendFormat": "Pool size"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8}
+          },
+          {
+            "id": 4,
+            "title": "InfluxDB Write Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(influxdb_writes_total[5m])",
+                "legendFormat": "Writes/sec"
+              },
+              {
+                "expr": "rate(influxdb_write_failures_total[5m])",
+                "legendFormat": "Failures/sec"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8}
+          },
+          {
+            "id": 5,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "process_resident_memory_bytes{job=\"optiflow-backend\"}",
+                "legendFormat": "Memory bytes"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 16, "w": 12, "h": 6}
+          },
+          {
+            "id": 6,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(process_cpu_seconds_total{job=\"optiflow-backend\"}[5m]) * 100",
+                "legendFormat": "CPU %"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 16, "w": 12, "h": 6}
+          }
+        ],
+        "refresh": "10s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        }
+      }
+    }
+
+  # Kubernetes Cluster Dashboard
+  kubernetes-cluster.json: |
+    {
+      "dashboard": {
+        "title": "OptiFlow - Kubernetes Cluster",
+        "tags": ["kubernetes", "cluster"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Node CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                "legendFormat": "{{ instance }}"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 2,
+            "title": "Node Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+                "legendFormat": "{{ instance }}"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 3,
+            "title": "Pod Count by Namespace",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "count(kube_pod_info) by (namespace)",
+                "legendFormat": "{{ namespace }}"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8}
+          },
+          {
+            "id": 4,
+            "title": "Disk Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "(1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100",
+                "legendFormat": "{{ instance }} - {{ mountpoint }}"
+              }
+            ],
+            "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8}
+          },
+          {
+            "id": 5,
+            "title": "Network Traffic",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(node_network_receive_bytes_total[5m])",
+                "legendFormat": "{{ instance }} RX"
+              },
+              {
+                "expr": "rate(node_network_transmit_bytes_total[5m])",
+                "legendFormat": "{{ instance }} TX"
+              }
+            ],
+            "gridPos": {"x": 0, "y": 16, "w": 24, "h": 8}
+          }
+        ],
+        "refresh": "30s",
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        }
+      }
+    }

@@ -249,6 +249,9 @@ class BaseProtocolAdapter(ABC):
                     self._read_count += len(tags)
                     self._last_read_time = datetime.utcnow()
 
+                    # Check for quality issues and broadcast alarms
+                    await self._check_quality_and_broadcast(tags)
+
                     # Publish to Kafka
                     await self._publish_to_kafka(tags)
 
@@ -262,6 +265,38 @@ class BaseProtocolAdapter(ABC):
                 self._error_count += 1
                 logger.error(f"❌ Error in scan loop for {self.adapter_id}: {e}", exc_info=True)
                 await asyncio.sleep(self.config.retry_interval)
+
+    async def _check_quality_and_broadcast(self, tags: List[TagData]):
+        """
+        Check tag quality and broadcast alarms via WebSocket
+
+        Detects:
+        - Quality != "good" (bad, uncertain, comm_failure)
+        - Communication loss
+        - Quality degradation
+
+        Broadcasts alarm to all connected WebSocket clients in real-time
+        """
+        try:
+            # Import here to avoid circular dependency
+            from app.api.routes.websocket import broadcast_alarm
+
+            for tag in tags:
+                # Check if quality is not good
+                if tag.quality.lower() != "good":
+                    # Broadcast alarm via WebSocket
+                    await broadcast_alarm(
+                        tag_name=tag.tag_name,
+                        quality=tag.quality,
+                        value=tag.value,
+                        adapter_id=self.adapter_id,
+                        address=tag.address or "",
+                        timestamp=tag.timestamp
+                    )
+
+        except Exception as e:
+            # Don't let alarm broadcasting break the main scan loop
+            logger.error(f"❌ Error broadcasting alarm from {self.adapter_id}: {e}")
 
     async def _publish_to_kafka(self, tags: List[TagData]):
         """Publish tag data to Kafka"""
@@ -299,3 +334,7 @@ class BaseProtocolAdapter(ABC):
             'error_count': self._error_count,
             'last_read_time': self._last_read_time.isoformat() if self._last_read_time else None
         }
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Alias for get_stats() - used by API endpoints"""
+        return self.get_stats()

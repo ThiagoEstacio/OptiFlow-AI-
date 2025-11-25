@@ -1,0 +1,48 @@
+# ============================================================================
+# OptiFlow Simulator - Docker Compose
+# ============================================================================
+#
+# Standalone simulator para desenvolvimento e testes
+#
+# Usage:
+#   docker-compose -f simulator/docker-compose.yml up
+#
+# Access:
+#   - OPC-UA: opc.tcp://localhost:4840
+#   - REST API: http://localhost:4850
+#   - Docs: http://localhost:4850/docs
+# ============================================================================
+
+version: '3.8'
+
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: optiflow-simulator:latest
+    container_name: optiflow-simulator
+    hostname: simulator
+
+    ports:
+      - "4840:4840"  # OPC-UA server
+      - "4850:4850"  # REST API
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:4850/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,126 @@
+{
+  "tags": [
+    {
+      "tag_id": "tag_8cd41e09",
+      "tag_name": "current_a",
+      "address": "ns=2;i=10",
+      "data_type": "uint32",
+      "protocol_type": "",
+      "adapter_id": "opcua-simulator-001",
+      "enabled": true,
+      "read_only": true,
+      "quality": "Good",
+      "scaling": null,
+      "deadband": null,
+      "historian": {
+        "enabled": false,
+        "mode": "on_change",
+        "interval_ms": 1000,
+        "retention_days": null,
+        "compress": true,
+        "exception_deadband": null
+      },
+      "alarm": null,
+      "advanced_alarms": [
+        {
+          "alarm_id": "alarm_c2c0f479",
+          "alarm_type": "limit",
+          "enabled": true,
+          "priority": "normal",
+          "high_high_limit": null,
+          "high_limit": null,
+          "low_limit": null,
+          "low_low_limit": null,
+          "max_rate_of_change": null,
+          "rate_window_seconds": 60.0,
+          "setpoint_tag": null,
+          "max_deviation": null,
+          "deviation_type": "absolute",
+          "rolling_window_seconds": null,
+          "std_dev_multiplier": null,
+          "custom_condition": null,
+          "alarm_deadband": 0.0,
+          "delay_seconds": 0.0,
+          "auto_acknowledge": false,
+          "shelved": false,
+          "shelved_until": null,
+          "message_template": null,
+          "action_ids": [
+            "action_c3fef8ea"
+          ]
+        }
+      ],
+      "validation": null,
+      "formula": null,
+      "event_triggers": [
+        {
+          "trigger_id": "trigger_3ee012c5",
+          "event_type": "value_change",
+          "enabled": true,
+          "condition": "value > previous_value + 5",
+          "action_ids": [
+            "action_c3fef8ea"
+          ],
+          "min_interval_seconds": 10.0,
+          "last_trigger_time": null
+        }
+      ],
+      "actions": [
+        {
+          "action_id": "action_c3fef8ea",
+          "action_type": "webhook",
+          "enabled": true,
+          "webhook_url": "http://backend:8000/api/v1/webhooks/test",
+          "webhook_method": "POST",
+          "webhook_headers": {},
+          "webhook_body_template": "{\"tag\": \"{{tag_name}}\", \"value\": {{value}}}",
+          "email_to": [],
+          "email_subject_template": null,
+          "email_body_template": null,
+          "sms_to": [],
+          "sms_message_template": null,
+          "mqtt_topic": null,
+          "mqtt_payload_template": null,
+          "mqtt_qos": 0,
+          "mqtt_retain": false,
+          "script_code": null,
+          "script_timeout_seconds": 5.0,
+          "log_level": "INFO",
+          "log_message_template": null,
+          "notification_title": null,
+          "notification_message": null,
+          "notification_severity": "info",
+          "retry_on_failure": false,
+          "max_retries": 3,
+          "retry_delay_seconds": 5.0
+        }
+      ],
+      "metadata": {
+        "description": "",
+        "engineering_units": "",
+        "asset_id": "",
+        "asset_name": null,
+        "location": "",
+        "pid_tag": null,
+        "custom_properties": {}
+      },
+      "group_path": null,
+      "tags": [],
+      "current_value": null,
+      "current_value_timestamp": null,
+      "last_good_value": null,
+      "last_change_timestamp": null,
+      "read_count": 0,
+      "error_count": 0,
+      "last_error": null,
+      "created_at": "2025-11-25 04:50:06.690752",
+      "updated_at": "2025-11-25 05:25:50.162880"
+    }
+  ],
+  "groups": [],
+  "templates": [],
+  "metadata": {
+    "version": "1.0",
+    "updated_at": "2025-11-25T05:25:50.163282"
+  }
+}

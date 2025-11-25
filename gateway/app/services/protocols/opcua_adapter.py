@@ -60,6 +60,9 @@ class OPCUAAdapter(BaseProtocolAdapter):
         self._tag_buffer: List[TagData] = []
         self._buffer_lock = asyncio.Lock()
 
+        # Cache for realtime API access (last received values from subscription)
+        self.last_values: Dict[str, Dict[str, Any]] = {}  # {address: {value, quality, timestamp}}
+
         # Connection settings
         self.endpoint = f"opc.tcp://{config.host}:{config.port}"
         self.username = config.extra_config.get('username')
@@ -92,6 +95,11 @@ class OPCUAAdapter(BaseProtocolAdapter):
             # Get namespace array for logging
             namespaces = await self.client.get_namespace_array()
             logger.info(f"✅ Connected to OPC UA server - Namespaces: {len(namespaces)}")
+
+            # Auto-discover tags if none configured
+            if not self.config.tags:
+                logger.info("🔍 No tags configured - starting auto-discovery...")
+                await self._discover_tags()
 
             # Create subscription
             await self._create_subscription()
@@ -145,9 +153,10 @@ class OPCUAAdapter(BaseProtocolAdapter):
             logger.info(f"📡 Creating OPC UA subscription (interval: {self.subscription_interval}ms)...")
 
             # Create subscription
+            # The handler should be the adapter object itself (which has datachange_notification method)
             self.subscription = await self.client.create_subscription(
                 period=self.subscription_interval,
-                handler=self._subscription_handler
+                handler=self
             )
 
             # Subscribe to all configured tags
@@ -183,9 +192,9 @@ class OPCUAAdapter(BaseProtocolAdapter):
             logger.error(f"❌ Failed to create subscription: {e}", exc_info=True)
             raise
 
-    def _subscription_handler(self, node, value, data):
+    def datachange_notification(self, node, value, data):
         """
-        Callback for subscription data changes
+        Callback for subscription data changes (asyncua standard method name)
 
         This is called by asyncua when a monitored value changes.
         We buffer the change and publish in batches.
@@ -203,17 +212,46 @@ class OPCUAAdapter(BaseProtocolAdapter):
 
             # Determine quality
             quality = 'good'
-            if hasattr(data, 'StatusCode'):
-                if not data.StatusCode.is_good():
-                    quality = 'bad'
-                elif data.StatusCode.name == 'Uncertain':
-                    quality = 'uncertain'
+            timestamp = None
 
-            # Create TagData
+            # Extract quality and timestamp from OPC UA DataValue
+            if hasattr(data, 'monitored_item') and hasattr(data.monitored_item, 'Value'):
+                datavalue = data.monitored_item.Value
+
+                # Get quality from StatusCode
+                if hasattr(datavalue, 'StatusCode_'):
+                    status_code = datavalue.StatusCode_
+                    if hasattr(status_code, 'is_good') and callable(status_code.is_good):
+                        quality = 'Good' if status_code.is_good() else 'Bad'
+                    elif status_code.value == 0:
+                        quality = 'Good'
+                    else:
+                        quality = 'Bad'
+
+                # Get timestamp (prefer SourceTimestamp)
+                if hasattr(datavalue, 'SourceTimestamp') and datavalue.SourceTimestamp:
+                    timestamp = datavalue.SourceTimestamp.isoformat()
+                elif hasattr(datavalue, 'ServerTimestamp') and datavalue.ServerTimestamp:
+                    timestamp = datavalue.ServerTimestamp.isoformat()
+            elif hasattr(data, 'StatusCode'):
+                # Fallback for older format
+                if not data.StatusCode.is_good():
+                    quality = 'Bad'
+                elif data.StatusCode.name == 'Uncertain':
+                    quality = 'Uncertain'
+
+            # Store in last_values cache for realtime API access
+            self.last_values[node_id] = {
+                'value': value,
+                'quality': quality,
+                'timestamp': timestamp
+            }
+
+            # Create TagData (for Kafka publishing)
             tag_data = TagData(
                 tag_name=tag_name,
                 value=value,
-                quality=quality,
+                quality=quality.lower(),  # Keep lowercase for backward compatibility
                 source=self.adapter_id,
                 address=node_id
             )
@@ -221,6 +259,8 @@ class OPCUAAdapter(BaseProtocolAdapter):
             # Add to buffer (will be published in scan loop)
             # Using asyncio.create_task to not block the callback
             asyncio.create_task(self._add_to_buffer(tag_data))
+
+            logger.debug(f"📊 {tag_name}: {value} (quality={quality}, ts={timestamp})")
 
         except Exception as e:
             logger.error(f"❌ Error in subscription handler: {e}", exc_info=True)
@@ -243,6 +283,108 @@ class OPCUAAdapter(BaseProtocolAdapter):
             self._tag_buffer.clear()
 
         return tags
+
+    async def _discover_tags(self):
+        """
+        Auto-discover tags from OPC UA server
+
+        Browses the server namespace and finds all readable variables
+        """
+        try:
+            from asyncua import ua
+
+            logger.info("🔍 Starting OPC UA tag discovery...")
+
+            # Get namespace array
+            namespaces = await self.client.get_namespace_array()
+            logger.info(f"📋 Found {len(namespaces)} namespaces")
+
+            # Browse from Objects node (standard starting point)
+            objects_node = self.client.get_node("ns=0;i=85")  # Objects folder
+
+            discovered_tags = []
+
+            async def browse_node(node, depth=0, max_depth=10):
+                """Recursively browse nodes"""
+                if depth > max_depth:
+                    return
+
+                try:
+                    # Get node class
+                    node_class = await node.read_node_class()
+
+                    # If it's a variable, check if readable
+                    if node_class == ua.NodeClass.Variable:
+                        try:
+                            # Check access level
+                            access_level = await node.read_attribute(ua.AttributeIds.AccessLevel)
+                            readable = (access_level.Value.Value & 0x01) != 0
+
+                            if readable:
+                                # Get node ID and browse name
+                                node_id = node.nodeid.to_string()
+                                browse_name = await node.read_browse_name()
+                                display_name = await node.read_display_name()
+
+                                # Only add tags from namespace 2 (application namespace)
+                                if node_id.startswith('ns=2;'):
+                                    tag_name = display_name.Text or browse_name.Name
+
+                                    # Try to get data type
+                                    data_type = 'variant'
+                                    try:
+                                        data_type_node = await node.read_data_type()
+                                        if data_type_node:
+                                            dt_str = str(data_type_node)
+                                            # Map OPC UA types to common names
+                                            if 'Double' in dt_str:
+                                                data_type = 'double'
+                                            elif 'Float' in dt_str:
+                                                data_type = 'float'
+                                            elif 'Int32' in dt_str or 'Int16' in dt_str:
+                                                data_type = 'int32'
+                                            elif 'Int64' in dt_str:
+                                                data_type = 'int64'
+                                            elif 'Boolean' in dt_str:
+                                                data_type = 'boolean'
+                                            elif 'String' in dt_str:
+                                                data_type = 'string'
+                                            elif 'Byte' in dt_str or 'UInt' in dt_str:
+                                                data_type = 'uint32'
+                                    except Exception:
+                                        pass  # Keep default 'variant'
+
+                                    discovered_tags.append({
+                                        'name': tag_name,
+                                        'address': node_id,
+                                        'data_type': data_type
+                                    })
+                                    logger.debug(f"  ✓ Found tag: {tag_name} ({node_id}) type={data_type}")
+                        except Exception:
+                            pass  # Skip nodes we can't read
+
+                    # Browse children
+                    children = await node.get_children()
+                    for child in children:
+                        await browse_node(child, depth + 1, max_depth)
+
+                except Exception as e:
+                    logger.debug(f"  ⚠️  Error browsing node at depth {depth}: {e}")
+
+            # Start browsing
+            await browse_node(objects_node)
+
+            logger.info(f"✅ Discovery complete - Found {len(discovered_tags)} readable tags")
+
+            # Update config with discovered tags
+            if discovered_tags:
+                self.config.tags = discovered_tags
+                logger.info(f"📊 Configured {len(discovered_tags)} tags for monitoring")
+            else:
+                logger.warning("⚠️  No tags discovered - check OPC UA server configuration")
+
+        except Exception as e:
+            logger.error(f"❌ Tag discovery failed: {e}", exc_info=True)
 
     async def health_check(self) -> bool:
         """Check if connection is still alive"""

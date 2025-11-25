@@ -36,9 +36,12 @@ ENV PYTHONPATH=/app
 # Create directory for local buffer
 RUN mkdir -p /app/data
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import os; exit(0 if os.path.exists('/app/data/gateway.health') else 1)"
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Default command
-CMD ["python", "-m", "app.main"]
+# Health check - check HTTP API
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Default command - start Gateway with API
+CMD ["python", "-m", "app.main_with_api"]

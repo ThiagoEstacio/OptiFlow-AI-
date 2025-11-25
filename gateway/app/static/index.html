@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiFlow Gateway - Configuração Edge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .status-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .status-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #111827;
+        }
+
+        .status-value.success {
+            color: #10b981;
+        }
+
+        .status-value.warning {
+            color: #f59e0b;
+        }
+
+        .actions {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 12px;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .adapters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 24px;
+        }
+
+        .adapter-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+        }
+
+        .adapter-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .adapter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+
+        .adapter-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .adapter-id {
+            font-size: 12px;
+            color: #6b7280;
+            font-family: monospace;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .adapter-info {
+            margin: 16px 0;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            color: #6b7280;
+        }
+
+        .info-value {
+            color: #111827;
+            font-weight: 500;
+        }
+
+        .adapter-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 12px;
+            flex: 1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 18px;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 24px;
+            color: #111827;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-checkbox {
+            margin-right: 8px;
+        }
+
+        .discovered-tags {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .tag-item {
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>OptiFlow Gateway - Configuração Edge</h1>
+            <p>Gerenciamento de adaptadores de protocolo industrial</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">Total de Adaptadores</div>
+                <div class="status-value" id="total-adapters">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Conectados</div>
+                <div class="status-value success" id="connected-adapters">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Rodando</div>
+                <div class="status-value success" id="running-adapters">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Total de Tags</div>
+                <div class="status-value" id="total-tags">0</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-success" onclick="openAddAdapterModal()">+ Adicionar Adaptador</button>
+            <button class="btn" onclick="refreshAdapters()">Atualizar</button>
+            <button class="btn" onclick="window.location.href='/ui/tags.html'">📊 Tag Configuration</button>
+            <button class="btn btn-secondary" onclick="window.open('/docs', '_blank')">API Docs</button>
+        </div>
+
+        <div id="error-container"></div>
+        <div id="loading" class="loading">Carregando adaptadores...</div>
+        <div id="adapters-container" class="adapters-grid" style="display: none;"></div>
+    </div>
+
+    <!-- Modal para adicionar adaptador -->
+    <div id="addAdapterModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Adicionar Novo Adaptador</div>
+            <form id="addAdapterForm">
+                <div class="form-group">
+                    <label class="form-label">Nome do Adaptador</label>
+                    <input type="text" class="form-input" id="adapter_name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Protocolo</label>
+                    <select class="form-select" id="protocol_type" required>
+                        <option value="opcua">OPC UA</option>
+                        <option value="modbus">Modbus TCP/IP</option>
+                        <option value="mqtt">MQTT</option>
+                        <option value="ethernet_ip">EtherNet/IP</option>
+                        <option value="s7">Siemens S7</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Host (IP ou hostname)</label>
+                    <input type="text" class="form-input" id="host" required placeholder="192.168.1.10">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Porta</label>
+                    <input type="number" class="form-input" id="port" required value="4840">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Taxa de Scan (ms)</label>
+                    <input type="number" class="form-input" id="scan_rate_ms" value="1000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Timeout (segundos)</label>
+                    <input type="number" class="form-input" id="timeout" value="10.0" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="enabled" checked>
+                        Habilitado
+                    </label>
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Criar Adaptador</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddAdapterModal()" style="flex: 1;">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para tags descobertos -->
+    <div id="discoveredTagsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Tags Descobertos</div>
+            <div id="discovered-tags-content"></div>
+            <button class="btn" onclick="closeDiscoveredTagsModal()" style="margin-top: 20px; width: 100%;">Fechar</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        async function fetchAdapters() {
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/`);
+                if (!response.ok) throw new Error('Falha ao carregar adaptadores');
+                return await response.json();
+            } catch (error) {
+                showError('Erro ao carregar adaptadores: ' + error.message);
+                return [];
+            }
+        }
+
+        async function renderAdapters() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('adapters-container').style.display = 'none';
+
+            const adapters = await fetchAdapters();
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('adapters-container').style.display = 'grid';
+
+            // Update stats
+            const connected = adapters.filter(a => a.connected).length;
+            const running = adapters.filter(a => a.running).length;
+            const totalTags = adapters.reduce((sum, a) => sum + a.tags_count, 0);
+
+            document.getElementById('total-adapters').textContent = adapters.length;
+            document.getElementById('connected-adapters').textContent = connected;
+            document.getElementById('running-adapters').textContent = running;
+            document.getElementById('total-tags').textContent = totalTags;
+
+            // Render adapter cards
+            const container = document.getElementById('adapters-container');
+            container.innerHTML = adapters.map(adapter => `
+                <div class="adapter-card">
+                    <div class="adapter-header">
+                        <div>
+                            <div class="adapter-title">${adapter.adapter_name}</div>
+                            <div class="adapter-id">${adapter.adapter_id}</div>
+                        </div>
+                        <span class="status-badge ${adapter.connected ? 'connected' : 'disconnected'}">
+                            ${adapter.connected ? 'Conectado' : 'Desconectado'}
+                        </span>
+                    </div>
+                    <div class="adapter-info">
+                        <div class="info-row">
+                            <span class="info-label">Protocolo:</span>
+                            <span class="info-value">${adapter.protocol_type.toUpperCase()}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Endpoint:</span>
+                            <span class="info-value">${adapter.host}:${adapter.port}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Taxa de Scan:</span>
+                            <span class="info-value">${adapter.scan_rate_ms}ms</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Tags:</span>
+                            <span class="info-value">${adapter.tags_count}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Status:</span>
+                            <span class="info-value">${adapter.running ? 'Rodando' : 'Parado'}</span>
+                        </div>
+                    </div>
+                    <div class="adapter-actions">
+                        ${adapter.running ?
+                            `<button class="btn btn-danger btn-small" onclick="stopAdapter('${adapter.adapter_id}')">Parar</button>` :
+                            `<button class="btn btn-success btn-small" onclick="startAdapter('${adapter.adapter_id}')">Iniciar</button>`
+                        }
+                        <button class="btn btn-small" onclick="testAdapter('${adapter.adapter_id}')">Testar</button>
+                        <button class="btn btn-small" onclick="discoverTags('${adapter.adapter_id}')">Descobrir Tags</button>
+                        <button class="btn btn-danger btn-small" onclick="deleteAdapter('${adapter.adapter_id}')">Excluir</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function startAdapter(adapterId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/${adapterId}/start`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`Adaptador ${adapterId} iniciado com sucesso!`);
+                    refreshAdapters();
+                } else {
+                    alert('Erro ao iniciar adaptador: ' + data.message);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        }
+
+        async function stopAdapter(adapterId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/${adapterId}/stop`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`Adaptador ${adapterId} parado com sucesso!`);
+                    refreshAdapters();
+                } else {
+                    alert('Erro ao parar adaptador: ' + data.message);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        }
+
+        async function testAdapter(adapterId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/${adapterId}/test`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success && data.connected) {
+                    alert(`Conexão bem-sucedida!\n\nTags descobertos: ${data.discovered_tags_count || 0}`);
+                } else {
+                    alert('Falha na conexão: ' + data.message);
+                }
+            } catch (error) {
+                alert('Erro ao testar: ' + error.message);
+            }
+        }
+
+        async function discoverTags(adapterId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/${adapterId}/discover`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showDiscoveredTags(data.discovered_tags, data.count);
+                } else {
+                    alert('Descoberta não suportada ou falhou: ' + data.message);
+                }
+            } catch (error) {
+                alert('Erro ao descobrir tags: ' + error.message);
+            }
+        }
+
+        async function deleteAdapter(adapterId) {
+            if (!confirm(`Tem certeza que deseja excluir o adaptador ${adapterId}?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/${adapterId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Adaptador excluído com sucesso!');
+                    refreshAdapters();
+                } else {
+                    alert('Erro ao excluir: ' + data.message);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        }
+
+        function openAddAdapterModal() {
+            document.getElementById('addAdapterModal').classList.add('show');
+        }
+
+        function closeAddAdapterModal() {
+            document.getElementById('addAdapterModal').classList.remove('show');
+            document.getElementById('addAdapterForm').reset();
+        }
+
+        function showDiscoveredTags(tags, count) {
+            const content = document.getElementById('discovered-tags-content');
+            content.innerHTML = `
+                <p style="margin-bottom: 16px; color: #10b981; font-weight: 600;">
+                    ${count} tags descobertos com sucesso!
+                </p>
+                <div class="discovered-tags">
+                    ${tags.map(tag => `
+                        <div class="tag-item">
+                            <strong>${tag.name}</strong><br>
+                            Address: ${tag.address}<br>
+                            Type: ${tag.type || 'unknown'}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            document.getElementById('discoveredTagsModal').classList.add('show');
+        }
+
+        function closeDiscoveredTagsModal() {
+            document.getElementById('discoveredTagsModal').classList.remove('show');
+        }
+
+        document.getElementById('addAdapterForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                adapter_name: document.getElementById('adapter_name').value,
+                protocol_type: document.getElementById('protocol_type').value,
+                host: document.getElementById('host').value,
+                port: parseInt(document.getElementById('port').value),
+                scan_rate_ms: parseInt(document.getElementById('scan_rate_ms').value),
+                timeout: parseFloat(document.getElementById('timeout').value),
+                retry_interval: 10.0,
+                enabled: document.getElementById('enabled').checked,
+                extra_config: {},
+                tags: []
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Adaptador criado com sucesso! ID: ' + data.adapter_id);
+                    closeAddAdapterModal();
+                    refreshAdapters();
+                } else {
+                    alert('Erro ao criar adaptador: ' + data.message);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        });
+
+        function refreshAdapters() {
+            renderAdapters();
+        }
+
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        // Initial load
+        renderAdapters();
+
+        // Auto-refresh every 10 seconds
+        setInterval(refreshAdapters, 10000);
+    </script>
+</body>
+</html>

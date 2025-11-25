@@ -1,0 +1,14 @@
+# ============================================================================
+# OptiFlow Simulator - Python Dependencies
+# ============================================================================
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# OPC-UA
+asyncua==1.0.6
+
+# Utilities
+python-multipart==0.0.6

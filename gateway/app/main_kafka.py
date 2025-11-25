@@ -55,6 +55,8 @@ class KafkaGateway:
 
     async def initialize(self):
         """Initialize gateway components"""
+        global protocol_manager
+
         try:
             logger.info("=" * 70)
             logger.info("  🚀 OptiFlow Gateway Starting (Kafka Event-Driven Architecture)")
@@ -68,6 +70,7 @@ class KafkaGateway:
             # Initialize Protocol Manager
             logger.info("🔧 Initializing Protocol Manager...")
             self.protocol_manager = ProtocolManager(config_path=self.config_path)
+            protocol_manager = self.protocol_manager  # Export for API access
 
             # Load adapter configurations
             config_file = Path(self.config_path)
@@ -209,8 +212,9 @@ class KafkaGateway:
         logger.info("=" * 70)
 
 
-# Global gateway instance
+# Global gateway instance and protocol manager (for API access)
 gateway: Optional[KafkaGateway] = None
+protocol_manager: Optional['ProtocolManager'] = None
 
 
 def signal_handler(signum, frame):

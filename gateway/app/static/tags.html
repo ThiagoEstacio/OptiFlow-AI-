@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiFlow Gateway - Tag Configuration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar - Tag Browser */
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e1e8ed;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-header h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .search-box {
+            padding: 16px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e1e8ed;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .tag-browser {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .tag-item {
+            padding: 10px 12px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .tag-item:hover {
+            background: #f5f7fa;
+        }
+
+        .tag-item.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tag-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .tag-type {
+            font-size: 11px;
+            opacity: 0.7;
+            padding: 2px 6px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 3px;
+        }
+
+        .tag-discovered {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #f97316;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .discovered-banner {
+            border: 1px dashed #fb923c;
+            background: #fff7ed;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #7c2d12;
+        }
+
+        .discovered-banner-actions {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            padding: 16px 24px;
+            background: white;
+            border-bottom: 1px solid #e1e8ed;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-secondary {
+            background: #e1e8ed;
+            color: #2c3e50;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d8dd;
+        }
+
+        /* Properties Panel */
+        .properties {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .properties-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 6px;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e1e8ed;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-checkbox input {
+            width: 18px;
+            height: 18px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-good {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-bad {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-uncertain {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        /* Template Selector */
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .template-card {
+            padding: 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            border-color: #667eea;
+            background: #f5f7fa;
+        }
+
+        .template-card.selected {
+            border-color: #667eea;
+            background: #eef2ff;
+        }
+
+        .template-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .template-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Current Value Display */
+        .current-value {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            padding: 16px;
+            background: #f5f7fa;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        .value-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .value-unit {
+            font-size: 16px;
+            color: #6b7280;
+        }
+
+        .value-timestamp {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        /* Scaling Preview */
+        .scaling-preview {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f5f7fa;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        /* Statistics */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .stat-card {
+            padding: 12px;
+            background: #f5f7fa;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-subtext {
+            font-size: 14px;
+        }
+
+        /* Tabs System */
+        .tabs-nav {
+            display: flex;
+            border-bottom: 2px solid #e1e8ed;
+            margin-bottom: 16px;
+            gap: 4px;
+            background: white;
+            padding: 0 20px;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #64748b;
+            transition: all 0.2s;
+            position: relative;
+            top: 2px;
+        }
+
+        .tab-button:hover {
+            color: #667eea;
+            background: #f8fafc;
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Formula Editor */
+        .formula-input {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            min-height: 100px;
+        }
+
+        .formula-examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .formula-example {
+            padding: 12px;
+            background: #f5f7fa;
+            border-radius: 6px;
+            border: 1px solid #e1e8ed;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .formula-example:hover {
+            border-color: #667eea;
+            background: #eef2ff;
+        }
+
+        .formula-example-title {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .formula-example-code {
+            font-family: monospace;
+            font-size: 11px;
+            color: #6b7280;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Alarm/Event/Action List */
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .item-card {
+            padding: 16px;
+            background: #f5f7fa;
+            border-radius: 8px;
+            border: 1px solid #e1e8ed;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .item-card-info {
+            flex: 1;
+        }
+
+        .item-card-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .item-card-details {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .item-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .priority-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .priority-critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .priority-high {
+            background: #fed7aa;
+            color: #9a3412;
+        }
+
+        .priority-normal {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .priority-low {
+            background: #e5e7eb;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar - Tag Browser -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>📊 Tag Configuration</h2>
+                <p>Enterprise tag management</p>
+            </div>
+
+            <div class="search-box">
+                <input type="text" id="searchTags" placeholder="🔍 Search tags..." onkeyup="searchTags()">
+            </div>
+
+            <!-- Scan Rate Configuration -->
+            <div style="padding: 12px 16px; background: #f0f9ff; border-bottom: 1px solid #e1e8ed; border-top: 1px solid #e1e8ed;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <label style="font-size: 11px; font-weight: 600; color: #1e40af;">⏱️ Scan Rate:</label>
+                    <input
+                        type="range"
+                        id="scanRateSlider"
+                        min="500"
+                        max="60000"
+                        value="1000"
+                        step="500"
+                        style="flex: 1;"
+                        oninput="updateScanRateDisplay(this.value)"
+                        onchange="updateScanRate(parseInt(this.value))">
+                    <span id="scanRateDisplay" style="font-size: 11px; font-weight: 600; color: #1e40af; min-width: 45px;">1.0s</span>
+                </div>
+                <div style="font-size: 9px; color: #6b7280;">
+                    Range: 500ms - 60s (faster = more API calls)
+                </div>
+            </div>
+
+            <div class="tag-browser" id="tagBrowser">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <div class="empty-state-text">No tags configured</div>
+                    <div class="empty-state-subtext">Create your first tag to get started</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <button class="btn btn-success" onclick="showCreateTagModal()">
+                    ➕ New Tag
+                </button>
+                <button class="btn btn-primary" onclick="showImportModal()">
+                    📥 Import CSV
+                </button>
+                <button class="btn btn-secondary" onclick="exportTags()">
+                    📤 Export
+                </button>
+                <button class="btn btn-secondary" onclick="showTemplatesModal()">
+                    📝 Templates
+                </button>
+                <button class="btn btn-secondary" onclick="refreshTags()">
+                    🔄 Refresh
+                </button>
+                <div style="flex: 1"></div>
+                <button class="btn btn-secondary" onclick="window.location.href='/ui/index.html'">
+                    🏠 Back to Gateway
+                </button>
+            </div>
+
+            <!-- Properties Panel -->
+            <div class="properties" id="propertiesPanel">
+                <div class="empty-state">
+                    <div class="empty-state-icon">👈</div>
+                    <div class="empty-state-text">Select a tag</div>
+                    <div class="empty-state-subtext">Choose a tag from the sidebar to view and edit its properties</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Tag Modal -->
+    <div id="createTagModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New Tag</div>
+            <form id="createTagForm" onsubmit="createTag(event)">
+                <div class="form-group">
+                    <label class="form-label">Tag Name *</label>
+                    <input type="text" class="form-input" id="new_tag_name" required placeholder="e.g., Reactor_A_Temperature">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Address *</label>
+                    <input type="text" class="form-input" id="new_address" required placeholder="e.g., ns=2;i=1001">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Data Type *</label>
+                        <select class="form-select" id="new_data_type" required>
+                            <option value="double">Double</option>
+                            <option value="float">Float</option>
+                            <option value="int32">Int32</option>
+                            <option value="boolean">Boolean</option>
+                            <option value="string">String</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Adapter *</label>
+                        <select class="form-select" id="new_adapter_id" required>
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Engineering Units</label>
+                    <input type="text" class="form-input" id="new_units" placeholder="e.g., °C, bar, m³/h">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" id="new_description" placeholder="Tag description">
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="new_enabled" checked>
+                        <span>Enabled</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="new_historize" checked>
+                        <span>Enable Historization</span>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Create Tag</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateTagModal()" style="flex: 1;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import CSV Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Import Tags from CSV</div>
+            <div class="form-group">
+                <label class="form-label">CSV File</label>
+                <input type="file" id="csvFile" accept=".csv" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Adapter</label>
+                <select class="form-select" id="import_adapter_id">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Apply Template (Optional)</label>
+                <select class="form-select" id="import_template">
+                    <option value="">None</option>
+                    <option value="temp_sensor">Temperature Sensor</option>
+                    <option value="pressure_sensor">Pressure Sensor</option>
+                    <option value="flow_meter">Flow Meter</option>
+                </select>
+            </div>
+            <div style="background: #f5f7fa; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 12px;">
+                <strong>CSV Format:</strong><br>
+                tag_name,address,data_type,engineering_units,description<br>
+                TEMP_001,ns=2;i=1001,double,°C,Reactor temperature
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 24px;">
+                <button class="btn btn-success" onclick="importCSV()" style="flex: 1;">Import</button>
+                <button class="btn btn-secondary" onclick="closeImportModal()" style="flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentTag = null;
+        let allTags = [];
+
+        // Initialize
+        async function init() {
+            await loadAdapters();
+            await refreshTags();
+        }
+
+        // Load adapters for dropdowns
+        async function loadAdapters() {
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/`);
+                const adapters = await response.json();
+
+                const options = adapters.map(a =>
+                    `<option value="${a.adapter_id}">${a.adapter_name}</option>`
+                ).join('');
+
+                document.getElementById('new_adapter_id').innerHTML = options;
+                document.getElementById('import_adapter_id').innerHTML = options;
+            } catch (error) {
+                console.error('Failed to load adapters:', error);
+            }
+        }
+
+        // Refresh tags list - Load from tag manager or adapters
+        async function refreshTags() {
+            try {
+                // Try to load from tag manager first (enterprise tags with full config)
+                try {
+                    const response = await fetch(`${API_BASE}/api/tags/`);
+                    if (response.ok) {
+                        const managedTags = await response.json();
+                        if (Array.isArray(managedTags) && managedTags.length > 0) {
+                            allTags = managedTags.map(tag => ({
+                                ...tag,
+                                is_discovered: false
+                            }));
+                            console.log(`Loaded ${allTags.length} tags from tag manager`);
+                            renderTagBrowser(allTags);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Tag manager returned no tags, loading from adapters...');
+                }
+
+                // Fallback: Load discovered tags from adapters using the /api/tags/list endpoint
+                const listResponse = await fetch(`${API_BASE}/api/tags/list`);
+                if (listResponse.ok) {
+                    const listData = await listResponse.json();
+                    const discoveredTags = Array.isArray(listData?.tags) ? listData.tags : [];
+
+                    // Convert adapter tags to tag manager format
+                    allTags = discoveredTags.map(tag => ({
+                        tag_id: `${tag.adapter_id}_${tag.name}`,
+                        tag_name: tag.name,
+                        address: tag.address,
+                        data_type: tag.data_type || 'unknown',
+                        adapter_id: tag.adapter_id,
+                        enabled: tag.enabled !== false,
+                        quality: tag.connected ? 'Good' : 'BadNotConnected',
+                        current_value: null,
+                        current_value_timestamp: null,
+                        metadata: {
+                            engineering_units: tag.unit || '',
+                            description: ''
+                        },
+                        historian: {
+                            enabled: false,
+                            mode: 'on_change'
+                        },
+                        scaling: null,
+                        deadband: null,
+                        alarm: null,
+                        read_count: 0,
+                        error_count: 0,
+                        is_discovered: true
+                    }));
+
+                    console.log(`Loaded ${allTags.length} discovered tags from adapters`);
+                    renderTagBrowser(allTags);
+                } else {
+                    throw new Error('Failed to load tags from adapters');
+                }
+
+            } catch (error) {
+                console.error('Failed to load tags:', error);
+                document.getElementById('tagBrowser').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <div class="empty-state-text">Failed to load tags</div>
+                        <div class="empty-state-subtext">${error.message}</div>
+                        <button class="btn btn-primary" onclick="refreshTags()">Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Render tag browser
+        function renderTagBrowser(tags) {
+            const browser = document.getElementById('tagBrowser');
+
+            if (tags.length === 0) {
+                browser.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <div class="empty-state-text">No tags configured</div>
+                        <div class="empty-state-subtext">Create your first tag to get started</div>
+                    </div>
+                `;
+                return;
+            }
+
+            browser.innerHTML = tags.map(tag => `
+                <div class="tag-item" data-tag-id="${tag.tag_id}" onclick="selectTag(event, '${tag.tag_id}')">
+                    <div>
+                        <div class="tag-name">${tag.tag_name}</div>
+                        ${tag.is_discovered ? '<div class="tag-discovered">⚡ Descoberto</div>' : ''}
+                    </div>
+                    <span class="tag-type">${tag.data_type}</span>
+                </div>
+            `).join('');
+        }
+
+        // Search tags
+        function searchTags() {
+            const search = document.getElementById('searchTags').value.toLowerCase();
+            const filtered = allTags.filter(tag =>
+                tag.tag_name.toLowerCase().includes(search) ||
+                tag.address.toLowerCase().includes(search)
+            );
+            renderTagBrowser(filtered);
+        }
+
+        // Select tag
+        async function selectTag(eventOrId, maybeTagId) {
+            let tagId = maybeTagId;
+            let evt = null;
+
+            if (typeof eventOrId === 'string' && !maybeTagId) {
+                tagId = eventOrId;
+            } else if (eventOrId && typeof eventOrId === 'object') {
+                evt = eventOrId;
+            }
+
+            if (!tagId) return;
+
+            let tagData = null;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/tags/${tagId}`);
+                if (response.ok) {
+                    tagData = await response.json();
+                    tagData.is_discovered = false;
+                }
+            } catch (error) {
+                console.debug('Managed tag lookup failed, attempting discovered cache fallback', error);
+            }
+
+            if (!tagData) {
+                tagData = allTags.find(tag => tag.tag_id === tagId);
+                if (!tagData) {
+                    console.error(`Tag ${tagId} not found in local cache`);
+                    alert('Tag não encontrado. Tente atualizar a lista.');
+                    return;
+                }
+            }
+
+            currentTag = tagData;
+
+            // Update active state
+            document.querySelectorAll('.tag-item').forEach(el => el.classList.remove('active'));
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add('active');
+            } else {
+                const fallbackEl = document.querySelector(`.tag-item[data-tag-id="${tagId}"]`);
+                if (fallbackEl) {
+                    fallbackEl.classList.add('active');
+                }
+            }
+
+            // Fetch realtime value with quality and timestamp
+            await fetchRealtimeValue(currentTag);
+
+            renderTagProperties(currentTag);
+
+            // Start periodic updates for current value
+            startRealtimeUpdates(currentTag);
+        }
+
+        // Fetch realtime value from adapter
+        async function fetchRealtimeValue(tag) {
+            try {
+                // Use the adapter to read current value
+                const response = await fetch(`${API_BASE}/api/tags/realtime/${tag.tag_name}`);
+                if (response.ok) {
+                    const realtimeData = await response.json();
+                    tag.current_value = realtimeData.value;
+                    tag.current_value_timestamp = realtimeData.timestamp;
+                    tag.quality = realtimeData.quality || 'Good';
+                }
+            } catch (error) {
+                console.debug('Failed to fetch realtime value:', error);
+                // Keep existing values if realtime fetch fails
+            }
+        }
+
+        let realtimeUpdateInterval = null;
+        let updateIntervalMs = 1000; // Default: 1 second
+
+        // Start periodic realtime updates
+        function startRealtimeUpdates(tag) {
+            // Clear previous interval
+            if (realtimeUpdateInterval) {
+                clearInterval(realtimeUpdateInterval);
+            }
+
+            // Update at configured interval (default 1s, range 500ms-60s)
+            realtimeUpdateInterval = setInterval(async () => {
+                if (currentTag && currentTag.tag_id === tag.tag_id) {
+                    await fetchRealtimeValue(currentTag);
+                    // Update only the current value display
+                    updateCurrentValueDisplay();
+                }
+            }, updateIntervalMs);
+        }
+
+        // Update the scan rate
+        function updateScanRate(intervalMs) {
+            updateIntervalMs = Math.max(500, Math.min(60000, intervalMs)); // Clamp between 500ms and 60s
+            updateScanRateDisplay(updateIntervalMs);
+            if (currentTag) {
+                startRealtimeUpdates(currentTag); // Restart with new interval
+            }
+        }
+
+        // Update scan rate display label
+        function updateScanRateDisplay(intervalMs) {
+            const display = document.getElementById('scanRateDisplay');
+            if (display) {
+                if (intervalMs < 1000) {
+                    display.textContent = `${intervalMs}ms`;
+                } else {
+                    display.textContent = `${(intervalMs / 1000).toFixed(1)}s`;
+                }
+            }
+        }
+
+        // Update current value display without re-rendering entire panel
+        function updateCurrentValueDisplay() {
+            if (!currentTag || !currentTag.current_value) return;
+
+            const valueDisplay = document.querySelector('.current-value');
+            if (valueDisplay) {
+                const qualityBadge = currentTag.quality === 'Good' || currentTag.quality === 'good'
+                    ? '<span class="badge badge-good">Good</span>'
+                    : '<span class="badge badge-bad">' + currentTag.quality + '</span>';
+
+                valueDisplay.innerHTML = `
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: baseline; gap: 8px;">
+                            <span class="value-number">${typeof currentTag.current_value === 'number' ? currentTag.current_value.toFixed(2) : currentTag.current_value}</span>
+                            <span class="value-unit">${currentTag.metadata?.engineering_units || ''}</span>
+                            ${qualityBadge}
+                        </div>
+                        <div class="value-timestamp">Last update: ${currentTag.current_value_timestamp ? new Date(currentTag.current_value_timestamp).toLocaleString() : 'Never'}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Render tag properties
+        function renderTagProperties(tag) {
+            const panel = document.getElementById('propertiesPanel');
+
+            panel.innerHTML = `
+                <!-- Tabs Navigation -->
+                <div class="tabs-nav">
+                    <button class="tab-button active" onclick="switchTab(event, 'general')">General</button>
+                    <button class="tab-button" onclick="switchTab(event, 'formula')">🧮 Formula</button>
+                    <button class="tab-button" onclick="switchTab(event, 'alarms')">🚨 Alarms</button>
+                    <button class="tab-button" onclick="switchTab(event, 'events')">📡 Events</button>
+                    <button class="tab-button" onclick="switchTab(event, 'actions')">🤖 Actions</button>
+                </div>
+
+                <!-- General Tab -->
+                <div id="tab-general" class="tab-content active">
+                    ${renderGeneralTab(tag)}
+                </div>
+
+                <!-- Formula Tab -->
+                <div id="tab-formula" class="tab-content">
+                    ${renderFormulaTab(tag)}
+                </div>
+
+                <!-- Alarms Tab -->
+                <div id="tab-alarms" class="tab-content">
+                    ${renderAlarmsTab(tag)}
+                </div>
+
+                <!-- Events Tab -->
+                <div id="tab-events" class="tab-content">
+                    ${renderEventsTab(tag)}
+                </div>
+
+                <!-- Actions Tab -->
+                <div id="tab-actions" class="tab-content">
+                    ${renderActionsTab(tag)}
+                </div>
+            `;
+        }
+
+        function renderLockedFeature(title) {
+            return `
+                <div class="properties-section">
+                    <div class="section-title">${title}</div>
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔒</div>
+                        <div class="empty-state-text">Disponível após salvar o tag</div>
+                        <div class="empty-state-subtext">Clique em "Criar Tag no Gateway" para habilitar este recurso.</div>
+                        <div class="discovered-banner-actions" style="justify-content: center; margin-top: 20px;">
+                            <button class="btn btn-success" onclick="createManagedTagFromDiscovered()">Criar Tag no Gateway</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Switch between tabs
+        function switchTab(event, tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Render General Tab
+        function renderGeneralTab(tag) {
+            const disabledAttr = tag.is_discovered ? 'disabled' : '';
+            const discoveredNotice = tag.is_discovered ? `
+                <div class="discovered-banner">
+                    <strong>Tag descoberto automaticamente.</strong>
+                    <p style="margin-top: 8px; font-size: 13px;">
+                        Salve este tag no Gateway para habilitar edição, alarmes, fórmulas e historização.
+                    </p>
+                    <div class="discovered-banner-actions">
+                        <button class="btn btn-success" onclick="createManagedTagFromDiscovered()">Criar Tag no Gateway</button>
+                        <button class="btn btn-secondary" onclick="openCreateModalPrefilled()">Editar antes de salvar</button>
+                    </div>
+                </div>
+            ` : '';
+
+            const actionsContent = tag.is_discovered ? `
+                <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;">
+                    Disponível após salvar este tag no Gateway.
+                </p>
+                <div class="discovered-banner-actions">
+                    <button class="btn btn-success" onclick="createManagedTagFromDiscovered()">Criar Tag no Gateway</button>
+                    <button class="btn btn-secondary" onclick="openCreateModalPrefilled()">Editar antes de salvar</button>
+                </div>
+            ` : `
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-primary" onclick="applyTemplate()">Apply Template</button>
+                    <button class="btn btn-secondary" onclick="cloneTag()">Clone Tag</button>
+                    <button class="btn btn-secondary" style="background: #ef4444; color: white;" onclick="deleteTag()">Delete</button>
+                </div>
+            `;
+
+            return `
+                <div class="properties-section">
+                    <div class="section-title">📌 General Information</div>
+                    ${discoveredNotice}
+
+                    <div class="form-group">
+                        <label class="form-label">Tag Name</label>
+                        <input type="text" class="form-input" value="${tag.tag_name}" ${disabledAttr}
+                            onchange="updateTag('tag_name', this.value)">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Address</label>
+                            <input type="text" class="form-input" value="${tag.address}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Data Type</label>
+                            <input type="text" class="form-input" value="${tag.data_type}" readonly>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Quality</label>
+                            <span class="badge badge-${tag.quality === 'Good' ? 'good' : 'bad'}">${tag.quality}</span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Status</label>
+                            <span class="badge ${tag.enabled ? 'badge-good' : 'badge-uncertain'}">${tag.enabled ? 'Enabled' : 'Disabled'}</span>
+                        </div>
+                    </div>
+
+                    ${tag.current_value !== null && tag.current_value !== undefined ? `
+                    <div class="current-value">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: baseline; gap: 8px;">
+                                <span class="value-number">${typeof tag.current_value === 'number' ? tag.current_value.toFixed(2) : tag.current_value}</span>
+                                <span class="value-unit">${tag.metadata?.engineering_units || ''}</span>
+                                <span class="badge badge-${tag.quality === 'Good' || tag.quality === 'good' ? 'good' : 'bad'}">${tag.quality || 'Unknown'}</span>
+                            </div>
+                            <div class="value-timestamp">⏱️ Last update: ${tag.current_value_timestamp ? new Date(tag.current_value_timestamp).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) : 'Never'}</div>
+                        </div>
+                    </div>
+                    ` : `
+                    <div style="text-align: center; padding: 20px; color: #9ca3af; background: #f5f7fa; border-radius: 8px; margin-top: 12px;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">📡</div>
+                        <div style="font-size: 13px;">Loading realtime value...</div>
+                    </div>
+                    `}
+                </div>
+
+                <div class="properties-section">
+                    <div class="section-title">🔧 Metadata</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-input" value="${tag.metadata?.description || ''}" ${disabledAttr}
+                            onchange="updateTagMetadata('description', this.value)">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Engineering Units</label>
+                        <input type="text" class="form-input" value="${tag.metadata?.engineering_units || ''}" ${disabledAttr}
+                            onchange="updateTagMetadata('engineering_units', this.value)">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Location</label>
+                            <input type="text" class="form-input" value="${tag.metadata?.location || ''}" ${disabledAttr}
+                                onchange="updateTagMetadata('location', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Asset ID</label>
+                            <input type="text" class="form-input" value="${tag.metadata?.asset_id || ''}" ${disabledAttr}
+                                onchange="updateTagMetadata('asset_id', this.value)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="properties-section">
+                    <div class="section-title">📊 Historization</div>
+
+                    <div class="form-group">
+                        <label class="form-checkbox">
+                            <input type="checkbox" ${tag.historian?.enabled ? 'checked' : ''} ${disabledAttr}
+                                onchange="updateHistorian('enabled', this.checked)">
+                            <span>Enable Historization</span>
+                        </label>
+                    </div>
+
+                    ${tag.historian?.enabled ? `
+                    <div class="form-group">
+                        <label class="form-label">Mode</label>
+                        <select class="form-select" ${disabledAttr} onchange="updateHistorian('mode', this.value)">
+                            <option value="disabled" ${tag.historian.mode === 'disabled' ? 'selected' : ''}>Disabled</option>
+                            <option value="on_change" ${tag.historian.mode === 'on_change' ? 'selected' : ''}>On Change (Exception)</option>
+                            <option value="periodic" ${tag.historian.mode === 'periodic' ? 'selected' : ''}>Periodic</option>
+                            <option value="both" ${tag.historian.mode === 'both' ? 'selected' : ''}>On Change + Periodic</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Interval (ms)</label>
+                        <input type="number" class="form-input" value="${tag.historian.interval_ms || 1000}" ${disabledAttr}
+                            onchange="updateHistorian('interval_ms', parseInt(this.value))">
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="properties-section">
+                    <div class="section-title">📈 Statistics</div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${tag.read_count || 0}</div>
+                            <div class="stat-label">Reads</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${tag.error_count || 0}</div>
+                            <div class="stat-label">Errors</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${((tag.error_count || 0) / Math.max(tag.read_count || 1, 1) * 100).toFixed(1)}%</div>
+                            <div class="stat-label">Error Rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="properties-section">
+                    <div class="section-title">⚙️ Actions</div>
+                    ${actionsContent}
+                </div>
+            `;
+        }
+
+        // Render Formula Tab
+        function renderFormulaTab(tag) {
+            if (tag.is_discovered) {
+                return renderLockedFeature('🧮 Calculated Tag Formula');
+            }
+            const hasFormula = tag.formula && tag.formula.enabled;
+
+            return `
+                <div class="properties-section">
+                    <div class="section-title">🧮 Calculated Tag Formula</div>
+
+                    <div class="form-group">
+                        <label class="form-checkbox">
+                            <input type="checkbox" id="formula_enabled" ${hasFormula ? 'checked' : ''}>
+                            <span>Enable Formula Calculation</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Formula Expression</label>
+                        <textarea class="form-input formula-input" id="formula_expression" placeholder="e.g., tags['TEMP_C'] * 1.8 + 32">${hasFormula ? tag.formula.expression : ''}</textarea>
+                        <small style="color: #6b7280; font-size: 12px;">
+                            Available: tags['TAG_NAME'], value, old_value, math module functions
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Input Tags (comma-separated)</label>
+                        <input type="text" class="form-input" id="formula_input_tags"
+                            placeholder="e.g., TEMP_C, PRESSURE_01"
+                            value="${hasFormula && tag.formula.input_tags ? tag.formula.input_tags.join(', ') : ''}">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Update Interval (ms)</label>
+                            <input type="number" class="form-input" id="formula_interval"
+                                value="${hasFormula ? tag.formula.update_interval_ms : 1000}" min="100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">On Error Value</label>
+                            <input type="text" class="form-input" id="formula_error_value"
+                                placeholder="null" value="${hasFormula ? tag.formula.on_error_value || '' : ''}">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-success" onclick="saveFormula()">💾 Save Formula</button>
+                        <button class="btn btn-secondary" onclick="testFormula()">🧪 Test Formula</button>
+                    </div>
+                </div>
+
+                <div class="properties-section">
+                    <div class="section-title">📚 Formula Examples</div>
+                    <div class="formula-examples">
+                        <div class="formula-example" onclick="applyFormulaExample('temp_conversion')">
+                            <div class="formula-example-title">Temperature Conversion</div>
+                            <div class="formula-example-code">tags['TEMP_C'] * 1.8 + 32</div>
+                        </div>
+                        <div class="formula-example" onclick="applyFormulaExample('mass_flow')">
+                            <div class="formula-example-title">Mass Flow</div>
+                            <div class="formula-example-code">tags['VOL_FLOW'] * tags['DENSITY']</div>
+                        </div>
+                        <div class="formula-example" onclick="applyFormulaExample('power_3phase')">
+                            <div class="formula-example-title">3-Phase Power</div>
+                            <div class="formula-example-code">math.sqrt(3) * V * I * PF</div>
+                        </div>
+                        <div class="formula-example" onclick="applyFormulaExample('efficiency')">
+                            <div class="formula-example-title">Efficiency %</div>
+                            <div class="formula-example-code">(OUT / max(IN, 0.001)) * 100</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Alarms Tab
+        function renderAlarmsTab(tag) {
+            if (tag.is_discovered) {
+                return renderLockedFeature('🚨 Advanced Alarms');
+            }
+            const alarms = tag.advanced_alarms || [];
+
+            return `
+                <div class="properties-section">
+                    <div class="section-title">🚨 Advanced Alarms</div>
+
+                    <div style="margin-bottom: 16px;">
+                        <button class="btn btn-success" onclick="showCreateAlarmModal()">➕ Add Alarm</button>
+                    </div>
+
+                    ${alarms.length === 0 ? `
+                        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                            <div style="font-size: 48px; margin-bottom: 12px;">🔕</div>
+                            <div style="font-size: 14px;">No alarms configured</div>
+                            <div style="font-size: 12px; margin-top: 4px;">Add your first alarm to start monitoring</div>
+                        </div>
+                    ` : `
+                        <div class="item-list">
+                            ${alarms.map(alarm => `
+                                <div class="item-card">
+                                    <div class="item-card-info">
+                                        <div class="item-card-title">
+                                            ${alarm.alarm_type.toUpperCase()} Alarm
+                                            <span class="priority-badge priority-${alarm.priority}">${alarm.priority}</span>
+                                        </div>
+                                        <div class="item-card-details">
+                                            ${renderAlarmDetails(alarm)}
+                                        </div>
+                                    </div>
+                                    <div class="item-card-actions">
+                                        <button class="btn btn-secondary btn-small" onclick="editAlarm('${alarm.alarm_id}')">Edit</button>
+                                        <button class="btn btn-secondary btn-small" onclick="deleteAlarm('${alarm.alarm_id}')">Delete</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        // Render alarm details based on type
+        function renderAlarmDetails(alarm) {
+            switch(alarm.alarm_type) {
+                case 'limit':
+                    return `Limits: HH=${alarm.high_high_limit || 'N/A'}, H=${alarm.high_limit || 'N/A'}, L=${alarm.low_limit || 'N/A'}, LL=${alarm.low_low_limit || 'N/A'}`;
+                case 'rate_of_change':
+                    return `Max rate: ${alarm.max_rate_of_change} per ${alarm.rate_window_seconds}s`;
+                case 'deviation':
+                    return `Setpoint: ${alarm.setpoint_tag}, Max deviation: ${alarm.max_deviation} ${alarm.deviation_type}`;
+                case 'statistical':
+                    return `Window: ${alarm.rolling_window_seconds}s, Threshold: ${alarm.std_dev_multiplier}σ`;
+                case 'custom_formula':
+                    return `Formula: ${alarm.custom_condition}`;
+                default:
+                    return 'Custom alarm';
+            }
+        }
+
+        // Render Events Tab
+        function renderEventsTab(tag) {
+            if (tag.is_discovered) {
+                return renderLockedFeature('📡 Events');
+            }
+            const events = tag.event_triggers || [];
+
+            return `
+                <div class="properties-section">
+                    <div class="section-title">📡 Event Triggers</div>
+
+                    <div style="margin-bottom: 16px;">
+                        <button class="btn btn-success" onclick="showCreateEventModal()">➕ Add Event</button>
+                    </div>
+
+                    ${events.length === 0 ? `
+                        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                            <div style="font-size: 48px; margin-bottom: 12px;">📭</div>
+                            <div style="font-size: 14px;">No events configured</div>
+                            <div style="font-size: 12px; margin-top: 4px;">Add event triggers to automate responses</div>
+                        </div>
+                    ` : `
+                        <div class="item-list">
+                            ${events.map(event => `
+                                <div class="item-card">
+                                    <div class="item-card-info">
+                                        <div class="item-card-title">${event.event_type}</div>
+                                        <div class="item-card-details">
+                                            Condition: ${event.condition || 'N/A'}<br>
+                                            Min interval: ${event.min_interval_seconds}s
+                                        </div>
+                                    </div>
+                                    <div class="item-card-actions">
+                                        <button class="btn btn-secondary btn-small" onclick="editEvent('${event.event_id}')">Edit</button>
+                                        <button class="btn btn-secondary btn-small" onclick="deleteEvent('${event.event_id}')">Delete</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        // Render Actions Tab
+        function renderActionsTab(tag) {
+            if (tag.is_discovered) {
+                return renderLockedFeature('🤖 Actions');
+            }
+            const actions = tag.actions || [];
+
+            return `
+                <div class="properties-section">
+                    <div class="section-title">🤖 Automated Actions (READ-ONLY Gateway)</div>
+
+                    <div style="background: #fef3c7; border: 1px solid #fbbf24; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
+                        ⚠️ <strong>Security Note:</strong> This gateway is READ-ONLY by design. Actions cannot write to tags or PLCs.
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <button class="btn btn-success" onclick="showCreateActionModal()">➕ Add Action</button>
+                    </div>
+
+                    ${actions.length === 0 ? `
+                        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                            <div style="font-size: 48px; margin-bottom: 12px;">🤖</div>
+                            <div style="font-size: 14px;">No actions configured</div>
+                            <div style="font-size: 12px; margin-top: 4px;">Add automated actions for notifications and alerts</div>
+                        </div>
+                    ` : `
+                        <div class="item-list">
+                            ${actions.map(action => `
+                                <div class="item-card">
+                                    <div class="item-card-info">
+                                        <div class="item-card-title">${action.action_type.toUpperCase()}</div>
+                                        <div class="item-card-details">
+                                            ${renderActionDetails(action)}
+                                        </div>
+                                    </div>
+                                    <div class="item-card-actions">
+                                        <button class="btn btn-secondary btn-small" onclick="editAction('${action.action_id}')">Edit</button>
+                                        <button class="btn btn-secondary btn-small" onclick="deleteAction('${action.action_id}')">Delete</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+
+                <div class="properties-section">
+                    <div class="section-title">✅ Available Action Types</div>
+                    <ul style="font-size: 13px; color: #4a5568; line-height: 1.8;">
+                        <li><strong>WEBHOOK</strong> - HTTP POST to external systems</li>
+                        <li><strong>EMAIL</strong> - Send email notifications</li>
+                        <li><strong>SMS</strong> - Send SMS alerts</li>
+                        <li><strong>MQTT_PUBLISH</strong> - Publish to MQTT broker</li>
+                        <li><strong>EXECUTE_SCRIPT</strong> - Run Python script (read-only context)</li>
+                        <li><strong>LOG_MESSAGE</strong> - Log to system</li>
+                        <li><strong>DASHBOARD_NOTIFICATION</strong> - Push notification to dashboard</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Render action details based on type
+        function renderActionDetails(action) {
+            switch(action.action_type) {
+                case 'webhook':
+                    return `URL: ${action.webhook_url}, Method: ${action.webhook_method}`;
+                case 'email':
+                    return `To: ${action.email_to?.join(', ')}, Subject: ${action.email_subject_template}`;
+                case 'sms':
+                    return `To: ${action.sms_to?.join(', ')}`;
+                case 'mqtt_publish':
+                    return `Topic: ${action.mqtt_topic}`;
+                case 'execute_script':
+                    return `Timeout: ${action.script_timeout_seconds}s`;
+                case 'log_message':
+                    return `Level: ${action.log_level}`;
+                case 'dashboard_notification':
+                    return `Notification to dashboard users`;
+                default:
+                    return 'Custom action';
+            }
+        }
+
+        function ensureManagedTag() {
+            if (!currentTag) return false;
+            if (currentTag.is_discovered) {
+                alert('Salve este tag clicando em "Criar Tag no Gateway" antes de editar.');
+                return false;
+            }
+            return true;
+        }
+
+        // Update tag
+        async function updateTag(field, value) {
+            if (!ensureManagedTag()) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/tags/${currentTag.tag_id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({[field]: value})
+                });
+
+                if (response.ok) {
+                    await refreshTags();
+                    await selectTag(currentTag.tag_id);
+                }
+            } catch (error) {
+                console.error('Failed to update tag:', error);
+                alert('Failed to update tag: ' + error.message);
+            }
+        }
+
+        // Update metadata
+        async function updateTagMetadata(field, value) {
+            if (!ensureManagedTag()) return;
+
+            const metadata = currentTag.metadata || {};
+            metadata[field] = value;
+
+            await updateTag('metadata', metadata);
+        }
+
+        // Update historian
+        async function updateHistorian(field, value) {
+            if (!ensureManagedTag()) return;
+
+            const historian = currentTag.historian || {};
+            historian[field] = value;
+
+            await updateTag('historian', historian);
+        }
+
+        // Create tag
+        async function createTag(event) {
+            event.preventDefault();
+
+            const data = {
+                tag_name: document.getElementById('new_tag_name').value,
+                address: document.getElementById('new_address').value,
+                data_type: document.getElementById('new_data_type').value,
+                adapter_id: document.getElementById('new_adapter_id').value,
+                enabled: document.getElementById('new_enabled').checked,
+                metadata: {
+                    engineering_units: document.getElementById('new_units').value,
+                    description: document.getElementById('new_description').value
+                },
+                historian: {
+                    enabled: document.getElementById('new_historize').checked,
+                    mode: 'on_change',
+                    interval_ms: 5000
+                }
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/tags/`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    closeCreateTagModal();
+                    await refreshTags();
+                    alert('Tag created successfully!');
+                } else {
+                    const error = await response.json();
+                    alert('Failed to create tag: ' + error.detail);
+                }
+            } catch (error) {
+                console.error('Failed to create tag:', error);
+                alert('Failed to create tag: ' + error.message);
+            }
+        }
+
+        // Delete tag
+        async function deleteTag() {
+            if (!ensureManagedTag()) return;
+            if (!confirm(`Delete tag "${currentTag.tag_name}"?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/tags/${currentTag.tag_id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    currentTag = null;
+                    await refreshTags();
+                    document.getElementById('propertiesPanel').innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">👈</div>
+                            <div class="empty-state-text">Select a tag</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to delete tag:', error);
+                alert('Failed to delete tag: ' + error.message);
+            }
+        }
+
+        async function createManagedTagFromDiscovered() {
+            if (!currentTag || !currentTag.is_discovered) {
+                alert('Selecione um tag descoberto primeiro.');
+                return;
+            }
+
+            const safeDataType = currentTag.data_type && currentTag.data_type !== 'unknown'
+                ? currentTag.data_type
+                : 'double';
+
+            const payload = {
+                tag_name: currentTag.tag_name,
+                address: currentTag.address,
+                data_type: safeDataType,
+                adapter_id: currentTag.adapter_id,
+                enabled: currentTag.enabled !== false,
+                metadata: {
+                    engineering_units: currentTag.metadata?.engineering_units || '',
+                    description: currentTag.metadata?.description || '',
+                    location: currentTag.metadata?.location || '',
+                    asset_id: currentTag.metadata?.asset_id || ''
+                },
+                historian: {
+                    enabled: currentTag.historian?.enabled || false,
+                    mode: currentTag.historian?.mode || 'on_change',
+                    interval_ms: currentTag.historian?.interval_ms || 1000
+                }
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/tags/`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json().catch(() => null);
+
+                if (!response.ok) {
+                    throw new Error(result?.detail || 'Erro ao criar o tag no Gateway');
+                }
+
+                alert('Tag salvo no Gateway com sucesso!');
+                await refreshTags();
+                if (result?.tag_id) {
+                    await selectTag(result.tag_id);
+                }
+            } catch (error) {
+                console.error('Failed to convert discovered tag:', error);
+                alert('Falha ao salvar tag: ' + error.message);
+            }
+        }
+
+        function openCreateModalPrefilled() {
+            if (!currentTag) return;
+            showCreateTagModal();
+
+            const setValue = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.value = value ?? '';
+            };
+
+            setValue('new_tag_name', currentTag.tag_name);
+            setValue('new_address', currentTag.address);
+            setValue('new_units', currentTag.metadata?.engineering_units || currentTag.metadata?.unit || '');
+            setValue('new_description', currentTag.metadata?.description || '');
+
+            const dataTypeSelect = document.getElementById('new_data_type');
+            if (dataTypeSelect && currentTag.data_type) {
+                dataTypeSelect.value = currentTag.data_type;
+            }
+
+            const adapterSelect = document.getElementById('new_adapter_id');
+            if (adapterSelect && currentTag.adapter_id) {
+                adapterSelect.value = currentTag.adapter_id;
+            }
+
+            const enabledCheckbox = document.getElementById('new_enabled');
+            if (enabledCheckbox) {
+                enabledCheckbox.checked = currentTag.enabled !== false;
+            }
+
+            const historizeCheckbox = document.getElementById('new_historize');
+            if (historizeCheckbox) {
+                historizeCheckbox.checked = currentTag.historian?.enabled || false;
+            }
+        }
+
+        // Export tags
+        function exportTags() {
+            window.open(`${API_BASE}/api/tags/export/csv`, '_blank');
+        }
+
+        // Modals
+        function showCreateTagModal() {
+            document.getElementById('createTagModal').classList.add('show');
+        }
+
+        function closeCreateTagModal() {
+            document.getElementById('createTagModal').classList.remove('show');
+            document.getElementById('createTagForm').reset();
+        }
+
+        function showImportModal() {
+            document.getElementById('importModal').classList.add('show');
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').classList.remove('show');
+        }
+
+        // Import CSV
+        async function importCSV() {
+            const fileInput = document.getElementById('csvFile');
+            const adapterId = document.getElementById('import_adapter_id').value;
+            const template = document.getElementById('import_template').value;
+
+            if (!fileInput.files[0]) {
+                alert('Please select a CSV file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                let url = `${API_BASE}/api/tags/import/csv?adapter_id=${adapterId}`;
+                if (template) url += `&apply_template=${template}`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`Import successful!\nImported: ${result.imported}\nErrors: ${result.errors}`);
+                    closeImportModal();
+                    await refreshTags();
+                } else {
+                    alert('Import failed: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('Import failed: ' + error.message);
+            }
+        }
+
+        // Formula functions
+        async function saveFormula() {
+            if (!ensureManagedTag()) return;
+
+            const formulaData = {
+                tag_id: currentTag.tag_id,
+                enabled: document.getElementById('formula_enabled').checked,
+                expression: document.getElementById('formula_expression').value,
+                input_tags: document.getElementById('formula_input_tags').value.split(',').map(t => t.trim()).filter(t => t),
+                update_interval_ms: parseInt(document.getElementById('formula_interval').value),
+                on_error_value: document.getElementById('formula_error_value').value || null
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/formula`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formulaData)
+                });
+
+                if (response.ok) {
+                    alert('Formula saved successfully!');
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    const error = await response.json();
+                    alert('Failed to save formula: ' + (error.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Failed to save formula:', error);
+                alert('Failed to save formula: ' + error.message);
+            }
+        }
+
+        async function testFormula() {
+            if (currentTag && currentTag.is_discovered) {
+                alert('Salve este tag antes de testar fórmulas.');
+                return;
+            }
+            const expression = document.getElementById('formula_expression').value;
+            if (!expression) {
+                alert('Please enter a formula expression');
+                return;
+            }
+
+            // Simple test with sample values
+            const sampleValues = {};
+            const inputTags = document.getElementById('formula_input_tags').value.split(',').map(t => t.trim()).filter(t => t);
+            inputTags.forEach(tag => {
+                sampleValues[tag] = parseFloat(prompt(`Enter test value for ${tag}:`, '100') || '100');
+            });
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/formulas/test`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({expression, sample_values: sampleValues})
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Formula test result: ${result.result}`);
+                } else {
+                    alert('Formula test failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Failed to test formula:', error);
+                alert('Failed to test formula: ' + error.message);
+            }
+        }
+
+        function applyFormulaExample(exampleType) {
+            const examples = {
+                temp_conversion: {
+                    expression: "tags['TEMP_C'] * 1.8 + 32",
+                    input_tags: 'TEMP_C'
+                },
+                mass_flow: {
+                    expression: "tags['VOL_FLOW'] * tags['DENSITY']",
+                    input_tags: 'VOL_FLOW, DENSITY'
+                },
+                power_3phase: {
+                    expression: "math.sqrt(3) * tags['VOLTAGE'] * tags['CURRENT'] * tags['POWER_FACTOR']",
+                    input_tags: 'VOLTAGE, CURRENT, POWER_FACTOR'
+                },
+                efficiency: {
+                    expression: "(tags['OUTPUT'] / max(tags['INPUT'], 0.001)) * 100",
+                    input_tags: 'OUTPUT, INPUT'
+                }
+            };
+
+            const example = examples[exampleType];
+            if (example) {
+                document.getElementById('formula_expression').value = example.expression;
+                document.getElementById('formula_input_tags').value = example.input_tags;
+                document.getElementById('formula_enabled').checked = true;
+            }
+        }
+
+        // Alarm functions
+        function showCreateAlarmModal() {
+            alert('Alarm creation modal coming soon! Use API:\nPOST /api/automation/tags/{tag_id}/alarms/advanced');
+        }
+
+        function editAlarm(alarmId) {
+            alert('Edit alarm: ' + alarmId + '\nComing soon!');
+        }
+
+        async function deleteAlarm(alarmId) {
+            if (!ensureManagedTag() || !confirm('Delete this alarm?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/alarms/${alarmId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Alarm deleted successfully!');
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to delete alarm');
+                }
+            } catch (error) {
+                console.error('Failed to delete alarm:', error);
+                alert('Failed to delete alarm: ' + error.message);
+            }
+        }
+
+        // Event functions
+        function showCreateEventModal() {
+            alert('Event creation modal coming soon! Use API:\nPOST /api/automation/tags/{tag_id}/events');
+        }
+
+        function editEvent(eventId) {
+            alert('Edit event: ' + eventId + '\nComing soon!');
+        }
+
+        async function deleteEvent(eventId) {
+            if (!ensureManagedTag() || !confirm('Delete this event?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/events/${eventId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Event deleted successfully!');
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to delete event');
+                }
+            } catch (error) {
+                console.error('Failed to delete event:', error);
+                alert('Failed to delete event: ' + error.message);
+            }
+        }
+
+        // Action functions
+        function showCreateActionModal() {
+            alert('Action creation modal coming soon! Use API:\nPOST /api/automation/tags/{tag_id}/actions');
+        }
+
+        function editAction(actionId) {
+            alert('Edit action: ' + actionId + '\nComing soon!');
+        }
+
+        async function deleteAction(actionId) {
+            if (!ensureManagedTag() || !confirm('Delete this action?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/actions/${actionId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Action deleted successfully!');
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to delete action');
+                }
+            } catch (error) {
+                console.error('Failed to delete action:', error);
+                alert('Failed to delete action: ' + error.message);
+            }
+        }
+
+        // Template/Clone functions (stubs)
+        function applyTemplate() {
+            alert('Apply template functionality coming soon!');
+        }
+
+        function cloneTag() {
+            if (!currentTag) return;
+            alert('Clone tag: ' + currentTag.tag_name + '\nComing soon!');
+        }
+
+        function showTemplatesModal() {
+            alert('Templates modal coming soon!');
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

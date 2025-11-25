@@ -272,7 +272,7 @@ services:
     networks:
       - it-network
     healthcheck:
-      test: ["CMD", "vault", "status"]
+      test: ["CMD-SHELL", "wget --spider http://127.0.0.1:8200/v1/sys/health 2>&1 | grep -q 'remote file exists'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -291,7 +291,7 @@ services:
     networks:
       - ot-network  # PDCA #1: Apenas OT (PLCs)
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 4840 || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 4840)); s.close()\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -369,6 +369,7 @@ services:
 
       # Gateway
       GATEWAY_API_KEY: secure-gateway-api-key-change-in-production
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9093,kafka-3:9096
 
       # AI Agent - Ollama
       OLLAMA_BASE_URL: http://ollama:11434
@@ -398,6 +399,12 @@ services:
       redis:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
 
   # Celery Worker (Background Tasks - PDCA #11 Enhanced)
@@ -486,7 +493,9 @@ services:
       context: ./gateway
       dockerfile: Dockerfile
     container_name: optiflow-gateway
-    command: python -m app
+    command: python -m app.main_with_api
+    ports:
+      - "8080:8080"  # Gateway Configuration API
     volumes:
       - ./gateway:/app
       - ./gateway/config:/app/config
@@ -504,12 +513,20 @@ services:
       API_URL: http://backend:8000
       API_KEY: secure-gateway-api-key-change-in-production
       LOG_LEVEL: INFO
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9093,kafka-3:9096
     networks:
       # PDCA #1: Gateway tem acesso a AMBAS as redes (funciona como diodo de dados)
       - ot-network   # Comunica com PLCs (OPC UA, Modbus, etc)
       - it-network   # Envia dados para Backend
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
 
   # Frontend Web Application
   frontend:

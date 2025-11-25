@@ -111,29 +111,13 @@ async def readiness_check() -> JSONResponse:
         }
         all_healthy = False
     
-    # Check Gateway Service
-    try:
-        from app.services.gateway_service import gateway_service
-        gateway_status = gateway_service.get_status()
-        gateway_healthy = gateway_status.get("running", False)
-        
-        health_status["checks"]["gateway"] = {
-            "status": "healthy" if gateway_healthy else "unhealthy",
-            "running": gateway_healthy,
-            "messages_published": gateway_status.get("statistics", {}).get("messages_published", 0),
-            "errors": gateway_status.get("statistics", {}).get("errors_count", 0),
-            "circuit_breaker": gateway_status.get("circuit_breaker", {}).get("state", "unknown")
-        }
-        
-        # Gateway is not critical for readiness (can start even if gateway has issues)
-        # So we don't set all_healthy = False here
-        
-    except Exception as e:
-        logger.error(f"Gateway health check failed: {e}")
-        health_status["checks"]["gateway"] = {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+    # Gateway Service now runs as standalone microservice
+    # Its health is available at http://gateway:8080/health
+    health_status["checks"]["gateway"] = {
+        "status": "external",
+        "note": "Gateway is now a standalone microservice (port 8080)",
+        "health_endpoint": "http://gateway:8080/health"
+    }
     
     # Check Consumer Service
     try:

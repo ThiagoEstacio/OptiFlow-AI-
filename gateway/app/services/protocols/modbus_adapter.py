@@ -18,6 +18,8 @@ import asyncio
 import logging
 import struct
 
+from dataclasses import dataclass, field
+
 try:
     from pymodbus.client import AsyncModbusTcpClient
     from pymodbus.exceptions import ModbusException
@@ -30,6 +32,30 @@ except ImportError:
 from .base_adapter import BaseProtocolAdapter, ProtocolConfig, TagData
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TagReadSpec:
+    """Metadata describing how to extract a tag value from a batch read"""
+
+    name: str
+    data_type: str
+    function: str
+    address: str
+    raw_address: int
+    register_count: int
+    offset: int  # Offset in registers (or bits for coils/discrete)
+    config: Dict[str, Any]
+
+
+@dataclass
+class ReadGroup:
+    """Represents a contiguous block of registers/bits to read in a single Modbus request"""
+
+    function: str
+    start_address: int
+    count: int
+    tags: List[TagReadSpec] = field(default_factory=list)
 
 
 class ModbusAdapter(BaseProtocolAdapter):
@@ -81,7 +107,29 @@ class ModbusAdapter(BaseProtocolAdapter):
         self.byte_order = config.extra_config.get('byte_order', 'big')
         self.word_order = config.extra_config.get('word_order', 'big')
 
+        # Batch/concurrency configuration for high tag counts
+        self.max_registers_per_batch = int(
+            config.extra_config.get(
+                'max_registers_per_batch',
+                max(10, min(120, config.batch_size or 120))
+            )
+        )
+        self.max_bits_per_batch = int(config.extra_config.get('max_bits_per_batch', 2000))
+        self.max_concurrent_reads = int(config.extra_config.get('max_concurrent_reads', 10))
+
+        # Pre-compute optimal read plan for all tags (to avoid 1 request per tag)
+        self._read_plan: List[ReadGroup] = self._build_read_plan()
+
         logger.info(f"🔧 Modbus adapter initialized - Host: {config.host}:{config.port}, Slave: {self.slave_id}")
+        if self._read_plan:
+            total_groups = len(self._read_plan)
+            total_tags = sum(len(group.tags) for group in self._read_plan)
+            logger.info(
+                f"📦 Modbus read plan created - {total_tags} tags in {total_groups} batch groups "
+                f"(max {self.max_registers_per_batch} registers per group)"
+            )
+        else:
+            logger.warning("⚠️  Modbus read plan empty - falling back to sequential reads (less efficient)")
 
     async def connect(self) -> bool:
         """Connect to Modbus TCP server"""
@@ -116,6 +164,100 @@ class ModbusAdapter(BaseProtocolAdapter):
             self.connected = False
             return False
 
+    def _build_read_plan(self) -> List[ReadGroup]:
+        """
+        Build an optimized plan grouping tags into contiguous blocks for batch reads.
+
+        This drastically reduces the number of Modbus round-trips, enabling
+        10k+ tags to be read under tight scan intervals.
+        """
+        if not self.config.tags:
+            return []
+
+        tags_by_function: Dict[str, List[Dict[str, Any]]] = {
+            'holding': [],
+            'input': [],
+            'coil': [],
+            'discrete': []
+        }
+
+        for tag_config in self.config.tags:
+            function = tag_config.get('function', 'holding').lower()
+            if function not in tags_by_function:
+                logger.warning(f"⚠️  Unsupported Modbus function '{function}' for tag {tag_config.get('name')}")
+                continue
+
+            address = tag_config.get('address')
+            if not address:
+                logger.warning(f"⚠️  Tag {tag_config.get('name')} missing address")
+                continue
+
+            parsed_address = self._parse_address(address, function)
+            data_type = tag_config.get('type', 'int16').lower()
+            register_count = self.TYPE_SIZES.get(data_type, 1)
+
+            tags_by_function[function].append({
+                'config': tag_config,
+                'address': parsed_address,
+                'register_count': register_count
+            })
+
+        plan: List[ReadGroup] = []
+        for function, tag_list in tags_by_function.items():
+            if not tag_list:
+                continue
+
+            tag_list.sort(key=lambda t: t['address'])
+            max_span = self.max_registers_per_batch if function in ('holding', 'input') else self.max_bits_per_batch
+
+            current_group: Optional[ReadGroup] = None
+            for tag_info in tag_list:
+                tag_conf = tag_info['config']
+                address = tag_info['address']
+                register_count = tag_info['register_count']
+                span_unit = register_count if function in ('holding', 'input') else 1
+
+                if current_group is None:
+                    current_group = ReadGroup(
+                        function=function,
+                        start_address=address,
+                        count=0,
+                        tags=[]
+                    )
+
+                # Determine if tag fits in current group
+                relative_offset = address - current_group.start_address
+                required_span = relative_offset + span_unit
+
+                if required_span > max_span:
+                    plan.append(current_group)
+                    current_group = ReadGroup(
+                        function=function,
+                        start_address=address,
+                        count=0,
+                        tags=[]
+                    )
+                    relative_offset = 0
+                    required_span = span_unit
+
+                spec = TagReadSpec(
+                    name=tag_conf.get('name'),
+                    data_type=tag_conf.get('type', 'int16'),
+                    function=function,
+                    address=tag_conf.get('address'),
+                    raw_address=address,
+                    register_count=register_count,
+                    offset=relative_offset,
+                    config=tag_conf
+                )
+                current_group.tags.append(spec)
+                current_group.count = max(current_group.count, required_span)
+
+            if current_group and current_group.tags:
+                plan.append(current_group)
+
+        return plan
+
     async def disconnect(self):
         """Disconnect from Modbus TCP server"""
         if not self.connected:
@@ -135,11 +277,35 @@ class ModbusAdapter(BaseProtocolAdapter):
             logger.error(f"❌ Error during disconnect: {e}")
 
     async def read_tags(self) -> List[TagData]:
-        """Read all configured tags from Modbus device"""
+        """Read all configured tags from Modbus device using optimized batch plan"""
         if not self.connected or not self.client:
             return []
 
-        tags = []
+        # Fallback to sequential reads if no plan could be built
+        if not self._read_plan:
+            return await self._read_tags_sequential()
+
+        results: List[TagData] = []
+        semaphore = asyncio.Semaphore(self.max_concurrent_reads)
+
+        async def read_group(group: ReadGroup):
+            async with semaphore:
+                return await self._read_group(group)
+
+        tasks = [read_group(group) for group in self._read_plan]
+        group_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in group_results:
+            if isinstance(result, Exception):
+                logger.error(f"❌ Error reading Modbus group: {result}")
+                continue
+            results.extend(result)
+
+        return results
+
+    async def _read_tags_sequential(self) -> List[TagData]:
+        """Fallback for environments where batch plan isn't available"""
+        tags: List[TagData] = []
 
         for tag_config in self.config.tags:
             try:
@@ -152,35 +318,27 @@ class ModbusAdapter(BaseProtocolAdapter):
                     logger.warning(f"⚠️  Skipping tag with missing name or address: {tag_config}")
                     continue
 
-                # Parse Modbus address
                 modbus_address = self._parse_address(address, function)
-
-                # Read value from device
                 value = await self._read_value(modbus_address, data_type, function)
+                quality = 'good' if value is not None else 'bad'
 
-                if value is not None:
-                    tag_data = TagData(
-                        tag_name=tag_name,
-                        value=value,
-                        quality='good',
-                        source=self.adapter_id,
-                        address=address
-                    )
-                    tags.append(tag_data)
-                else:
-                    # Create tag with bad quality
-                    tag_data = TagData(
-                        tag_name=tag_name,
-                        value=None,
-                        quality='bad',
-                        source=self.adapter_id,
-                        address=address
-                    )
-                    tags.append(tag_data)
+                tags.append(TagData(
+                    tag_name=tag_name,
+                    value=value,
+                    quality=quality,
+                    source=self.adapter_id,
+                    address=address
+                ))
 
             except Exception as e:
                 logger.error(f"❌ Error reading tag {tag_config.get('name')}: {e}")
-                continue
+                tags.append(TagData(
+                    tag_name=tag_config.get('name', 'unknown'),
+                    value=None,
+                    quality='bad',
+                    source=self.adapter_id,
+                    address=tag_config.get('address')
+                ))
 
         return tags
 
@@ -351,6 +509,126 @@ class ModbusAdapter(BaseProtocolAdapter):
         except Exception as e:
             logger.warning(f"⚠️  Health check failed: {e}")
             return False
+
+    async def _read_group(self, group: ReadGroup) -> List[TagData]:
+        """Read a single batch group and return TagData entries"""
+        if group.function in ('holding', 'input'):
+            registers = await self._read_register_block(group.function, group.start_address, group.count)
+            return self._build_tag_data_from_registers(group, registers)
+        else:
+            bits = await self._read_bit_block(group.function, group.start_address, group.count)
+            return self._build_tag_data_from_bits(group, bits)
+
+    async def _read_register_block(self, function: str, start: int, count: int) -> Optional[List[int]]:
+        """Read a contiguous block of registers"""
+        try:
+            if function == 'holding':
+                response = await self.client.read_holding_registers(
+                    address=start,
+                    count=count,
+                    slave=self.slave_id
+                )
+            else:
+                response = await self.client.read_input_registers(
+                    address=start,
+                    count=count,
+                    slave=self.slave_id
+                )
+
+            if response.isError():
+                logger.warning(f"⚠️  Modbus error reading block {function}@{start}+{count}: {response}")
+                return None
+
+            return response.registers
+
+        except Exception as e:
+            logger.error(f"❌ Error reading register block {function}@{start}+{count}: {e}")
+            return None
+
+    async def _read_bit_block(self, function: str, start: int, count: int) -> Optional[List[bool]]:
+        """Read a contiguous block of coils/discrete inputs"""
+        try:
+            if function == 'coil':
+                response = await self.client.read_coils(
+                    address=start,
+                    count=count,
+                    slave=self.slave_id
+                )
+            else:
+                response = await self.client.read_discrete_inputs(
+                    address=start,
+                    count=count,
+                    slave=self.slave_id
+                )
+
+            if response.isError():
+                logger.warning(f"⚠️  Modbus error reading bit block {function}@{start}+{count}: {response}")
+                return None
+
+            return list(response.bits)
+
+        except Exception as e:
+            logger.error(f"❌ Error reading bit block {function}@{start}+{count}: {e}")
+            return None
+
+    def _build_tag_data_from_registers(
+        self,
+        group: ReadGroup,
+        registers: Optional[List[int]]
+    ) -> List[TagData]:
+        """Convert register block into TagData entries"""
+        results: List[TagData] = []
+
+        for spec in group.tags:
+            value = None
+            quality = 'bad'
+
+            if registers is not None:
+                slice_start = spec.offset
+                slice_end = slice_start + spec.register_count
+                registers_slice = registers[slice_start:slice_end]
+
+                if len(registers_slice) == spec.register_count:
+                    value = self._convert_registers(registers_slice, spec.data_type)
+                    quality = 'good' if value is not None else 'bad'
+
+            results.append(TagData(
+                tag_name=spec.name,
+                value=value,
+                quality=quality,
+                source=self.adapter_id,
+                address=spec.address
+            ))
+
+        return results
+
+    def _build_tag_data_from_bits(
+        self,
+        group: ReadGroup,
+        bits: Optional[List[bool]]
+    ) -> List[TagData]:
+        """Convert coil/discrete block into TagData entries"""
+        results: List[TagData] = []
+
+        for spec in group.tags:
+            value = None
+            quality = 'bad'
+
+            if bits is not None:
+                bit_index = spec.offset
+                if bit_index < len(bits):
+                    value = bool(bits[bit_index])
+                    quality = 'good'
+
+            results.append(TagData(
+                tag_name=spec.name,
+                value=value,
+                quality=quality,
+                source=self.adapter_id,
+                address=spec.address
+            ))
+
+        return results
 
 
 def create_modbus_adapter(
