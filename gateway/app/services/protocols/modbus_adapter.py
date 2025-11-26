@@ -649,8 +649,10 @@ class ModbusAdapter(BaseProtocolAdapter):
         group: ReadGroup,
         registers: Optional[List[int]]
     ) -> List[TagData]:
-        """Convert register block into TagData entries"""
+        """Convert register block into TagData entries and update last_values cache"""
+        from datetime import datetime
         results: List[TagData] = []
+        now = datetime.now().isoformat()
 
         for spec in group.tags:
             value = None
@@ -664,6 +666,13 @@ class ModbusAdapter(BaseProtocolAdapter):
                 if len(registers_slice) == spec.register_count:
                     value = self._convert_registers(registers_slice, spec.data_type)
                     quality = 'good' if value is not None else 'bad'
+
+            # Update last_values cache for realtime API access (same as OPC-UA)
+            self.last_values[spec.address] = {
+                'value': value,
+                'quality': quality.capitalize(),
+                'timestamp': now
+            }
 
             results.append(TagData(
                 tag_name=spec.name,
@@ -681,8 +690,10 @@ class ModbusAdapter(BaseProtocolAdapter):
         group: ReadGroup,
         bits: Optional[List[bool]]
     ) -> List[TagData]:
-        """Convert coil/discrete block into TagData entries"""
+        """Convert coil/discrete block into TagData entries and update last_values cache"""
+        from datetime import datetime
         results: List[TagData] = []
+        now = datetime.now().isoformat()
 
         for spec in group.tags:
             value = None
@@ -693,6 +704,13 @@ class ModbusAdapter(BaseProtocolAdapter):
                 if bit_index < len(bits):
                     value = bool(bits[bit_index])
                     quality = 'good'
+
+            # Update last_values cache for realtime API access (same as OPC-UA)
+            self.last_values[spec.address] = {
+                'value': value,
+                'quality': quality.capitalize(),
+                'timestamp': now
+            }
 
             results.append(TagData(
                 tag_name=spec.name,
