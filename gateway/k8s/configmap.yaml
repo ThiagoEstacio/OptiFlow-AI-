@@ -1,0 +1,102 @@
+# ============================================================================
+# OptiFlow Gateway - ConfigMap
+# ============================================================================
+#
+# Stores non-sensitive configuration for the gateway.
+# Secrets (passwords, tokens) should be in a Secret object.
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+data:
+  # Gateway identity
+  GATEWAY_ID: "gateway-001"
+  GATEWAY_NAME: "OptiFlow Gateway Edge"
+
+  # Server configuration
+  MODE: "production"
+  HOST: "0.0.0.0"
+  PORT: "8080"
+  WORKERS: "4"
+  LOG_LEVEL: "info"
+
+  # Kafka configuration (optional)
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_TOPIC: "raw_tags"
+
+  # Backend URL (optional)
+  BACKEND_URL: "http://backend:8000"
+
+  # Adapter configuration file
+  adapters_config.yaml: |
+    # OptiFlow Gateway - Protocol Adapters Configuration
+    # ==================================================
+    #
+    # This file defines the industrial protocol adapters
+    # that will connect to PLCs, sensors, and other devices.
+    #
+    # Supported protocols:
+    # - OPC-UA (asyncua)
+    # - Modbus TCP (pymodbus)
+    # - MQTT (paho-mqtt)
+    # - Ethernet/IP (future)
+    # - Siemens S7 (future)
+
+    adapters:
+      # Example OPC-UA Adapter
+      - adapter_id: plc1_opcua
+        protocol_type: opcua
+        enabled: true
+        host: 192.168.1.10
+        port: 4840
+        timeout: 5.0
+        retry_interval: 10.0
+        scan_rate_ms: 1000
+
+        # Security (for production OPC-UA servers)
+        extra_config:
+          security_mode: None  # None, Sign, SignAndEncrypt
+          security_policy: None  # None, Basic256Sha256
+          username: ""
+          password: ""
+
+        # Tags to monitor
+        tags:
+          - name: SILO1_TEMPERATURA
+            address: ns=2;s=TEAG.SILO1.TEMP
+            type: float
+            unit: °C
+
+          - name: SILO1_NIVEL
+            address: ns=2;s=TEAG.SILO1.NIVEL
+            type: float
+            unit: "%"
+
+      # Example Modbus TCP Adapter
+      - adapter_id: sensor_modbus
+        protocol_type: modbus
+        enabled: false
+        host: 192.168.1.20
+        port: 502
+        timeout: 3.0
+        scan_rate_ms: 2000
+
+        extra_config:
+          unit_id: 1  # Modbus slave ID
+
+        tags:
+          - name: PRESSURE_TANK_1
+            address: "40001"
+            type: float32
+            unit: Bar
+
+          - name: FLOW_RATE
+            address: "40003"
+            type: float32
+            unit: m3/h

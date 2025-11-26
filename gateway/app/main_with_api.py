@@ -102,6 +102,15 @@ class GatewayWithAPI:
             logger.info("🚀 Starting protocol adapters...")
             await self.gateway.protocol_manager.start_all()
 
+            # Start Alarm Evaluator
+            if self.gateway.alarm_evaluator:
+                logger.info("🚨 Starting Alarm Evaluator...")
+                await self.gateway.alarm_evaluator.start(
+                    protocol_manager=self.gateway.protocol_manager,
+                    interval_seconds=2.0
+                )
+                logger.info("✅ Alarm Evaluator started (interval: 2s)")
+
             # Get status
             status = self.gateway.protocol_manager.get_status()
 

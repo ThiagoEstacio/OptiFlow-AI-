@@ -61,10 +61,12 @@ class TagData:
     timestamp: Optional[str] = None
     source: Optional[str] = None  # Protocol adapter ID
     address: Optional[str] = None  # Original address (for debugging)
+    tag_id: Optional[str] = None  # Unique tag identifier for persistence
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for Kafka publishing"""
         return {
+            'tag_id': self.tag_id or self.tag_name,  # Use tag_id if available, else tag_name
             'tag_name': self.tag_name,
             'value': self.value,
             'quality': self.quality,

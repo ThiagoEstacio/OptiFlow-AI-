@@ -66,6 +66,8 @@ async def metrics_endpoint():
     - **Devices**: devices conectados, tags lidas, erros
     - **Alarmes**: alarmes ativos, alarmes disparados
     - **Sistema**: CPU, memória, disco
+    - **Simulador**: status do processo, inventário, fluxo
+    - **Negócio**: KPIs de energia (kWh/ton), custo operacional
     
     **Exemplo de Configuração Prometheus:**
     

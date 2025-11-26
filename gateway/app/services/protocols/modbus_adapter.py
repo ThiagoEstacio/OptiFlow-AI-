@@ -46,6 +46,7 @@ class TagReadSpec:
     register_count: int
     offset: int  # Offset in registers (or bits for coils/discrete)
     config: Dict[str, Any]
+    tag_id: Optional[str] = None  # Unique tag ID for InfluxDB persistence
 
 
 @dataclass
@@ -119,6 +120,9 @@ class ModbusAdapter(BaseProtocolAdapter):
 
         # Pre-compute optimal read plan for all tags (to avoid 1 request per tag)
         self._read_plan: List[ReadGroup] = self._build_read_plan()
+
+        # Cache for realtime API access (last received values)
+        self.last_values: Dict[str, Dict[str, Any]] = {}  # {address: {value, quality, timestamp}}
 
         logger.info(f"🔧 Modbus adapter initialized - Host: {config.host}:{config.port}, Slave: {self.slave_id}")
         if self._read_plan:
@@ -248,7 +252,8 @@ class ModbusAdapter(BaseProtocolAdapter):
                     raw_address=address,
                     register_count=register_count,
                     offset=relative_offset,
-                    config=tag_conf
+                    config=tag_conf,
+                    tag_id=tag_conf.get('tag_id')  # Include tag_id for InfluxDB persistence
                 )
                 current_group.tags.append(spec)
                 current_group.count = max(current_group.count, required_span)
@@ -310,6 +315,7 @@ class ModbusAdapter(BaseProtocolAdapter):
         for tag_config in self.config.tags:
             try:
                 tag_name = tag_config.get('name')
+                tag_id = tag_config.get('tag_id')  # Get tag_id for InfluxDB persistence
                 address = tag_config.get('address')
                 data_type = tag_config.get('type', 'int16')
                 function = tag_config.get('function', 'holding')
@@ -327,7 +333,8 @@ class ModbusAdapter(BaseProtocolAdapter):
                     value=value,
                     quality=quality,
                     source=self.adapter_id,
-                    address=address
+                    address=address,
+                    tag_id=tag_id  # Include tag_id for InfluxDB persistence
                 ))
 
             except Exception as e:
@@ -337,7 +344,8 @@ class ModbusAdapter(BaseProtocolAdapter):
                     value=None,
                     quality='bad',
                     source=self.adapter_id,
-                    address=tag_config.get('address')
+                    address=tag_config.get('address'),
+                    tag_id=tag_config.get('tag_id')  # Include tag_id even for errors
                 ))
 
         return tags
@@ -510,6 +518,71 @@ class ModbusAdapter(BaseProtocolAdapter):
             logger.warning(f"⚠️  Health check failed: {e}")
             return False
 
+    async def read_all_discovered_tags(self) -> List[Dict[str, Any]]:
+        """
+        Read current values for ALL configured tags directly from Modbus device
+
+        This reads values directly and updates the last_values cache.
+        Used by the Gateway UI to show real-time values for all tags.
+
+        Returns:
+            List of dicts with tag info and current values
+        """
+        from datetime import datetime
+
+        if not self.connected or not self.client:
+            logger.warning("Cannot read tags - not connected to Modbus server")
+            return []
+
+        results = []
+
+        # Use tags from config
+        tags_to_read = self.config.tags if hasattr(self.config, 'tags') else []
+
+        if not tags_to_read:
+            logger.warning("No tags configured to read")
+            return []
+
+        logger.info(f"📖 Reading {len(tags_to_read)} tags directly from Modbus device...")
+
+        # Read all tags using the optimized batch plan
+        tag_data_list = await self.read_tags()
+
+        # Build results and update cache
+        now = datetime.now().isoformat()
+
+        for tag_data in tag_data_list:
+            # Find original tag config for additional info
+            tag_config = next(
+                (t for t in tags_to_read if t.get('name') == tag_data.tag_name),
+                {}
+            )
+
+            address = tag_data.address or tag_config.get('address', '')
+            quality = tag_data.quality.capitalize() if tag_data.quality else 'Bad'
+
+            # Update last_values cache
+            self.last_values[address] = {
+                'value': tag_data.value,
+                'quality': quality,
+                'timestamp': now
+            }
+
+            results.append({
+                "name": tag_data.tag_name,
+                "address": address,
+                "current_value": tag_data.value,
+                "quality": quality,
+                "data_type": tag_config.get('type', tag_config.get('data_type', 'int16')),
+                "unit": tag_config.get('unit'),
+                "last_update": now,
+                "connected": tag_data.value is not None
+            })
+
+        good_count = len([r for r in results if r['connected']])
+        logger.info(f"✅ Read {good_count}/{len(results)} tags successfully from Modbus")
+        return results
+
     async def _read_group(self, group: ReadGroup) -> List[TagData]:
         """Read a single batch group and return TagData entries"""
         if group.function in ('holding', 'input'):
@@ -597,7 +670,8 @@ class ModbusAdapter(BaseProtocolAdapter):
                 value=value,
                 quality=quality,
                 source=self.adapter_id,
-                address=spec.address
+                address=spec.address,
+                tag_id=spec.tag_id  # Include tag_id for InfluxDB persistence
             ))
 
         return results
@@ -625,7 +699,8 @@ class ModbusAdapter(BaseProtocolAdapter):
                 value=value,
                 quality=quality,
                 source=self.adapter_id,
-                address=spec.address
+                address=spec.address,
+                tag_id=spec.tag_id  # Include tag_id for InfluxDB persistence
             ))
 
         return results

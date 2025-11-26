@@ -15,6 +15,7 @@ Based on asyncua library and existing OPC UA browser code.
 
 from typing import List, Dict, Any, Optional
 import asyncio
+import hashlib
 import logging
 
 try:
@@ -96,9 +97,13 @@ class OPCUAAdapter(BaseProtocolAdapter):
             namespaces = await self.client.get_namespace_array()
             logger.info(f"✅ Connected to OPC UA server - Namespaces: {len(namespaces)}")
 
-            # Auto-discover tags if none configured
+            # Load tags from tags_config.json (Point Builder concept)
+            # Only tags in config will be historized
+            await self._load_managed_tags()
+
+            # If still no tags, fall back to auto-discovery
             if not self.config.tags:
-                logger.info("🔍 No tags configured - starting auto-discovery...")
+                logger.info("🔍 No managed tags found - starting auto-discovery...")
                 await self._discover_tags()
 
             # Create subscription
@@ -163,7 +168,8 @@ class OPCUAAdapter(BaseProtocolAdapter):
             for tag_config in self.config.tags:
                 try:
                     node_id = tag_config.get('address')  # OPC UA node ID
-                    tag_name = tag_config.get('name')
+                    tag_name = tag_config.get('name') or tag_config.get('tag_name')
+                    tag_id = tag_config.get('tag_id')  # Unique ID for InfluxDB persistence
 
                     if not node_id or not tag_name:
                         logger.warning(f"⚠️  Skipping tag with missing node_id or name: {tag_config}")
@@ -178,10 +184,11 @@ class OPCUAAdapter(BaseProtocolAdapter):
                     self._monitored_items[node_id] = {
                         'handle': handle,
                         'tag_name': tag_name,
+                        'tag_id': tag_id,  # Store tag_id for Kafka publishing
                         'node': node
                     }
 
-                    logger.debug(f"✅ Subscribed to {tag_name} ({node_id})")
+                    logger.debug(f"✅ Subscribed to {tag_name} (id={tag_id}, node={node_id})")
 
                 except Exception as e:
                     logger.error(f"❌ Failed to subscribe to tag {tag_config}: {e}")
@@ -209,6 +216,7 @@ class OPCUAAdapter(BaseProtocolAdapter):
                 return
 
             tag_name = tag_info['tag_name']
+            tag_id = tag_info.get('tag_id')  # Get tag_id for InfluxDB persistence
 
             # Determine quality
             quality = 'good'
@@ -253,7 +261,8 @@ class OPCUAAdapter(BaseProtocolAdapter):
                 value=value,
                 quality=quality.lower(),  # Keep lowercase for backward compatibility
                 source=self.adapter_id,
-                address=node_id
+                address=node_id,
+                tag_id=tag_id  # Include tag_id for InfluxDB persistence
             )
 
             # Add to buffer (will be published in scan loop)
@@ -283,6 +292,61 @@ class OPCUAAdapter(BaseProtocolAdapter):
             self._tag_buffer.clear()
 
         return tags
+
+    async def _load_managed_tags(self):
+        """
+        Load tags from tags_config.json (Point Builder concept)
+
+        Only tags explicitly configured in tags_config.json will be historized.
+        This follows the PI System pattern where tags must be created in Point Builder
+        before they can be archived.
+        """
+        import json
+        from pathlib import Path
+
+        try:
+            config_path = Path("/app/config/tags_config.json")
+
+            if not config_path.exists():
+                logger.warning("⚠️  tags_config.json not found - no managed tags to load")
+                return
+
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+
+            all_tags = config_data.get("tags", [])
+
+            # Filter tags for this adapter
+            adapter_tags = [
+                t for t in all_tags
+                if t.get("adapter_id") == self.adapter_id or t.get("protocol_type") == "opcua"
+            ]
+
+            if not adapter_tags:
+                logger.info(f"📋 No managed tags found for adapter {self.adapter_id}")
+                return
+
+            # Convert to adapter config format
+            managed_tags = []
+            for tag in adapter_tags:
+                managed_tags.append({
+                    'tag_id': tag.get('tag_id'),  # Use the configured tag_id!
+                    'name': tag.get('tag_name') or tag.get('name'),
+                    'tag_name': tag.get('tag_name') or tag.get('name'),
+                    'address': tag.get('address'),
+                    'data_type': tag.get('data_type', 'double')
+                })
+
+            if managed_tags:
+                self.config.tags = managed_tags
+                logger.info(f"✅ Loaded {len(managed_tags)} managed tags from tags_config.json")
+                for tag in managed_tags:
+                    logger.debug(f"   📌 {tag['tag_id']}: {tag['name']} @ {tag['address']}")
+            else:
+                logger.info("📋 No managed tags found in tags_config.json")
+
+        except Exception as e:
+            logger.error(f"❌ Error loading managed tags: {e}", exc_info=True)
 
     async def _discover_tags(self):
         """
@@ -354,12 +418,17 @@ class OPCUAAdapter(BaseProtocolAdapter):
                                     except Exception:
                                         pass  # Keep default 'variant'
 
+                                    # Generate tag_id from node_id hash for consistency
+                                    tag_id = f"tag_{hashlib.md5(node_id.encode()).hexdigest()[:8]}"
+
                                     discovered_tags.append({
                                         'name': tag_name,
+                                        'tag_name': tag_name,
+                                        'tag_id': tag_id,
                                         'address': node_id,
                                         'data_type': data_type
                                     })
-                                    logger.debug(f"  ✓ Found tag: {tag_name} ({node_id}) type={data_type}")
+                                    logger.debug(f"  ✓ Found tag: {tag_name} (id={tag_id}, node={node_id}) type={data_type}")
                         except Exception:
                             pass  # Skip nodes we can't read
 
@@ -398,6 +467,93 @@ class OPCUAAdapter(BaseProtocolAdapter):
         except Exception as e:
             logger.warning(f"⚠️  Health check failed: {e}")
             return False
+
+    async def read_all_discovered_tags(self) -> List[Dict[str, Any]]:
+        """
+        Read current values for ALL discovered tags directly from OPC-UA server
+
+        This bypasses the subscription cache and reads values directly.
+        Used by the Gateway UI to show real-time values for all tags.
+
+        Returns:
+            List of dicts with tag info and current values
+        """
+        if not self.connected or not self.client:
+            logger.warning("Cannot read tags - not connected to OPC-UA server")
+            return []
+
+        results = []
+
+        # Use tags from config (which includes discovered tags)
+        tags_to_read = self.config.tags if hasattr(self.config, 'tags') else []
+
+        if not tags_to_read:
+            logger.warning("No tags configured/discovered to read")
+            return []
+
+        logger.info(f"📖 Reading {len(tags_to_read)} tags directly from OPC-UA server...")
+
+        for tag in tags_to_read:
+            tag_addr = tag.get('address', '')
+            tag_name = tag.get('name') or tag.get('tag_name', tag_addr)
+
+            try:
+                # Get node and read value directly
+                node = self.client.get_node(tag_addr)
+                data_value = await node.read_data_value()
+
+                # Extract value
+                value = data_value.Value.Value if data_value.Value else None
+
+                # Extract quality
+                quality = 'Good'
+                if hasattr(data_value, 'StatusCode') and data_value.StatusCode:
+                    if hasattr(data_value.StatusCode, 'is_good'):
+                        quality = 'Good' if data_value.StatusCode.is_good() else 'Bad'
+                    elif hasattr(data_value.StatusCode, 'value'):
+                        quality = 'Good' if data_value.StatusCode.value == 0 else 'Bad'
+
+                # Extract timestamp
+                timestamp = None
+                if hasattr(data_value, 'SourceTimestamp') and data_value.SourceTimestamp:
+                    timestamp = data_value.SourceTimestamp.isoformat()
+                elif hasattr(data_value, 'ServerTimestamp') and data_value.ServerTimestamp:
+                    timestamp = data_value.ServerTimestamp.isoformat()
+
+                # Also update last_values cache
+                self.last_values[tag_addr] = {
+                    'value': value,
+                    'quality': quality,
+                    'timestamp': timestamp
+                }
+
+                results.append({
+                    "name": tag_name,
+                    "address": tag_addr,
+                    "current_value": value,
+                    "quality": quality,
+                    "data_type": tag.get('data_type', tag.get('type', 'variant')),
+                    "unit": tag.get('unit'),
+                    "last_update": timestamp,
+                    "connected": True
+                })
+
+            except Exception as e:
+                logger.debug(f"⚠️  Failed to read tag {tag_name} ({tag_addr}): {e}")
+                results.append({
+                    "name": tag_name,
+                    "address": tag_addr,
+                    "current_value": None,
+                    "quality": "Bad",
+                    "data_type": tag.get('data_type', tag.get('type', 'variant')),
+                    "unit": tag.get('unit'),
+                    "last_update": None,
+                    "connected": False,
+                    "error": str(e)
+                })
+
+        logger.info(f"✅ Read {len([r for r in results if r['connected']])} tags successfully")
+        return results
 
 
 def create_opcua_adapter(

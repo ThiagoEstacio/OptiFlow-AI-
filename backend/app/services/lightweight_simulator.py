@@ -23,13 +23,9 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-# Import InfluxDB service for automatic data recording
-try:
-    from app.services.influxdb import influxdb_service
-    INFLUXDB_AVAILABLE = True
-except ImportError:
-    INFLUXDB_AVAILABLE = False
-    logger.warning("InfluxDB service not available - simulator will run without data recording")
+# NOTE: Simulator is a "digital PLC" - it does NOT write to InfluxDB directly.
+# Data flow: Simulator (OPC-UA) -> Gateway -> Kafka -> Backend -> InfluxDB
+INFLUXDB_AVAILABLE = False  # Disabled by design - Gateway handles data collection
 
 
 @dataclass
@@ -365,8 +361,8 @@ class LightweightGrainTerminalSimulator:
         if self.test_counter > 10:
             self.test_counter = 0
 
-        # Grava dados no InfluxDB automaticamente
-        await self._write_to_influxdb()
+        # NOTE: Simulator does NOT write to InfluxDB - Gateway handles data collection
+        # Data flow: Simulator (OPC-UA) -> Gateway -> Kafka -> Backend -> InfluxDB
 
 
 
@@ -439,42 +435,8 @@ class LightweightGrainTerminalSimulator:
 
                 self.failure_events.remove(event)
 
-    async def _write_to_influxdb(self):
-        """
-        Grava todos os valores de tags no InfluxDB automaticamente.
-
-        Chamado a cada step da simulação para criar histórico de time-series.
-        """
-        if not INFLUXDB_AVAILABLE:
-            return
-
-        try:
-            # Obtém todas as tags
-            all_tags = self.get_all_tags()
-
-            # Prepara pontos para batch write
-            points = []
-            now = datetime.utcnow()
-
-            for tag_name, value in all_tags.items():
-                points.append({
-                    "tag_id": tag_name,  # Usa nome da tag como ID
-                    "value": float(value),
-                    "timestamp": now,
-                    "quality": "good",
-                    "source": "simulator"
-                })
-
-            # Grava batch no InfluxDB
-            if points:
-                success = influxdb_service.write_batch(points)
-                if success:
-                    logger.debug(f"✅ Gravou {len(points)} pontos no InfluxDB @ {self.time_s:.1f}s")
-                else:
-                    logger.warning(f"⚠️  Falha ao gravar {len(points)} pontos no InfluxDB")
-
-        except Exception as e:
-            logger.error(f"❌ Erro gravando dados no InfluxDB: {e}")
+    # NOTE: _write_to_influxdb removed - Simulator is a "digital PLC"
+    # Data persistence is handled by: Gateway -> Kafka -> Backend -> InfluxDB
 
     def get_status(self) -> Dict:
         """Retorna status completo para API"""

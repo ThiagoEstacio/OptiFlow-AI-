@@ -1,3 +1,10 @@
+# Log rotation global para todos os containers
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   # PostgreSQL Database
   postgres:
@@ -31,6 +38,7 @@ services:
       DOCKER_INFLUXDB_INIT_ORG: optiflow
       DOCKER_INFLUXDB_INIT_BUCKET: timeseries
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-influxdb-token
+      DOCKER_INFLUXDB_INIT_RETENTION_PERIOD: 7d # PDCA: Adicionado limite de retenção de 7 dias
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_config:/etc/influxdb2
@@ -86,6 +94,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: optiflow-zookeeper
+    logging: *default-logging
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -107,6 +116,7 @@ services:
   kafka-1:
     image: confluentinc/cp-kafka:7.5.0
     container_name: optiflow-kafka-1
+    logging: *default-logging
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -123,10 +133,10 @@ services:
       KAFKA_DEFAULT_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_HOURS: 8 # PDCA: Reduzido para 8h para economizar disco
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
       KAFKA_COMPRESSION_TYPE: lz4
-      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_NUM_PARTITIONS: 12 # PDCA: Aumentado para maior paralelismo
     volumes:
       - kafka_1_data:/var/lib/kafka/data
     networks:
@@ -142,6 +152,7 @@ services:
   kafka-2:
     image: confluentinc/cp-kafka:7.5.0
     container_name: optiflow-kafka-2
+    logging: *default-logging
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -158,10 +169,10 @@ services:
       KAFKA_DEFAULT_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_HOURS: 8 # PDCA: Reduzido para 8h para economizar disco
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
       KAFKA_COMPRESSION_TYPE: lz4
-      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_NUM_PARTITIONS: 12 # PDCA: Aumentado para maior paralelismo
     volumes:
       - kafka_2_data:/var/lib/kafka/data
     networks:
@@ -177,6 +188,7 @@ services:
   kafka-3:
     image: confluentinc/cp-kafka:7.5.0
     container_name: optiflow-kafka-3
+    logging: *default-logging
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -193,10 +205,10 @@ services:
       KAFKA_DEFAULT_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_HOURS: 8 # PDCA: Reduzido para 8h para economizar disco
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
       KAFKA_COMPRESSION_TYPE: lz4
-      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_NUM_PARTITIONS: 12 # PDCA: Aumentado para maior paralelismo
     volumes:
       - kafka_3_data:/var/lib/kafka/data
     networks:
@@ -324,6 +336,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: optiflow-backend
+    logging: *default-logging
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
       - ./backend:/app
@@ -433,7 +446,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: optiflow-celery-worker
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=100
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8 --max-tasks-per-child=100
     volumes:
       - ./backend:/app
       - backend_mlflow:/app/mlruns
@@ -462,6 +475,15 @@ services:
 
       # MLflow (for ML retraining)
       MLFLOW_TRACKING_URI: http://mlflow:5000
+    # SCALABILITY: Adicionado limites de recursos para workers
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
     networks:
       - it-network
     depends_on:
@@ -513,6 +535,7 @@ services:
       context: ./gateway
       dockerfile: Dockerfile
     container_name: optiflow-gateway
+    logging: *default-logging
     command: python -m app.main_with_api
     ports:
       - "8080:8080"  # Gateway Configuration API
@@ -525,15 +548,24 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 2G
+          memory: 1G
         reservations:
           cpus: '1.0'
-          memory: 512M
+          memory: 768M
     environment:
       API_URL: http://backend:8000
       API_KEY: secure-gateway-api-key-change-in-production
       LOG_LEVEL: INFO
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9093,kafka-3:9096
+      # Security Configuration
+      GATEWAY_API_KEY_ENABLED: "true"
+      GATEWAY_API_KEY: "gw-secure-key-2025-production"
+      GATEWAY_JWT_ENABLED: "true"
+      GATEWAY_JWT_SECRET: "super-secret-jwt-key-for-gateway-edge-2025"
+      GATEWAY_READ_ONLY_MODE: "false"
+      GATEWAY_RATE_LIMIT_ENABLED: "true"
+      GATEWAY_RATE_LIMIT_REQUESTS: "100"
+      GATEWAY_RATE_LIMIT_WINDOW: "60"
     networks:
       # PDCA #1: Gateway tem acesso a AMBAS as redes (funciona como diodo de dados)
       - ot-network   # Comunica com PLCs (OPC UA, Modbus, etc)
@@ -670,6 +702,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d' # PDCA: Adicionado limite de retenção de 7 dias
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     volumes:

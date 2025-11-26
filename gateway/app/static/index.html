@@ -328,6 +328,336 @@
             font-size: 12px;
             font-family: monospace;
         }
+
+        /* ========================================
+           REALTIME TAGS MODAL STYLES
+           ======================================== */
+        .modal-large {
+            max-width: 95%;
+            width: 1200px;
+            max-height: 90vh;
+        }
+
+        .realtime-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .realtime-header h2 {
+            font-size: 24px;
+            color: #111827;
+            margin: 0;
+        }
+
+        .realtime-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .realtime-stat {
+            text-align: center;
+        }
+
+        .realtime-stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .realtime-stat-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .tags-table-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .tags-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .tags-table th {
+            background: #f9fafb;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            position: sticky;
+            top: 0;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .tags-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .tags-table tr:hover {
+            background: #f9fafb;
+        }
+
+        .tag-name {
+            font-weight: 500;
+            color: #111827;
+        }
+
+        .tag-address {
+            font-family: monospace;
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .tag-value {
+            font-family: monospace;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .tag-value.good {
+            color: #10b981;
+        }
+
+        .tag-value.bad {
+            color: #ef4444;
+        }
+
+        .tag-quality {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .tag-quality.good {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-quality.bad {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tag-timestamp {
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        .update-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .adapter-card.clickable {
+            cursor: pointer;
+        }
+
+        .adapter-card.clickable:hover .adapter-title {
+            color: #667eea;
+        }
+
+        .click-hint {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* ========================================
+           TAG CARDS VIEW STYLES
+           ======================================== */
+        .view-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .view-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .view-btn.active {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+
+        .tags-cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+
+        .tag-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tag-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .tag-card.good {
+            border-left: 4px solid #10b981;
+        }
+
+        .tag-card.bad {
+            border-left: 4px solid #ef4444;
+        }
+
+        .tag-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .tag-card-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #111827;
+            word-break: break-word;
+        }
+
+        .tag-card-quality {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .tag-card-quality.good {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-card-quality.bad {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tag-card-value {
+            font-size: 32px;
+            font-weight: 700;
+            font-family: 'SF Mono', Monaco, monospace;
+            margin: 8px 0;
+            line-height: 1;
+        }
+
+        .tag-card-value.good {
+            color: #10b981;
+        }
+
+        .tag-card-value.bad {
+            color: #ef4444;
+        }
+
+        .tag-card-unit {
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+            margin-left: 4px;
+        }
+
+        .tag-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        .tag-card-address {
+            font-family: monospace;
+            font-size: 10px;
+            color: #6b7280;
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .tag-card-timestamp {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tag-card-timestamp::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -351,8 +681,12 @@
                 <div class="status-value success" id="running-adapters">0</div>
             </div>
             <div class="status-item">
-                <div class="status-label">Total de Tags</div>
+                <div class="status-label">Tags Descobertos</div>
                 <div class="status-value" id="total-tags">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Tags Gerenciados</div>
+                <div class="status-value" id="managed-tags" style="color: #667eea;">0</div>
             </div>
         </div>
 
@@ -426,8 +760,82 @@
         </div>
     </div>
 
+    <!-- Modal para visualização em tempo real -->
+    <div id="realtimeTagsModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="realtime-header">
+                <div>
+                    <h2 id="realtime-adapter-name">Tags em Tempo Real</h2>
+                    <p style="color: #6b7280; font-size: 13px; margin-top: 4px;">
+                        <span class="update-indicator"></span>
+                        Atualizando a cada 2 segundos
+                    </p>
+                </div>
+                <div class="realtime-stats">
+                    <div class="realtime-stat">
+                        <div class="realtime-stat-value" id="realtime-total">0</div>
+                        <div class="realtime-stat-label">Total Tags</div>
+                    </div>
+                    <div class="realtime-stat">
+                        <div class="realtime-stat-value" id="realtime-good" style="color: #10b981;">0</div>
+                        <div class="realtime-stat-label">Qualidade Boa</div>
+                    </div>
+                    <div class="realtime-stat">
+                        <div class="realtime-stat-value" id="realtime-bad" style="color: #ef4444;">0</div>
+                        <div class="realtime-stat-label">Qualidade Ruim</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
+                <input type="text" class="search-box" id="tag-search" placeholder="🔍 Pesquisar tags por nome, endereço ou valor..." onkeyup="filterTags()" style="margin-bottom: 0; flex: 1;">
+                <div class="view-toggle">
+                    <button class="view-btn active" id="view-cards-btn" onclick="setView('cards')">📊 Cards</button>
+                    <button class="view-btn" id="view-table-btn" onclick="setView('table')">📋 Tabela</button>
+                </div>
+            </div>
+
+            <!-- Cards View (Default) -->
+            <div id="tags-cards-view" class="tags-cards-container">
+                <div style="text-align: center; padding: 40px; grid-column: 1/-1; color: #6b7280;">Carregando tags...</div>
+            </div>
+
+            <!-- Table View -->
+            <div id="tags-table-view" class="tags-table-container hidden">
+                <table class="tags-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Endereço</th>
+                            <th>Valor</th>
+                            <th>Unidade</th>
+                            <th>Qualidade</th>
+                            <th>Última Atualização</th>
+                        </tr>
+                    </thead>
+                    <tbody id="realtime-tags-body">
+                        <tr><td colspan="6" style="text-align: center; padding: 40px;">Carregando tags...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button class="btn btn-success" onclick="exportTagsCSV()">📥 Exportar CSV</button>
+                <button class="btn" onclick="pauseRealtimeUpdates()" id="pause-btn">⏸️ Pausar</button>
+                <button class="btn btn-secondary" onclick="closeRealtimeModal()" style="margin-left: auto;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = window.location.origin;
+
+        // Realtime tags state
+        let realtimeInterval = null;
+        let currentAdapterId = null;
+        let allTags = [];
+        let isPaused = false;
+        let currentView = 'cards'; // 'cards' or 'table'
 
         async function fetchAdapters() {
             try {
@@ -444,6 +852,7 @@
             document.getElementById('loading').style.display = 'block';
             document.getElementById('adapters-container').style.display = 'none';
 
+            // Fetch adapters with verified connection status
             const adapters = await fetchAdapters();
 
             document.getElementById('loading').style.display = 'none';
@@ -459,16 +868,27 @@
             document.getElementById('running-adapters').textContent = running;
             document.getElementById('total-tags').textContent = totalTags;
 
+            // Fetch managed tags count
+            try {
+                const managedResponse = await fetch(`${API_BASE}/api/tags/`);
+                if (managedResponse.ok) {
+                    const managedTags = await managedResponse.json();
+                    document.getElementById('managed-tags').textContent = Array.isArray(managedTags) ? managedTags.length : 0;
+                }
+            } catch (e) {
+                document.getElementById('managed-tags').textContent = '0';
+            }
+
             // Render adapter cards
             const container = document.getElementById('adapters-container');
             container.innerHTML = adapters.map(adapter => `
-                <div class="adapter-card">
+                <div class="adapter-card clickable" onclick="openRealtimeModal('${adapter.adapter_id}', '${adapter.adapter_name}')" id="adapter-${adapter.adapter_id}">
                     <div class="adapter-header">
                         <div>
                             <div class="adapter-title">${adapter.adapter_name}</div>
                             <div class="adapter-id">${adapter.adapter_id}</div>
                         </div>
-                        <span class="status-badge ${adapter.connected ? 'connected' : 'disconnected'}">
+                        <span class="status-badge ${adapter.connected ? 'connected' : 'disconnected'}" id="status-${adapter.adapter_id}">
                             ${adapter.connected ? 'Conectado' : 'Desconectado'}
                         </span>
                     </div>
@@ -487,19 +907,20 @@
                         </div>
                         <div class="info-row">
                             <span class="info-label">Tags:</span>
-                            <span class="info-value">${adapter.tags_count}</span>
+                            <span class="info-value" id="tags-count-${adapter.adapter_id}">${adapter.tags_count}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Status:</span>
-                            <span class="info-value">${adapter.running ? 'Rodando' : 'Parado'}</span>
+                            <span class="info-value" id="running-${adapter.adapter_id}">${adapter.running ? 'Rodando' : 'Parado'}</span>
                         </div>
                     </div>
-                    <div class="adapter-actions">
+                    <div class="click-hint">👆 Clique para ver tags em tempo real</div>
+                    <div class="adapter-actions" onclick="event.stopPropagation()">
                         ${adapter.running ?
                             `<button class="btn btn-danger btn-small" onclick="stopAdapter('${adapter.adapter_id}')">Parar</button>` :
                             `<button class="btn btn-success btn-small" onclick="startAdapter('${adapter.adapter_id}')">Iniciar</button>`
                         }
-                        <button class="btn btn-small" onclick="testAdapter('${adapter.adapter_id}')">Testar</button>
+                        <button class="btn btn-small" onclick="verifyAdapter('${adapter.adapter_id}')">Verificar</button>
                         <button class="btn btn-small" onclick="discoverTags('${adapter.adapter_id}')">Descobrir Tags</button>
                         <button class="btn btn-danger btn-small" onclick="deleteAdapter('${adapter.adapter_id}')">Excluir</button>
                     </div>
@@ -554,6 +975,59 @@
                 }
             } catch (error) {
                 alert('Erro ao testar: ' + error.message);
+            }
+        }
+
+        async function verifyAdapter(adapterId) {
+            // Perform real health check to verify connection is actually working
+            const statusBadge = document.getElementById(`status-${adapterId}`);
+            const originalText = statusBadge.textContent;
+            statusBadge.textContent = 'Verificando...';
+            statusBadge.className = 'status-badge';
+            statusBadge.style.background = '#f59e0b';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/adapters/${adapterId}/health`);
+                const data = await response.json();
+
+                if (data.verified_connected && data.can_read_data) {
+                    // Connection truly working
+                    statusBadge.textContent = `Verificado (${data.tags_readable}/${data.tags_total} tags)`;
+                    statusBadge.className = 'status-badge connected';
+                    statusBadge.style.background = '';
+
+                    alert(`✅ Conexão VERIFICADA!\n\n` +
+                          `Protocolo: ${data.protocol}\n` +
+                          `Status: ${data.message}\n` +
+                          `Tags legíveis: ${data.tags_readable}/${data.tags_total}`);
+                } else if (data.verified_connected) {
+                    // Connected but can't read data
+                    statusBadge.textContent = 'Conectado (sem dados)';
+                    statusBadge.className = 'status-badge';
+                    statusBadge.style.background = '#f59e0b';
+
+                    alert(`⚠️ ATENÇÃO: Conexão estabelecida mas sem leitura de dados!\n\n` +
+                          `Motivo: ${data.message}\n\n` +
+                          `Verifique a configuração de tags.`);
+                } else {
+                    // Not really connected
+                    statusBadge.textContent = 'Desconectado';
+                    statusBadge.className = 'status-badge disconnected';
+                    statusBadge.style.background = '';
+
+                    alert(`❌ FALHA NA VERIFICAÇÃO!\n\n` +
+                          `O adapter reportava estar conectado, mas a verificação falhou.\n\n` +
+                          `Motivo: ${data.message}\n\n` +
+                          `Status foi atualizado para refletir a realidade.`);
+
+                    // Refresh to update UI
+                    setTimeout(() => refreshAdapters(), 1000);
+                }
+            } catch (error) {
+                statusBadge.textContent = 'Erro';
+                statusBadge.className = 'status-badge disconnected';
+                statusBadge.style.background = '';
+                alert('Erro ao verificar: ' + error.message);
             }
         }
 
@@ -675,6 +1149,219 @@
                 container.innerHTML = '';
             }, 5000);
         }
+
+        // ========================================
+        // REALTIME TAGS MODAL FUNCTIONS
+        // ========================================
+
+        async function openRealtimeModal(adapterId, adapterName) {
+            currentAdapterId = adapterId;
+            isPaused = false;
+            document.getElementById('pause-btn').textContent = '⏸️ Pausar';
+            document.getElementById('realtime-adapter-name').textContent = `${adapterName} - Tags em Tempo Real`;
+            document.getElementById('realtimeTagsModal').classList.add('show');
+            document.getElementById('tag-search').value = '';
+
+            // Initial load
+            await loadRealtimeTags();
+
+            // Start auto-refresh
+            realtimeInterval = setInterval(() => {
+                if (!isPaused) {
+                    loadRealtimeTags();
+                }
+            }, 2000);
+        }
+
+        async function loadRealtimeTags() {
+            try {
+                // Fetch ALL discovered tags with real-time values
+                const response = await fetch(`${API_BASE}/api/tags/realtime/discovered/${currentAdapterId}`);
+                if (!response.ok) throw new Error('Falha ao carregar tags');
+
+                const data = await response.json();
+                allTags = data.tags || [];
+
+                // Update stats
+                const goodQuality = allTags.filter(t => t.connected).length;
+                const badQuality = allTags.filter(t => !t.connected).length;
+
+                document.getElementById('realtime-total').textContent = allTags.length;
+                document.getElementById('realtime-good').textContent = goodQuality;
+                document.getElementById('realtime-bad').textContent = badQuality;
+
+                // Render tags
+                renderRealtimeTags(allTags);
+
+            } catch (error) {
+                console.error('Error loading realtime tags:', error);
+                document.getElementById('realtime-tags-body').innerHTML = `
+                    <tr><td colspan="6" style="text-align: center; padding: 40px; color: #ef4444;">
+                        Erro ao carregar tags: ${error.message}
+                    </td></tr>
+                `;
+            }
+        }
+
+        function renderRealtimeTags(tags) {
+            // Render both views
+            renderCardsView(tags);
+            renderTableView(tags);
+        }
+
+        function renderCardsView(tags) {
+            const container = document.getElementById('tags-cards-view');
+
+            if (tags.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; grid-column: 1/-1; color: #6b7280;">
+                        Nenhum tag encontrado para este adaptador
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = tags.map(tag => {
+                const quality = tag.connected ? 'good' : 'bad';
+                const qualityLabel = tag.connected ? 'GOOD' : 'BAD';
+                const value = formatValue(tag.current_value);
+                const timestamp = formatTimestamp(tag.last_update);
+
+                return `
+                    <div class="tag-card ${quality}">
+                        <div class="tag-card-header">
+                            <div class="tag-card-name">${tag.name}</div>
+                            <span class="tag-card-quality ${quality}">${qualityLabel}</span>
+                        </div>
+                        <div class="tag-card-value ${quality}">
+                            ${value}<span class="tag-card-unit">${tag.unit || ''}</span>
+                        </div>
+                        <div class="tag-card-footer">
+                            <span class="tag-card-address">${tag.address || '-'}</span>
+                            <span class="tag-card-timestamp">${timestamp}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderTableView(tags) {
+            const tbody = document.getElementById('realtime-tags-body');
+
+            if (tags.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="6" style="text-align: center; padding: 40px; color: #6b7280;">
+                        Nenhum tag encontrado para este adaptador
+                    </td></tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = tags.map(tag => {
+                const quality = tag.connected ? 'good' : 'bad';
+                const qualityLabel = tag.connected ? 'GOOD' : 'BAD';
+                const value = formatValue(tag.current_value);
+                const timestamp = formatTimestamp(tag.last_update);
+
+                return `
+                    <tr class="tag-row">
+                        <td>
+                            <div class="tag-name">${tag.name}</div>
+                        </td>
+                        <td><span class="tag-address">${tag.address || '-'}</span></td>
+                        <td><span class="tag-value ${quality}">${value}</span></td>
+                        <td>${tag.unit || '-'}</td>
+                        <td><span class="tag-quality ${quality}">${qualityLabel}</span></td>
+                        <td><span class="tag-timestamp">${timestamp}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function setView(view) {
+            currentView = view;
+
+            // Update buttons
+            document.getElementById('view-cards-btn').classList.toggle('active', view === 'cards');
+            document.getElementById('view-table-btn').classList.toggle('active', view === 'table');
+
+            // Show/hide views
+            document.getElementById('tags-cards-view').classList.toggle('hidden', view !== 'cards');
+            document.getElementById('tags-table-view').classList.toggle('hidden', view !== 'table');
+        }
+
+        function formatValue(value) {
+            if (value === null || value === undefined) return '-';
+            if (typeof value === 'number') {
+                return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+            }
+            if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+            return String(value);
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('pt-BR');
+        }
+
+        function filterTags() {
+            const searchTerm = document.getElementById('tag-search').value.toLowerCase();
+            const filteredTags = allTags.filter(tag =>
+                tag.name.toLowerCase().includes(searchTerm) ||
+                (tag.address && tag.address.toLowerCase().includes(searchTerm)) ||
+                String(tag.current_value).toLowerCase().includes(searchTerm)
+            );
+            renderRealtimeTags(filteredTags);
+        }
+
+        function pauseRealtimeUpdates() {
+            isPaused = !isPaused;
+            document.getElementById('pause-btn').textContent = isPaused ? '▶️ Continuar' : '⏸️ Pausar';
+        }
+
+        function closeRealtimeModal() {
+            document.getElementById('realtimeTagsModal').classList.remove('show');
+            if (realtimeInterval) {
+                clearInterval(realtimeInterval);
+                realtimeInterval = null;
+            }
+            currentAdapterId = null;
+        }
+
+        function exportTagsCSV() {
+            if (allTags.length === 0) {
+                alert('Nenhum tag para exportar');
+                return;
+            }
+
+            const headers = ['Nome', 'Endereço', 'Valor', 'Unidade', 'Qualidade', 'Última Atualização'];
+            const rows = allTags.map(tag => [
+                tag.name,
+                tag.address || '',
+                formatValue(tag.current_value),
+                tag.unit || '',
+                tag.connected ? 'GOOD' : 'BAD',
+                tag.last_update || ''
+            ]);
+
+            const csvContent = [headers, ...rows]
+                .map(row => row.map(cell => `"${cell}"`).join(','))
+                .join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `tags_${currentAdapterId}_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('realtimeTagsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeRealtimeModal();
+            }
+        });
 
         // Initial load
         renderAdapters();

@@ -105,10 +105,10 @@ class OptimizedInfluxDBService:
     
     async def query_tag_data(
         self,
-        tag_id: int,
+        tag_id: str,
         start: datetime,
         end: datetime,
-        measurement: str = "sensor_data",
+        measurement: str = "tag_data",
         force_bucket: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -126,10 +126,14 @@ class OptimizedInfluxDBService:
         """
         time_range = end - start
         bucket, resolution = self._select_optimal_bucket(time_range, force_bucket)
-        
+
+        # Format timestamps properly for InfluxDB (RFC3339 without duplicate timezone)
+        start_str = start.replace(tzinfo=None).isoformat() + "Z" if start.tzinfo else start.isoformat() + "Z"
+        end_str = end.replace(tzinfo=None).isoformat() + "Z" if end.tzinfo else end.isoformat() + "Z"
+
         query = f'''
             from(bucket: "{bucket}")
-              |> range(start: {start.isoformat()}Z, stop: {end.isoformat()}Z)
+              |> range(start: {start_str}, stop: {end_str})
               |> filter(fn: (r) => r._measurement == "{measurement}")
               |> filter(fn: (r) => r.tag_id == "{tag_id}")
               |> filter(fn: (r) => r._field == "value")

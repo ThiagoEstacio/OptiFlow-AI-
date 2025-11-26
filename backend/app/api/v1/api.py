@@ -44,6 +44,7 @@ from app.api.v1.endpoints import (
     rate_limits,
     demo,
 )
+from app.api.routes import consumer_metrics
 
 api_router = APIRouter()
 
@@ -87,3 +88,4 @@ api_router.include_router(prometheus.router, prefix="/prometheus", tags=["Promet
 api_router.include_router(rate_limits.router, prefix="/rate-limits", tags=["Rate Limiting & Throttling"])
 api_router.include_router(demo.router, prefix="/demo", tags=["Demo & Development Helpers"])
 api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics
+api_router.include_router(consumer_metrics.router, tags=["Pipeline Metrics"])  # Pipeline health endpoints at /api/v1/metrics/

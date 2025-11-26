@@ -1,0 +1,72 @@
+# ============================================================================
+# OptiFlow Gateway - Kubernetes Service
+# ============================================================================
+#
+# Exposes the gateway API internally (ClusterIP) or externally (NodePort/LoadBalancer).
+#
+# Access modes:
+# 1. ClusterIP (default): Internal access only (within cluster)
+# 2. NodePort: External access via node IP (edge devices)
+# 3. LoadBalancer: External access via cloud load balancer (cloud deployments)
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+spec:
+  # Service type
+  # - ClusterIP: Internal only
+  # - NodePort: External via node IP (edge devices)
+  # - LoadBalancer: External via cloud LB (cloud deployments)
+  type: NodePort
+
+  # Selector (matches pods with these labels)
+  selector:
+    app: optiflow
+    component: gateway
+
+  # Ports
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080        # Service port (internal)
+      targetPort: http  # Container port
+      nodePort: 30080   # External port (for NodePort)
+
+  # Session affinity (for WebSocket)
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600  # 1 hour
+
+---
+# ============================================================================
+# Headless Service (for StatefulSet if needed)
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-headless
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+
+  selector:
+    app: optiflow
+    component: gateway
+
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: http

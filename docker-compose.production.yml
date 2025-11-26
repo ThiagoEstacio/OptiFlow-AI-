@@ -119,7 +119,7 @@ services:
       KAFKA_NUM_PARTITIONS: 12
       KAFKA_COMPRESSION_TYPE: lz4
       KAFKA_LOG_SEGMENT_BYTES: 536870912  # 512MB
-      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
+      KAFKA_LOG_RETENTION_HOURS: 48  # PDCA: Reduzido para 48h (2 dias) para prevenir esgotamento de disco
 
       # AUTO-CREATE TOPICS
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -167,7 +167,7 @@ services:
       KAFKA_NUM_PARTITIONS: 12
       KAFKA_COMPRESSION_TYPE: lz4
       KAFKA_LOG_SEGMENT_BYTES: 536870912
-      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_HOURS: 48  # PDCA: Reduzido para 48h (2 dias) para prevenir esgotamento de disco
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_HEAP_OPTS: "-Xms2G -Xmx2G"
     volumes:
@@ -211,7 +211,7 @@ services:
       KAFKA_NUM_PARTITIONS: 12
       KAFKA_COMPRESSION_TYPE: lz4
       KAFKA_LOG_SEGMENT_BYTES: 536870912
-      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_HOURS: 48  # PDCA: Reduzido para 48h (2 dias) para prevenir esgotamento de disco
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_HEAP_OPTS: "-Xms2G -Xmx2G"
     volumes:
@@ -261,6 +261,7 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
       DOCKER_INFLUXDB_INIT_ORG: optiflow
       DOCKER_INFLUXDB_INIT_BUCKET: timeseries
+      DOCKER_INFLUXDB_INIT_RETENTION_PERIOD: 30d # PDCA: Adicionado limite de retenção de 30 dias
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-influxdb-token
     volumes:
       - influxdb_1_data:/var/lib/influxdb2
@@ -286,6 +287,7 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
       DOCKER_INFLUXDB_INIT_ORG: optiflow
       DOCKER_INFLUXDB_INIT_BUCKET: timeseries
+      DOCKER_INFLUXDB_INIT_RETENTION_PERIOD: 30d # PDCA: Adicionado limite de retenção de 30 dias
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-influxdb-token
     volumes:
       - influxdb_2_data:/var/lib/influxdb2
@@ -311,6 +313,7 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
       DOCKER_INFLUXDB_INIT_ORG: optiflow
       DOCKER_INFLUXDB_INIT_BUCKET: timeseries
+      DOCKER_INFLUXDB_INIT_RETENTION_PERIOD: 30d # PDCA: Adicionado limite de retenção de 30 dias
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-influxdb-token
     volumes:
       - influxdb_3_data:/var/lib/influxdb2
@@ -654,6 +657,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d' # PDCA: Adicionado limite de retenção explícito de 15 dias
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'

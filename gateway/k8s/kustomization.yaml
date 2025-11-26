@@ -1,0 +1,57 @@
+# ============================================================================
+# OptiFlow Gateway - Kustomize Configuration
+# ============================================================================
+#
+# Deploy with:
+#   kubectl apply -k gateway/k8s/
+#
+# Or with specific overlay:
+#   kubectl apply -k gateway/k8s/overlays/production
+# ============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: optiflow-gateway
+
+# Metadata labels (applied to all resources)
+commonLabels:
+  app.kubernetes.io/name: gateway
+  app.kubernetes.io/part-of: optiflow
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources to include
+resources:
+  - namespace.yaml
+  - secret.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - network-policy.yaml
+
+# ConfigMap generator (alternative to static configmap)
+# configMapGenerator:
+#   - name: gateway-config
+#     envs:
+#       - .env.production
+#     options:
+#       disableNameSuffixHash: true
+
+# Secret generator (alternative to static secret)
+# secretGenerator:
+#   - name: gateway-secret
+#     envs:
+#       - .env.secrets
+#     options:
+#       disableNameSuffixHash: true
+
+# Image customization
+images:
+  - name: optiflow-gateway
+    newTag: edge
+
+# Patches (modify existing resources)
+# patches:
+#   - path: patches/replica-count.yaml
+#   - path: patches/resource-limits.yaml

@@ -64,6 +64,7 @@ export const SimplifiedSidebar: React.FC = () => {
       children: [
         { path: '/realtime', label: 'Overview', icon: '📈' },
         { path: '/realtime/tags', label: 'Tags', icon: '🏷️' },
+        { path: '/realtime/trends', label: 'Tendências', icon: '📉' },
       ],
     },
     {
@@ -85,18 +86,6 @@ export const SimplifiedSidebar: React.FC = () => {
         { path: '/analytics', label: 'Insights', icon: '💡' },
         { path: '/analytics/ml-insights', label: 'ML Models', icon: '🧠' },
         { path: '/analytics/chat', label: 'AI Assistant', icon: '💬' },
-      ],
-    },
-    {
-      path: '/settings',
-      label: 'Settings',
-      icon: '⚙️',
-      children: [
-        { path: '/settings', label: 'Geral', icon: '🔧' },
-        { path: '/settings/devices', label: 'Devices', icon: '🔌' },
-        { path: '/settings/tags', label: 'Tag Config', icon: '🏷️' },
-        { path: '/settings/gateways', label: 'Gateways', icon: '🌐' },
-        { path: '/settings/users', label: 'Users', icon: '👥' },
       ],
     },
   ];
@@ -235,6 +224,32 @@ export const SimplifiedSidebar: React.FC = () => {
             </div>
           );
         })}
+
+        {/* ========================================
+            🔗 GATEWAY EDGE - EXTERNAL LINK
+            ======================================== */}
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <a
+            href="http://localhost:8080/ui/index.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center px-4 py-3 rounded-lg transition-all hover:bg-gray-700/50 text-gray-300 hover:text-white group"
+            title="Abrir Gateway Edge UI (nova aba)"
+          >
+            <span className="text-2xl">🔗</span>
+            {sidebarOpen && (
+              <>
+                <span className="ml-3 font-medium">Gateway Edge</span>
+                <span className="ml-auto text-xs text-gray-500 group-hover:text-gray-400">↗</span>
+              </>
+            )}
+          </a>
+          {sidebarOpen && (
+            <p className="px-4 text-xs text-gray-500 mt-1">
+              Configuração de Adapters e Tags
+            </p>
+          )}
+        </div>
       </nav>
 
       {/* ========================================

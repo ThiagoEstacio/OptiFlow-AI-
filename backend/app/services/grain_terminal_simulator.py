@@ -4,7 +4,18 @@ Real physics-based simulation of 1500 t/h export line
 
 This is the Python port of the TypeScript simulator for backend OPC-UA server
 Extended with InterlockManager, AlarmManager, MaintenanceManager, EnergyManager
-Integrated with InfluxDB for real-time data persistence
+
+ARCHITECTURE NOTE:
+This simulator acts as a "digital PLC" - it only exposes tag values via OPC-UA.
+It does NOT write directly to InfluxDB or Kafka.
+
+Data Flow:
+  Simulator (OPC-UA tags) -> Gateway -> Kafka -> Backend -> InfluxDB
+
+The Gateway is responsible for:
+- Collecting data from the simulator via OPC-UA protocol
+- Publishing data to Kafka topics
+- The Backend then consumes from Kafka and persists to InfluxDB
 """
 
 import math
@@ -52,21 +63,11 @@ try:
 except Exception as e:
     FAILURES_AVAILABLE = False
 
-# Import InfluxDB service
-try:
-    from app.services.influxdb import influxdb_service
-    INFLUXDB_AVAILABLE = True
-except Exception as e:
-    influxdb_service = None
-    INFLUXDB_AVAILABLE = False
-
-# Import Kafka Producer service
-try:
-    from app.services.kafka_producer import get_kafka_producer
-    KAFKA_AVAILABLE = True
-except Exception as e:
-    get_kafka_producer = None
-    KAFKA_AVAILABLE = False
+# NOTE: Simulator is a "digital PLC" - it does NOT write directly to InfluxDB or Kafka.
+# Data flow: Simulator (exposes OPC-UA tags) -> Gateway -> Kafka -> Backend -> InfluxDB
+# The Gateway is responsible for collecting data and sending to Kafka.
+INFLUXDB_AVAILABLE = False  # Disabled by design
+KAFKA_AVAILABLE = False     # Disabled by design - Gateway handles this
 
 logger = logging.getLogger(__name__)
 
@@ -76,15 +77,9 @@ if FAILURES_AVAILABLE:
 else:
     logger.warning("⚠️  Failure system not available - will run without failures")
 
-# Log InfluxDB availability after logger is initialized
-if not INFLUXDB_AVAILABLE:
-    logger.warning("InfluxDB service not available - data will not be persisted")
-
-# Log Kafka availability after logger is initialized
-if KAFKA_AVAILABLE:
-    logger.info("✅ Kafka producer imported successfully - real-time streaming enabled")
-else:
-    logger.warning("⚠️ Kafka producer not available - streaming disabled")
+# NOTE: Simulator is a "digital PLC" - does NOT write to InfluxDB or Kafka directly
+# Data flow: Simulator (OPC-UA) -> Gateway -> Kafka -> Backend -> InfluxDB
+logger.info("📡 Simulator running as digital PLC - Gateway handles data collection")
 
 
 # ============================================================================
@@ -702,43 +697,9 @@ class GrainTerminalSimulator:
 
         return None
 
-    def write_to_influxdb(self, tag_mapping: Dict[str, str]):
-        """
-        Write current simulator values to InfluxDB
-        
-        Args:
-            tag_mapping: Dict mapping tag names to tag UUIDs
-                        e.g., {'CORR01_FLOW_TPH_PV': 'uuid-1234-...'}
-        """
-        if not INFLUXDB_AVAILABLE or not influxdb_service:
-            return
-        
-        try:
-            points = []
-            timestamp = datetime.utcnow()
-            
-            # Collect all current values
-            for tag_name, tag_id in tag_mapping.items():
-                value = self.get_tag_value(tag_name)
-                
-                if value is not None:
-                    points.append({
-                        'tag_id': tag_id,
-                        'value': float(value),
-                        'timestamp': timestamp,
-                        'quality': 'good'
-                    })
-            
-            # Write batch to InfluxDB
-            if points:
-                success = influxdb_service.write_batch(points)
-                if success:
-                    logger.debug(f"✅ Wrote {len(points)} points to InfluxDB")
-                else:
-                    logger.warning(f"⚠️ Failed to write {len(points)} points to InfluxDB")
-                    
-        except Exception as e:
-            logger.error(f"❌ Error writing to InfluxDB: {e}")
+    # NOTE: write_to_influxdb removed - Simulator is a "digital PLC"
+    # Data persistence is handled by: Gateway -> Kafka -> Backend -> InfluxDB
+    # The Gateway collects data via OPC-UA and sends to Kafka.
 
     def step(self, dt_s: float = None):
         """Execute one simulation step"""
@@ -1404,17 +1365,7 @@ class GrainTerminalSimulator:
 
     def _step_alarms(self):
         # Temperature alarms
-        for belt_id, belt in self.belts.items():
-            if belt.temp_bearing_C >= Config.TEMP_BEARING_TRIP:
-                self._set_trip(f'TRIP_{belt_id}_BEARING_SOBRETEMP')
-            elif belt.temp_bearing_C >= Config.TEMP_BEARING_ALARM:
-                self._set_alarm(f'AL_{belt_id}_BEARING_TEMP_ALTA')
-
-        if self.elevator.temp_motor_C >= Config.TEMP_MOTOR_TRIP:
-# DISABLED_KAFKA:             self._set_trip('TRIP_ELV01_MOTOR_SOBRETEMP')
-# DISABLED_KAFKA:         elif self.elevator.temp_motor_C >= Config.TEMP_MOTOR_ALARM:
-# DISABLED_KAFKA:             self._set_alarm('AL_ELV01_MOTOR_TEMP_ALTA')
-# DISABLED_KAFKA: 
+        # LÓGICA DE ALARME LEGACY REMOVIDA - Agora centralizada em _step_alarm_manager
 # DISABLED_KAFKA:         # Underspeed
 # DISABLED_KAFKA:         for belt_id, belt in self.belts.items():
 # DISABLED_KAFKA:             if belt.underspeed_alarm:
@@ -1422,7 +1373,7 @@ class GrainTerminalSimulator:
 # DISABLED_KAFKA: 
 # DISABLED_KAFKA:         # Elevator slip
 # DISABLED_KAFKA:         if self.elevator.slip:
-            self._set_alarm('AL_ELV01_ESCORREGAMENTO')
+        pass
 
     def _set_alarm(self, tag: str):
         alarm = next((a for a in self.alarms if a.tag == tag), None)

@@ -40,6 +40,7 @@ import { StatWidget } from '../components/professional/StatWidget';
 import { AnalyticsCard } from '../components/professional/AnalyticsCard';
 import { ChartWidget } from '../components/professional/ChartWidget';
 import { useRealtimeData, useWebSocketStatus, SimulatorUpdate } from '../hooks/useRealtimeData';
+import { GatewayEdgeStatus } from '../components/GatewayEdgeStatus';
 
 export const ProfessionalDashboard: React.FC = () => {
   const theme = useTheme();
@@ -449,6 +450,11 @@ export const ProfessionalDashboard: React.FC = () => {
             />
           </Grid>
         </Grid>
+
+        {/* Gateway Edge Status */}
+        <Box sx={{ mt: 3 }}>
+          <GatewayEdgeStatus autoRefresh={true} refreshInterval={10000} />
+        </Box>
 
         {/* System Status */}
         <Paper sx={{ p: 3, mt: 3, borderRadius: 2 }}>

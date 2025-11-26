@@ -126,6 +126,193 @@
             gap: 10px;
         }
 
+        /* === TREE VIEW STYLES (KEPServerEX-like) === */
+        .tree-view {
+            font-size: 13px;
+            user-select: none;
+        }
+
+        .tree-node {
+            margin: 0;
+            padding: 0;
+        }
+
+        .tree-node-header {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
+            gap: 6px;
+        }
+
+        .tree-node-header:hover {
+            background: #f0f4f8;
+        }
+
+        .tree-node-header.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tree-node-header.active .tree-node-icon,
+        .tree-node-header.active .tree-node-count {
+            color: white;
+            opacity: 0.9;
+        }
+
+        .tree-expand {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #6b7280;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .tree-expand.expanded {
+            transform: rotate(90deg);
+        }
+
+        .tree-expand.hidden {
+            visibility: hidden;
+        }
+
+        .tree-node-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .tree-node-label {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        .tree-node-count {
+            font-size: 11px;
+            color: #9ca3af;
+            background: #f3f4f6;
+            padding: 1px 6px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+
+        .tree-node-header.active .tree-node-count {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .tree-children {
+            margin-left: 20px;
+            border-left: 1px solid #e5e7eb;
+            display: none;
+        }
+
+        .tree-children.expanded {
+            display: block;
+        }
+
+        /* Tree node type icons */
+        .tree-icon-gateway { color: #8b5cf6; }
+        .tree-icon-adapter { color: #3b82f6; }
+        .tree-icon-device { color: #10b981; }
+        .tree-icon-group { color: #f59e0b; }
+        .tree-icon-tag { color: #6b7280; }
+        .tree-icon-tag-managed { color: #667eea; }
+
+        /* Tag value indicator in tree */
+        .tree-tag-value {
+            font-size: 11px;
+            font-weight: 600;
+            color: #10b981;
+            margin-left: 4px;
+        }
+
+        .tree-tag-quality-bad {
+            color: #ef4444;
+        }
+
+        .tree-tag-quality-uncertain {
+            color: #f59e0b;
+        }
+
+        /* Tree view toolbar */
+        .tree-toolbar {
+            display: flex;
+            gap: 4px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #fafbfc;
+        }
+
+        .tree-toolbar-btn {
+            padding: 4px 8px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tree-toolbar-btn:hover {
+            background: #f3f4f6;
+        }
+
+        /* Status indicator */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-dot.connected { background: #10b981; }
+        .status-dot.disconnected { background: #ef4444; }
+        .status-dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Tree filter tabs */
+        .tree-filter-tabs {
+            display: flex;
+            padding: 8px 12px;
+            gap: 4px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .tree-filter-tab {
+            padding: 6px 12px;
+            border: none;
+            background: transparent;
+            font-size: 12px;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .tree-filter-tab:hover {
+            background: #f3f4f6;
+        }
+
+        .tree-filter-tab.active {
+            background: #667eea;
+            color: white;
+        }
+
         /* Main Content */
         .main-content {
             flex: 1;
@@ -605,10 +792,30 @@
                 <input type="text" id="searchTags" placeholder="🔍 Search tags..." onkeyup="searchTags()">
             </div>
 
+            <!-- Tree Filter Tabs -->
+            <div class="tree-filter-tabs">
+                <button class="tree-filter-tab active" onclick="setTreeFilter('all')">All</button>
+                <button class="tree-filter-tab" onclick="setTreeFilter('discovered')">Discovered</button>
+                <button class="tree-filter-tab" onclick="setTreeFilter('managed')">Managed</button>
+            </div>
+
+            <!-- Tree Toolbar -->
+            <div class="tree-toolbar">
+                <button class="tree-toolbar-btn" onclick="expandAllTree()" title="Expand All">
+                    <span>▼</span> Expand
+                </button>
+                <button class="tree-toolbar-btn" onclick="collapseAllTree()" title="Collapse All">
+                    <span>▶</span> Collapse
+                </button>
+                <button class="tree-toolbar-btn" onclick="refreshTags()" title="Refresh">
+                    🔄 Refresh
+                </button>
+            </div>
+
             <!-- Scan Rate Configuration -->
-            <div style="padding: 12px 16px; background: #f0f9ff; border-bottom: 1px solid #e1e8ed; border-top: 1px solid #e1e8ed;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <label style="font-size: 11px; font-weight: 600; color: #1e40af;">⏱️ Scan Rate:</label>
+            <div style="padding: 8px 12px; background: #f0f9ff; border-bottom: 1px solid #e1e8ed;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 10px; font-weight: 600; color: #1e40af;">⏱️ Scan:</label>
                     <input
                         type="range"
                         id="scanRateSlider"
@@ -616,21 +823,21 @@
                         max="60000"
                         value="1000"
                         step="500"
-                        style="flex: 1;"
+                        style="flex: 1; height: 4px;"
                         oninput="updateScanRateDisplay(this.value)"
                         onchange="updateScanRate(parseInt(this.value))">
-                    <span id="scanRateDisplay" style="font-size: 11px; font-weight: 600; color: #1e40af; min-width: 45px;">1.0s</span>
-                </div>
-                <div style="font-size: 9px; color: #6b7280;">
-                    Range: 500ms - 60s (faster = more API calls)
+                    <span id="scanRateDisplay" style="font-size: 10px; font-weight: 600; color: #1e40af; min-width: 40px;">1.0s</span>
                 </div>
             </div>
 
+            <!-- Tree View Browser -->
             <div class="tag-browser" id="tagBrowser">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📋</div>
-                    <div class="empty-state-text">No tags configured</div>
-                    <div class="empty-state-subtext">Create your first tag to get started</div>
+                <div class="tree-view" id="treeView">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <div class="empty-state-text">Loading tags...</div>
+                        <div class="empty-state-subtext">Connecting to adapters</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -765,10 +972,293 @@
         </div>
     </div>
 
+    <!-- Create Alarm Modal -->
+    <div id="createAlarmModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">🚨 Create Advanced Alarm</div>
+            <form id="createAlarmForm" onsubmit="createAlarm(event)">
+                <div class="form-group">
+                    <label class="form-label">Alarm Type *</label>
+                    <select class="form-select" id="alarm_type" required onchange="updateAlarmFields()">
+                        <option value="limit">Limit (High/Low)</option>
+                        <option value="rate_of_change">Rate of Change</option>
+                        <option value="deviation">Deviation from Setpoint</option>
+                        <option value="statistical">Statistical Anomaly</option>
+                        <option value="custom_formula">Custom Formula</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" id="alarm_priority">
+                        <option value="low">Low</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+
+                <!-- Limit Fields -->
+                <div id="limitFields">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">High-High Limit</label>
+                            <input type="number" step="any" class="form-input" id="alarm_hh" placeholder="e.g., 100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">High Limit</label>
+                            <input type="number" step="any" class="form-input" id="alarm_h" placeholder="e.g., 80">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Low Limit</label>
+                            <input type="number" step="any" class="form-input" id="alarm_l" placeholder="e.g., 20">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Low-Low Limit</label>
+                            <input type="number" step="any" class="form-input" id="alarm_ll" placeholder="e.g., 10">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rate of Change Fields -->
+                <div id="rateFields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Max Rate of Change *</label>
+                            <input type="number" step="any" class="form-input" id="alarm_max_rate" placeholder="e.g., 5.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Window (seconds)</label>
+                            <input type="number" class="form-input" id="alarm_rate_window" value="60">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deviation Fields -->
+                <div id="deviationFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Setpoint Tag Name *</label>
+                        <input type="text" class="form-input" id="alarm_setpoint_tag" placeholder="e.g., TEMP_SETPOINT">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Max Deviation *</label>
+                            <input type="number" step="any" class="form-input" id="alarm_max_deviation" placeholder="e.g., 5.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Deviation Type</label>
+                            <select class="form-select" id="alarm_deviation_type">
+                                <option value="absolute">Absolute</option>
+                                <option value="percentage">Percentage</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistical Fields -->
+                <div id="statisticalFields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Rolling Window (seconds) *</label>
+                            <input type="number" class="form-input" id="alarm_rolling_window" value="300" placeholder="e.g., 300">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Std Dev Multiplier *</label>
+                            <input type="number" step="0.1" class="form-input" id="alarm_std_dev" value="3" placeholder="e.g., 3">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Formula Fields -->
+                <div id="customFormulaFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Custom Condition *</label>
+                        <textarea class="form-input" id="alarm_custom_condition" rows="3" placeholder="e.g., value > 100 and tags['PUMP_STATUS'] == 'ON'"></textarea>
+                        <small style="color: #6b7280;">Variables: value, old_value, tags['TAG_NAME']</small>
+                    </div>
+                </div>
+
+                <!-- Common Fields -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Deadband</label>
+                        <input type="number" step="any" class="form-input" id="alarm_deadband" value="0" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Delay (seconds)</label>
+                        <input type="number" step="0.1" class="form-input" id="alarm_delay" value="0" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Message Template</label>
+                    <input type="text" class="form-input" id="alarm_message" placeholder="e.g., {tag_name} is {value} - exceeds limit!">
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Create Alarm</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateAlarmModal()" style="flex: 1;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Event Modal -->
+    <div id="createEventModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">📡 Create Event Trigger</div>
+            <form id="createEventForm" onsubmit="createEvent(event)">
+                <div class="form-group">
+                    <label class="form-label">Event Type *</label>
+                    <select class="form-select" id="event_type" required>
+                        <option value="value_change">Value Change</option>
+                        <option value="quality_change">Quality Change</option>
+                        <option value="alarm_activated">Alarm Activated</option>
+                        <option value="alarm_cleared">Alarm Cleared</option>
+                        <option value="threshold_crossed">Threshold Crossed</option>
+                        <option value="formula_error">Formula Error</option>
+                        <option value="communication_lost">Communication Lost</option>
+                        <option value="communication_restored">Communication Restored</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Condition (optional)</label>
+                    <input type="text" class="form-input" id="event_condition" placeholder="e.g., value > 100">
+                    <small style="color: #6b7280;">Leave empty to trigger on all events of this type</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Minimum Interval (seconds)</label>
+                    <input type="number" step="0.1" class="form-input" id="event_min_interval" value="0" placeholder="0">
+                    <small style="color: #6b7280;">Prevent rapid-fire triggers (0 = no limit)</small>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Create Event</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateEventModal()" style="flex: 1;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Action Modal -->
+    <div id="createActionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">🤖 Create Automated Action</div>
+            <form id="createActionForm" onsubmit="createAction(event)">
+                <div class="form-group">
+                    <label class="form-label">Action Type *</label>
+                    <select class="form-select" id="action_type" required onchange="updateActionFields()">
+                        <option value="webhook">Webhook (HTTP Request)</option>
+                        <option value="email">Email Notification</option>
+                        <option value="mqtt_publish">MQTT Publish</option>
+                        <option value="log_message">Log Message</option>
+                        <option value="dashboard_notification">Dashboard Notification</option>
+                    </select>
+                </div>
+
+                <!-- Webhook Fields -->
+                <div id="webhookFields">
+                    <div class="form-group">
+                        <label class="form-label">Webhook URL *</label>
+                        <input type="url" class="form-input" id="action_webhook_url" placeholder="https://api.example.com/webhook">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">HTTP Method</label>
+                            <select class="form-select" id="action_webhook_method">
+                                <option value="POST" selected>POST</option>
+                                <option value="GET">GET</option>
+                                <option value="PUT">PUT</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Body Template (JSON)</label>
+                        <textarea class="form-input" id="action_webhook_body" rows="3" placeholder='{"tag": "{tag_name}", "value": {value}}'></textarea>
+                    </div>
+                </div>
+
+                <!-- Email Fields -->
+                <div id="emailFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Recipients (comma-separated) *</label>
+                        <input type="text" class="form-input" id="action_email_to" placeholder="admin@example.com, ops@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Subject Template</label>
+                        <input type="text" class="form-input" id="action_email_subject" placeholder="Alert: {tag_name} = {value}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Body Template</label>
+                        <textarea class="form-input" id="action_email_body" rows="3" placeholder="Tag {tag_name} has value {value} at {timestamp}"></textarea>
+                    </div>
+                </div>
+
+                <!-- MQTT Fields -->
+                <div id="mqttFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">MQTT Topic *</label>
+                        <input type="text" class="form-input" id="action_mqtt_topic" placeholder="optiflow/alerts/{tag_name}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Payload Template</label>
+                        <textarea class="form-input" id="action_mqtt_payload" rows="3" placeholder='{"tag": "{tag_name}", "value": {value}}'></textarea>
+                    </div>
+                </div>
+
+                <!-- Log Fields -->
+                <div id="logFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Log Level</label>
+                        <select class="form-select" id="action_log_level">
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO" selected>INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Message Template</label>
+                        <input type="text" class="form-input" id="action_log_message" placeholder="Tag {tag_name} triggered with value {value}">
+                    </div>
+                </div>
+
+                <!-- Dashboard Notification Fields -->
+                <div id="notificationFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Notification Title</label>
+                        <input type="text" class="form-input" id="action_notif_title" placeholder="Alert: {tag_name}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notification Message</label>
+                        <input type="text" class="form-input" id="action_notif_message" placeholder="Value: {value} at {timestamp}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Severity</label>
+                        <select class="form-select" id="action_notif_severity">
+                            <option value="info" selected>Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Create Action</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateActionModal()" style="flex: 1;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const API_BASE = window.location.origin;
+        const BACKEND_API = 'http://localhost:8000';  // Backend API for alarm events
         let currentTag = null;
         let allTags = [];
+        let treeFilter = 'all'; // 'all', 'discovered', 'managed'
+        let expandedNodes = new Set(['gateway']); // Track expanded nodes
+        let adaptersData = {}; // Cache adapter info
 
         // Initialize
         async function init() {
@@ -776,11 +1266,354 @@
             await refreshTags();
         }
 
-        // Load adapters for dropdowns
+        // === TREE VIEW FUNCTIONS ===
+
+        // Set tree filter (all, discovered, managed)
+        function setTreeFilter(filter) {
+            treeFilter = filter;
+            document.querySelectorAll('.tree-filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent.toLowerCase() === filter);
+            });
+            renderTreeView(allTags);
+        }
+
+        // Expand all tree nodes
+        function expandAllTree() {
+            document.querySelectorAll('.tree-children').forEach(el => {
+                el.classList.add('expanded');
+            });
+            document.querySelectorAll('.tree-expand').forEach(el => {
+                if (!el.classList.contains('hidden')) {
+                    el.classList.add('expanded');
+                }
+            });
+            // Track all expanded
+            document.querySelectorAll('.tree-node').forEach(node => {
+                const nodeId = node.dataset.nodeId;
+                if (nodeId) expandedNodes.add(nodeId);
+            });
+        }
+
+        // Collapse all tree nodes
+        function collapseAllTree() {
+            document.querySelectorAll('.tree-children').forEach(el => {
+                el.classList.remove('expanded');
+            });
+            document.querySelectorAll('.tree-expand').forEach(el => {
+                el.classList.remove('expanded');
+            });
+            expandedNodes.clear();
+            expandedNodes.add('gateway'); // Keep root expanded
+        }
+
+        // Toggle tree node expand/collapse
+        function toggleTreeNode(event, nodeId) {
+            event.stopPropagation();
+            const node = event.currentTarget.closest('.tree-node');
+            const children = node.querySelector('.tree-children');
+            const expand = node.querySelector('.tree-expand');
+
+            if (children) {
+                children.classList.toggle('expanded');
+                expand.classList.toggle('expanded');
+
+                if (children.classList.contains('expanded')) {
+                    expandedNodes.add(nodeId);
+                } else {
+                    expandedNodes.delete(nodeId);
+                }
+            }
+        }
+
+        // Build hierarchical tree structure from flat tags array
+        function buildTreeStructure(tags) {
+            // Filter tags based on current filter
+            let filteredTags = tags;
+            if (treeFilter === 'discovered') {
+                filteredTags = tags.filter(t => t.is_discovered);
+            } else if (treeFilter === 'managed') {
+                filteredTags = tags.filter(t => t.is_managed);
+            }
+
+            // Group by protocol -> adapter -> device/group -> tags
+            const tree = {
+                id: 'gateway',
+                name: 'OptiFlow Gateway',
+                type: 'gateway',
+                icon: '🖥️',
+                children: {},
+                tagCount: filteredTags.length
+            };
+
+            // Group tags by adapter
+            const adapterGroups = {};
+            filteredTags.forEach(tag => {
+                const adapterId = tag.adapter_id || 'unknown';
+                if (!adapterGroups[adapterId]) {
+                    const adapterInfo = adaptersData[adapterId] || {};
+                    adapterGroups[adapterId] = {
+                        id: adapterId,
+                        name: adapterInfo.adapter_name || adapterId,
+                        protocol: (tag.protocol || adapterInfo.protocol_type || 'unknown').toUpperCase(),
+                        host: adapterInfo.host || '',
+                        port: adapterInfo.port || '',
+                        connected: adapterInfo.connected !== false,
+                        tags: [],
+                        groups: {}
+                    };
+                }
+                adapterGroups[adapterId].tags.push(tag);
+            });
+
+            // Group by protocol first
+            const protocolGroups = {};
+            Object.values(adapterGroups).forEach(adapter => {
+                const protocol = adapter.protocol;
+                if (!protocolGroups[protocol]) {
+                    protocolGroups[protocol] = {
+                        id: `protocol_${protocol}`,
+                        name: protocol,
+                        type: 'protocol',
+                        icon: protocol === 'OPCUA' ? '🔌' : protocol === 'MODBUS' ? '📡' : '🔗',
+                        adapters: []
+                    };
+                }
+                protocolGroups[protocol].adapters.push(adapter);
+            });
+
+            tree.children = protocolGroups;
+            return tree;
+        }
+
+        // Parse tag name/address to extract group hierarchy
+        function parseNodeIdGroups(address, tagName) {
+            // Handle OPC-UA node IDs like "ns=2;s=Silo1.Temperature"
+            if (address && address.includes(';s=')) {
+                const path = address.split(';s=')[1] || '';
+                const parts = path.split('.');
+                if (parts.length > 1) {
+                    return {
+                        device: parts[0],
+                        subgroups: parts.slice(1, -1),
+                        tagName: parts[parts.length - 1]
+                    };
+                }
+            }
+
+            // Try to extract group from tag name patterns like "Pump 1 Flow", "Pump 2 Pressure"
+            if (tagName) {
+                // Pattern: "Word Number ..." (e.g., "Pump 1 Flow")
+                const match = tagName.match(/^([A-Za-z]+\s*\d+)\s+(.+)$/);
+                if (match) {
+                    return {
+                        device: match[1],
+                        subgroups: [],
+                        tagName: match[2]
+                    };
+                }
+                // Pattern: "Word_Number_..." (e.g., "pump_1_flow")
+                const underscoreMatch = tagName.match(/^([a-z]+_\d+)_(.+)$/i);
+                if (underscoreMatch) {
+                    return {
+                        device: underscoreMatch[1].replace(/_/g, ' '),
+                        subgroups: [],
+                        tagName: underscoreMatch[2].replace(/_/g, ' ')
+                    };
+                }
+            }
+
+            return { device: null, subgroups: [], tagName: tagName || address };
+        }
+
+        // Render the tree view
+        function renderTreeView(tags) {
+            const treeContainer = document.getElementById('treeView');
+
+            if (!tags || tags.length === 0) {
+                treeContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <div class="empty-state-text">No tags found</div>
+                        <div class="empty-state-subtext">Configure adapters to discover tags</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const tree = buildTreeStructure(tags);
+            treeContainer.innerHTML = renderTreeNode(tree, 0);
+        }
+
+        // Render a single tree node recursively
+        function renderTreeNode(node, depth) {
+            const isExpanded = expandedNodes.has(node.id);
+
+            if (node.type === 'gateway') {
+                // Render gateway root node
+                const protocols = Object.values(node.children);
+                const hasChildren = protocols.length > 0;
+
+                return `
+                    <div class="tree-node" data-node-id="${node.id}">
+                        <div class="tree-node-header" onclick="toggleTreeNode(event, '${node.id}')">
+                            <span class="tree-expand ${hasChildren ? (isExpanded ? 'expanded' : '') : 'hidden'}">▶</span>
+                            <span class="tree-node-icon tree-icon-gateway">${node.icon}</span>
+                            <span class="tree-node-label">${node.name}</span>
+                            <span class="tree-node-count">${node.tagCount}</span>
+                        </div>
+                        ${hasChildren ? `
+                            <div class="tree-children ${isExpanded ? 'expanded' : ''}">
+                                ${protocols.map(p => renderProtocolNode(p, depth + 1)).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            return '';
+        }
+
+        // Render protocol node (OPC-UA, Modbus, etc)
+        function renderProtocolNode(protocol, depth) {
+            const isExpanded = expandedNodes.has(protocol.id);
+            const hasChildren = protocol.adapters.length > 0;
+            const tagCount = protocol.adapters.reduce((sum, a) => sum + a.tags.length, 0);
+
+            return `
+                <div class="tree-node" data-node-id="${protocol.id}">
+                    <div class="tree-node-header" onclick="toggleTreeNode(event, '${protocol.id}')">
+                        <span class="tree-expand ${hasChildren ? (isExpanded ? 'expanded' : '') : 'hidden'}">▶</span>
+                        <span class="tree-node-icon tree-icon-adapter">${protocol.icon}</span>
+                        <span class="tree-node-label">${protocol.name}</span>
+                        <span class="tree-node-count">${tagCount}</span>
+                    </div>
+                    ${hasChildren ? `
+                        <div class="tree-children ${isExpanded ? 'expanded' : ''}">
+                            ${protocol.adapters.map(a => renderAdapterNode(a, depth + 1)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Render adapter node
+        function renderAdapterNode(adapter, depth) {
+            const nodeId = `adapter_${adapter.id}`;
+            const isExpanded = expandedNodes.has(nodeId);
+
+            // Group tags by device/object hierarchy
+            const deviceGroups = {};
+            const ungroupedTags = [];
+
+            adapter.tags.forEach(tag => {
+                const parsed = parseNodeIdGroups(tag.address, tag.tag_name);
+                if (parsed.device) {
+                    if (!deviceGroups[parsed.device]) {
+                        deviceGroups[parsed.device] = [];
+                    }
+                    deviceGroups[parsed.device].push({ ...tag, shortName: parsed.tagName });
+                } else {
+                    ungroupedTags.push(tag);
+                }
+            });
+
+            const hasChildren = Object.keys(deviceGroups).length > 0 || ungroupedTags.length > 0;
+            const connectionInfo = adapter.host ? `${adapter.host}:${adapter.port}` : '';
+
+            return `
+                <div class="tree-node" data-node-id="${nodeId}">
+                    <div class="tree-node-header" onclick="toggleTreeNode(event, '${nodeId}')">
+                        <span class="tree-expand ${hasChildren ? (isExpanded ? 'expanded' : '') : 'hidden'}">▶</span>
+                        <span class="status-dot ${adapter.connected ? 'connected' : 'disconnected'}"></span>
+                        <span class="tree-node-icon tree-icon-device">📟</span>
+                        <span class="tree-node-label" title="${connectionInfo}">${adapter.name}</span>
+                        <span class="tree-node-count">${adapter.tags.length}</span>
+                    </div>
+                    ${hasChildren ? `
+                        <div class="tree-children ${isExpanded ? 'expanded' : ''}">
+                            ${Object.entries(deviceGroups).map(([deviceName, tags]) =>
+                                renderDeviceGroup(adapter.id, deviceName, tags, depth + 1)
+                            ).join('')}
+                            ${ungroupedTags.map(tag => renderTagNode(tag, depth + 1)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Render device/object group
+        function renderDeviceGroup(adapterId, deviceName, tags, depth) {
+            const nodeId = `device_${adapterId}_${deviceName}`;
+            const isExpanded = expandedNodes.has(nodeId);
+
+            return `
+                <div class="tree-node" data-node-id="${nodeId}">
+                    <div class="tree-node-header" onclick="toggleTreeNode(event, '${nodeId}')">
+                        <span class="tree-expand ${isExpanded ? 'expanded' : ''}">▶</span>
+                        <span class="tree-node-icon tree-icon-group">📦</span>
+                        <span class="tree-node-label">${deviceName}</span>
+                        <span class="tree-node-count">${tags.length}</span>
+                    </div>
+                    <div class="tree-children ${isExpanded ? 'expanded' : ''}">
+                        ${tags.map(tag => renderTagNode(tag, depth + 1)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render individual tag node (leaf)
+        function renderTagNode(tag, depth) {
+            const tagId = tag.tag_id;
+            const displayName = tag.shortName || tag.tag_name || tag.address;
+            const isManaged = tag.is_managed;
+            const iconClass = isManaged ? 'tree-icon-tag-managed' : 'tree-icon-tag';
+            const icon = isManaged ? '🏷️' : '📄';
+
+            return `
+                <div class="tree-node" data-node-id="tag_${tagId}" data-tag-id="${tagId}">
+                    <div class="tree-node-header" onclick="selectTagFromTree('${tagId}')">
+                        <span class="tree-expand hidden">▶</span>
+                        <span class="tree-node-icon ${iconClass}">${icon}</span>
+                        <span class="tree-node-label">${displayName}</span>
+                        <span class="tag-type" style="font-size: 10px; padding: 1px 4px;">${tag.data_type || '?'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Select tag from tree view
+        function selectTagFromTree(tagId) {
+            // Clear previous selection
+            document.querySelectorAll('.tree-node-header.active').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Mark current as active
+            const tagNode = document.querySelector(`.tree-node[data-tag-id="${tagId}"] .tree-node-header`);
+            if (tagNode) {
+                tagNode.classList.add('active');
+            }
+
+            // Call existing selectTag function
+            selectTag(tagId);
+        }
+
+        // Load adapters for dropdowns and cache for tree view
         async function loadAdapters() {
             try {
                 const response = await fetch(`${API_BASE}/api/adapters/`);
                 const adapters = await response.json();
+
+                // Cache adapter data for tree view
+                adaptersData = {};
+                adapters.forEach(a => {
+                    adaptersData[a.adapter_id] = {
+                        adapter_name: a.adapter_name || a.adapter_id,
+                        protocol_type: a.protocol_type,
+                        host: a.host,
+                        port: a.port,
+                        connected: a.connected
+                    };
+                });
 
                 const options = adapters.map(a =>
                     `<option value="${a.adapter_id}">${a.adapter_name}</option>`
@@ -793,41 +1626,26 @@
             }
         }
 
-        // Refresh tags list - Load from tag manager or adapters
+        // Refresh tags list - Load discovered tags from adapters (always)
+        // and merge with managed tags from tag manager
         async function refreshTags() {
             try {
-                // Try to load from tag manager first (enterprise tags with full config)
-                try {
-                    const response = await fetch(`${API_BASE}/api/tags/`);
-                    if (response.ok) {
-                        const managedTags = await response.json();
-                        if (Array.isArray(managedTags) && managedTags.length > 0) {
-                            allTags = managedTags.map(tag => ({
-                                ...tag,
-                                is_discovered: false
-                            }));
-                            console.log(`Loaded ${allTags.length} tags from tag manager`);
-                            renderTagBrowser(allTags);
-                            return;
-                        }
-                    }
-                } catch (e) {
-                    console.log('Tag manager returned no tags, loading from adapters...');
-                }
+                allTags = [];
 
-                // Fallback: Load discovered tags from adapters using the /api/tags/list endpoint
+                // 1. Always load discovered tags from adapters first
                 const listResponse = await fetch(`${API_BASE}/api/tags/list`);
                 if (listResponse.ok) {
                     const listData = await listResponse.json();
                     const discoveredTags = Array.isArray(listData?.tags) ? listData.tags : [];
 
-                    // Convert adapter tags to tag manager format
-                    allTags = discoveredTags.map(tag => ({
-                        tag_id: `${tag.adapter_id}_${tag.name}`,
+                    // Convert adapter tags to unified format
+                    const discoveredFormatted = discoveredTags.map(tag => ({
+                        tag_id: `discovered_${tag.adapter_id}_${tag.name}`,
                         tag_name: tag.name,
                         address: tag.address,
                         data_type: tag.data_type || 'unknown',
                         adapter_id: tag.adapter_id,
+                        protocol: tag.protocol,
                         enabled: tag.enabled !== false,
                         quality: tag.connected ? 'Good' : 'BadNotConnected',
                         current_value: null,
@@ -845,18 +1663,46 @@
                         alarm: null,
                         read_count: 0,
                         error_count: 0,
-                        is_discovered: true
+                        is_discovered: true,
+                        is_managed: false
                     }));
 
-                    console.log(`Loaded ${allTags.length} discovered tags from adapters`);
-                    renderTagBrowser(allTags);
-                } else {
-                    throw new Error('Failed to load tags from adapters');
+                    allTags = discoveredFormatted;
+                    console.log(`Loaded ${discoveredFormatted.length} discovered tags from adapters`);
                 }
+
+                // 2. Also load managed tags from tag manager and merge
+                try {
+                    const managedResponse = await fetch(`${API_BASE}/api/tags/`);
+                    if (managedResponse.ok) {
+                        const managedTags = await managedResponse.json();
+                        if (Array.isArray(managedTags) && managedTags.length > 0) {
+                            // Mark managed tags and add to list
+                            const managedFormatted = managedTags.map(tag => ({
+                                ...tag,
+                                is_discovered: false,
+                                is_managed: true
+                            }));
+
+                            // Remove discovered tags that have a managed version (same address + adapter)
+                            const managedKeys = new Set(managedFormatted.map(t => `${t.adapter_id}_${t.address}`));
+                            allTags = allTags.filter(t => !managedKeys.has(`${t.adapter_id}_${t.address}`));
+
+                            // Add managed tags at the beginning
+                            allTags = [...managedFormatted, ...allTags];
+                            console.log(`Added ${managedFormatted.length} managed tags`);
+                        }
+                    }
+                } catch (e) {
+                    console.log('Tag manager not available or empty');
+                }
+
+                console.log(`Total tags: ${allTags.length}`);
+                renderTreeView(allTags);
 
             } catch (error) {
                 console.error('Failed to load tags:', error);
-                document.getElementById('tagBrowser').innerHTML = `
+                document.getElementById('treeView').innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>
                         <div class="empty-state-text">Failed to load tags</div>
@@ -897,10 +1743,10 @@
         function searchTags() {
             const search = document.getElementById('searchTags').value.toLowerCase();
             const filtered = allTags.filter(tag =>
-                tag.tag_name.toLowerCase().includes(search) ||
-                tag.address.toLowerCase().includes(search)
+                (tag.tag_name && tag.tag_name.toLowerCase().includes(search)) ||
+                (tag.address && tag.address.toLowerCase().includes(search))
             );
-            renderTagBrowser(filtered);
+            renderTreeView(filtered);
         }
 
         // Select tag
@@ -1112,6 +1958,11 @@
             // Show selected tab
             document.getElementById(`tab-${tabName}`).classList.add('active');
             event.target.classList.add('active');
+
+            // Auto-load events when Events tab is selected
+            if (tabName === 'events' && currentTag && !currentTag.is_discovered) {
+                setTimeout(() => loadAlarmEvents(), 100);
+            }
         }
 
         // Render General Tab
@@ -1362,43 +2213,78 @@
         // Render Alarms Tab
         function renderAlarmsTab(tag) {
             if (tag.is_discovered) {
-                return renderLockedFeature('🚨 Advanced Alarms');
+                return renderLockedFeature('🚨 Alarms');
             }
-            const alarms = tag.advanced_alarms || [];
+
+            // Check for configured alarm (tag.alarm) - this is the main alarm config
+            const alarm = tag.alarm;
+            const hasAlarm = alarm && alarm.enabled;
 
             return `
                 <div class="properties-section">
-                    <div class="section-title">🚨 Advanced Alarms</div>
+                    <div class="section-title">🚨 Alarm Configuration</div>
 
                     <div style="margin-bottom: 16px;">
-                        <button class="btn btn-success" onclick="showCreateAlarmModal()">➕ Add Alarm</button>
+                        <button class="btn btn-success" onclick="showCreateAlarmModal()">${hasAlarm ? '✏️ Edit Alarm' : '➕ Add Alarm'}</button>
+                        ${hasAlarm ? `<button class="btn btn-danger" style="margin-left: 8px;" onclick="deleteAlarm()">🗑️ Remove Alarm</button>` : ''}
                     </div>
 
-                    ${alarms.length === 0 ? `
+                    ${!hasAlarm ? `
                         <div style="text-align: center; padding: 40px; color: #9ca3af;">
                             <div style="font-size: 48px; margin-bottom: 12px;">🔕</div>
-                            <div style="font-size: 14px;">No alarms configured</div>
-                            <div style="font-size: 12px; margin-top: 4px;">Add your first alarm to start monitoring</div>
+                            <div style="font-size: 14px;">No alarm configured</div>
+                            <div style="font-size: 12px; margin-top: 4px;">Add an alarm to start monitoring this tag</div>
                         </div>
                     ` : `
                         <div class="item-list">
-                            ${alarms.map(alarm => `
-                                <div class="item-card">
-                                    <div class="item-card-info">
-                                        <div class="item-card-title">
-                                            ${alarm.alarm_type.toUpperCase()} Alarm
-                                            <span class="priority-badge priority-${alarm.priority}">${alarm.priority}</span>
-                                        </div>
-                                        <div class="item-card-details">
-                                            ${renderAlarmDetails(alarm)}
-                                        </div>
+                            <div class="item-card" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b;">
+                                <div class="item-card-info" style="flex: 1;">
+                                    <div class="item-card-title" style="color: #92400e; font-size: 16px; margin-bottom: 12px;">
+                                        🚨 Limit Alarm
+                                        <span class="priority-badge" style="background: ${alarm.hi_hi || alarm.lo_lo ? '#dc2626' : '#f59e0b'}; color: white; margin-left: 8px;">
+                                            ${alarm.hi_hi || alarm.lo_lo ? 'CRITICAL' : 'HIGH'}
+                                        </span>
                                     </div>
-                                    <div class="item-card-actions">
-                                        <button class="btn btn-secondary btn-small" onclick="editAlarm('${alarm.alarm_id}')">Edit</button>
-                                        <button class="btn btn-secondary btn-small" onclick="deleteAlarm('${alarm.alarm_id}')">Delete</button>
+
+                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px;">
+                                        ${alarm.hi_hi !== undefined && alarm.hi_hi !== null ? `
+                                            <div style="background: #fee2e2; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #dc2626;">
+                                                <div style="font-size: 11px; color: #991b1b; text-transform: uppercase; font-weight: 600;">HI-HI (Critical)</div>
+                                                <div style="font-size: 18px; font-weight: bold; color: #dc2626;">${alarm.hi_hi}</div>
+                                            </div>
+                                        ` : ''}
+                                        ${alarm.hi !== undefined && alarm.hi !== null ? `
+                                            <div style="background: #ffedd5; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #f97316;">
+                                                <div style="font-size: 11px; color: #9a3412; text-transform: uppercase; font-weight: 600;">HI (High)</div>
+                                                <div style="font-size: 18px; font-weight: bold; color: #f97316;">${alarm.hi}</div>
+                                            </div>
+                                        ` : ''}
+                                        ${alarm.lo !== undefined && alarm.lo !== null ? `
+                                            <div style="background: #dbeafe; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                                                <div style="font-size: 11px; color: #1e40af; text-transform: uppercase; font-weight: 600;">LO (High)</div>
+                                                <div style="font-size: 18px; font-weight: bold; color: #3b82f6;">${alarm.lo}</div>
+                                            </div>
+                                        ` : ''}
+                                        ${alarm.lo_lo !== undefined && alarm.lo_lo !== null ? `
+                                            <div style="background: #ede9fe; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #7c3aed;">
+                                                <div style="font-size: 11px; color: #5b21b6; text-transform: uppercase; font-weight: 600;">LO-LO (Critical)</div>
+                                                <div style="font-size: 18px; font-weight: bold; color: #7c3aed;">${alarm.lo_lo}</div>
+                                            </div>
+                                        ` : ''}
                                     </div>
+
+                                    <div style="display: flex; gap: 16px; font-size: 12px; color: #78716c;">
+                                        <div><strong>Deadband:</strong> ${alarm.deadband || 0}</div>
+                                        <div><strong>Delay:</strong> ${alarm.delay_seconds || 0}s</div>
+                                    </div>
+
+                                    ${alarm.message_template ? `
+                                        <div style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.5); border-radius: 4px; font-size: 12px;">
+                                            <strong>Message:</strong> ${alarm.message_template}
+                                        </div>
+                                    ` : ''}
                                 </div>
-                            `).join('')}
+                            </div>
                         </div>
                     `}
                 </div>
@@ -1423,48 +2309,144 @@
             }
         }
 
-        // Render Events Tab
+        // Render Events Tab - Shows alarm event history from Backend
         function renderEventsTab(tag) {
             if (tag.is_discovered) {
                 return renderLockedFeature('📡 Events');
             }
-            const events = tag.event_triggers || [];
 
             return `
                 <div class="properties-section">
-                    <div class="section-title">📡 Event Triggers</div>
+                    <div class="section-title">📡 Alarm Event History</div>
 
                     <div style="margin-bottom: 16px;">
-                        <button class="btn btn-success" onclick="showCreateEventModal()">➕ Add Event</button>
+                        <button class="btn btn-primary" onclick="loadAlarmEvents()">🔄 Refresh Events</button>
                     </div>
 
-                    ${events.length === 0 ? `
+                    <div id="alarmEventsContainer">
                         <div style="text-align: center; padding: 40px; color: #9ca3af;">
-                            <div style="font-size: 48px; margin-bottom: 12px;">📭</div>
-                            <div style="font-size: 14px;">No events configured</div>
-                            <div style="font-size: 12px; margin-top: 4px;">Add event triggers to automate responses</div>
+                            <div style="font-size: 48px; margin-bottom: 12px;">⏳</div>
+                            <div style="font-size: 14px;">Loading alarm events...</div>
                         </div>
-                    ` : `
-                        <div class="item-list">
-                            ${events.map(event => `
-                                <div class="item-card">
-                                    <div class="item-card-info">
-                                        <div class="item-card-title">${event.event_type}</div>
-                                        <div class="item-card-details">
-                                            Condition: ${event.condition || 'N/A'}<br>
-                                            Min interval: ${event.min_interval_seconds}s
-                                        </div>
-                                    </div>
-                                    <div class="item-card-actions">
-                                        <button class="btn btn-secondary btn-small" onclick="editEvent('${event.event_id}')">Edit</button>
-                                        <button class="btn btn-secondary btn-small" onclick="deleteEvent('${event.event_id}')">Delete</button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `}
+                    </div>
                 </div>
             `;
+        }
+
+        // Load alarm events from Backend API
+        async function loadAlarmEvents() {
+            if (!currentTag) return;
+
+            const container = document.getElementById('alarmEventsContainer');
+            if (!container) return;
+
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #9ca3af;">
+                    <div style="font-size: 24px;">⏳</div>
+                    <div>Loading...</div>
+                </div>
+            `;
+
+            try {
+                // Fetch alarm history from Backend - filter by tag name
+                const response = await fetch(`${BACKEND_API}/api/v1/alarms/history?limit=50`);
+                if (!response.ok) throw new Error('Failed to fetch alarm events');
+
+                const events = await response.json();
+
+                // Filter events for current tag (by tag name in alarm_name or description)
+                const tagEvents = events.filter(e =>
+                    (e.alarm_name && e.alarm_name.includes(currentTag.tag_name)) ||
+                    (e.description && e.description.includes(currentTag.tag_name))
+                );
+
+                if (tagEvents.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                            <div style="font-size: 48px; margin-bottom: 12px;">📭</div>
+                            <div style="font-size: 14px;">No alarm events for this tag</div>
+                            <div style="font-size: 12px; margin-top: 4px;">Events will appear here when alarms are triggered</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="item-list" style="max-height: 400px; overflow-y: auto;">
+                        ${tagEvents.map(event => {
+                            const stateColors = {
+                                'active': '#dc2626',
+                                'acknowledged': '#f59e0b',
+                                'cleared': '#22c55e'
+                            };
+                            const stateIcons = {
+                                'active': '🔴',
+                                'acknowledged': '🟡',
+                                'cleared': '🟢'
+                            };
+                            const triggerTime = new Date(event.trigger_timestamp).toLocaleString();
+                            const clearedTime = event.cleared_at ? new Date(event.cleared_at).toLocaleString() : '-';
+                            const duration = event.duration_seconds ? `${event.duration_seconds.toFixed(1)}s` : '-';
+
+                            return `
+                                <div class="item-card" style="border-left: 4px solid ${stateColors[event.state] || '#6b7280'}; margin-bottom: 8px;">
+                                    <div class="item-card-info" style="flex: 1;">
+                                        <div class="item-card-title" style="display: flex; align-items: center; gap: 8px;">
+                                            ${stateIcons[event.state] || '⚪'} ${event.alarm_type || 'Alarm'}
+                                            <span style="background: ${stateColors[event.state]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase;">
+                                                ${event.state}
+                                            </span>
+                                            <span style="background: ${event.severity === 'critical' ? '#dc2626' : '#f59e0b'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                                                ${event.severity || 'high'}
+                                            </span>
+                                        </div>
+                                        <div class="item-card-details" style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                                            <div><strong>Trigger:</strong> ${triggerTime} | <strong>Value:</strong> ${event.trigger_value?.toFixed(2) || '-'}</div>
+                                            <div><strong>Cleared:</strong> ${clearedTime} | <strong>Duration:</strong> ${duration}</div>
+                                            ${event.description ? `<div style="margin-top: 4px; font-style: italic;">${event.description}</div>` : ''}
+                                        </div>
+                                    </div>
+                                    ${event.state === 'active' ? `
+                                        <div class="item-card-actions">
+                                            <button class="btn btn-warning btn-small" onclick="acknowledgeAlarm('${event.id}')">Acknowledge</button>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Failed to load alarm events:', error);
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <div style="font-size: 48px; margin-bottom: 12px;">❌</div>
+                        <div style="font-size: 14px;">Failed to load alarm events</div>
+                        <div style="font-size: 12px; margin-top: 4px;">${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Acknowledge alarm event
+        async function acknowledgeAlarm(eventId) {
+            try {
+                const response = await fetch(`${BACKEND_API}/api/v1/alarms/events/${eventId}/acknowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ comment: 'Acknowledged via Gateway UI' })
+                });
+
+                if (response.ok) {
+                    alert('Alarm acknowledged successfully!');
+                    loadAlarmEvents();
+                } else {
+                    alert('Failed to acknowledge alarm');
+                }
+            } catch (error) {
+                console.error('Failed to acknowledge alarm:', error);
+                alert('Failed to acknowledge alarm: ' + error.message);
+            }
         }
 
         // Render Actions Tab
@@ -1817,9 +2799,15 @@
         }
 
         // Formula functions
+        // NOTE: Formula DEFINITIONS are now managed via Backend API
+        // Gateway only handles local formula EVALUATION (test endpoint available)
         async function saveFormula() {
             if (!ensureManagedTag()) return;
 
+            alert('⚠️ Formula definitions have been moved to Backend.\n\nUse Backend API:\n• POST /api/v1/formulas - Create formula\n• GET /api/v1/formulas - List formulas\n\nYou can still TEST formulas locally using the "Test Formula" button.\n\nOr use the main OptiFlow dashboard.');
+            return;
+
+            // Original code disabled - formula definitions managed via Backend
             const formulaData = {
                 tag_id: currentTag.tag_id,
                 enabled: document.getElementById('formula_enabled').checked,
@@ -1868,7 +2856,8 @@
             });
 
             try {
-                const response = await fetch(`${API_BASE}/api/automation/formulas/test`, {
+                // Use new simplified formula test endpoint
+                const response = await fetch(`${API_BASE}/api/formulas/test`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({expression, sample_values: sampleValues})
@@ -1914,46 +2903,221 @@
             }
         }
 
-        // Alarm functions
+        // ==================== ALARM FUNCTIONS ====================
+        // NOTE: Alarms are now configured directly in Gateway's tags_config.json
+        // The Alarm Evaluator reads from this config and publishes to Kafka
+
         function showCreateAlarmModal() {
-            alert('Alarm creation modal coming soon! Use API:\nPOST /api/automation/tags/{tag_id}/alarms/advanced');
-        }
+            if (!ensureManagedTag()) return;
+            document.getElementById('createAlarmModal').classList.add('show');
+            updateAlarmFields();
 
-        function editAlarm(alarmId) {
-            alert('Edit alarm: ' + alarmId + '\nComing soon!');
-        }
-
-        async function deleteAlarm(alarmId) {
-            if (!ensureManagedTag() || !confirm('Delete this alarm?')) return;
-
-            try {
-                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/alarms/${alarmId}`, {
-                    method: 'DELETE'
-                });
-
-                if (response.ok) {
-                    alert('Alarm deleted successfully!');
-                    await selectTag(currentTag.tag_id);
-                } else {
-                    alert('Failed to delete alarm');
-                }
-            } catch (error) {
-                console.error('Failed to delete alarm:', error);
-                alert('Failed to delete alarm: ' + error.message);
+            // Pre-populate with existing alarm config if available
+            if (currentTag.alarm) {
+                const alarm = currentTag.alarm;
+                document.getElementById('alarm_hh').value = alarm.hi_hi || '';
+                document.getElementById('alarm_h').value = alarm.hi || '';
+                document.getElementById('alarm_l').value = alarm.lo || '';
+                document.getElementById('alarm_ll').value = alarm.lo_lo || '';
+                document.getElementById('alarm_deadband').value = alarm.deadband || 0;
+                document.getElementById('alarm_delay').value = alarm.delay_seconds || 0;
+                document.getElementById('alarm_message').value = alarm.message_template || '';
             }
         }
 
-        // Event functions
+        function closeCreateAlarmModal() {
+            document.getElementById('createAlarmModal').classList.remove('show');
+            document.getElementById('createAlarmForm').reset();
+        }
+
+        function updateAlarmFields() {
+            const alarmType = document.getElementById('alarm_type').value;
+
+            // Hide all field groups
+            document.getElementById('limitFields').style.display = 'none';
+            document.getElementById('rateFields').style.display = 'none';
+            document.getElementById('deviationFields').style.display = 'none';
+            document.getElementById('statisticalFields').style.display = 'none';
+            document.getElementById('customFormulaFields').style.display = 'none';
+
+            // Show relevant fields
+            switch (alarmType) {
+                case 'limit':
+                    document.getElementById('limitFields').style.display = 'block';
+                    break;
+                case 'rate_of_change':
+                    document.getElementById('rateFields').style.display = 'block';
+                    break;
+                case 'deviation':
+                    document.getElementById('deviationFields').style.display = 'block';
+                    break;
+                case 'statistical':
+                    document.getElementById('statisticalFields').style.display = 'block';
+                    break;
+                case 'custom_formula':
+                    document.getElementById('customFormulaFields').style.display = 'block';
+                    break;
+            }
+        }
+
+        async function createAlarm(event) {
+            event.preventDefault();
+            if (!ensureManagedTag()) return;
+
+            const alarmType = document.getElementById('alarm_type').value;
+            const priority = document.getElementById('alarm_priority').value;
+
+            // Build alarm config in Gateway format (tags_config.json)
+            const alarmConfig = {
+                enabled: true,
+                deadband: parseFloat(document.getElementById('alarm_deadband').value) || 0,
+                delay_seconds: parseFloat(document.getElementById('alarm_delay').value) || 0,
+                message_template: document.getElementById('alarm_message').value || `${currentTag.tag_name} alarm`
+            };
+
+            // Add type-specific fields
+            switch (alarmType) {
+                case 'limit':
+                    const hh = document.getElementById('alarm_hh').value;
+                    const h = document.getElementById('alarm_h').value;
+                    const l = document.getElementById('alarm_l').value;
+                    const ll = document.getElementById('alarm_ll').value;
+                    if (hh) {
+                        alarmConfig.hi_hi = parseFloat(hh);
+                        alarmConfig.hi_hi_severity = 'critical';
+                    }
+                    if (h) {
+                        alarmConfig.hi = parseFloat(h);
+                        alarmConfig.hi_severity = priority === 'critical' ? 'critical' : 'high';
+                    }
+                    if (l) {
+                        alarmConfig.lo = parseFloat(l);
+                        alarmConfig.lo_severity = priority === 'critical' ? 'critical' : 'high';
+                    }
+                    if (ll) {
+                        alarmConfig.lo_lo = parseFloat(ll);
+                        alarmConfig.lo_lo_severity = 'critical';
+                    }
+                    break;
+                case 'rate_of_change':
+                    alarmConfig.max_rate_of_change = parseFloat(document.getElementById('alarm_max_rate').value);
+                    alarmConfig.rate_window_seconds = parseFloat(document.getElementById('alarm_rate_window').value) || 60;
+                    alarmConfig.rate_severity = priority;
+                    break;
+                case 'deviation':
+                    alarmConfig.setpoint_tag = document.getElementById('alarm_setpoint_tag').value;
+                    alarmConfig.max_deviation = parseFloat(document.getElementById('alarm_max_deviation').value);
+                    alarmConfig.deviation_type = document.getElementById('alarm_deviation_type').value;
+                    alarmConfig.deviation_severity = priority;
+                    break;
+            }
+
+            try {
+                // Update tag with alarm config using PUT /api/tags/{tag_id}
+                const response = await fetch(`${API_BASE}/api/tags/${currentTag.tag_id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alarm: alarmConfig })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(`Alarm configured successfully!\n\nThe Gateway Alarm Evaluator will now monitor this tag.`);
+                    closeCreateAlarmModal();
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to configure alarm: ' + (result.detail || result.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Failed to configure alarm:', error);
+                alert('Failed to configure alarm: ' + error.message);
+            }
+        }
+
+        function editAlarm(alarmId) {
+            // Open the create modal which will pre-populate with existing values
+            showCreateAlarmModal();
+        }
+
+        async function deleteAlarm(alarmId) {
+            if (!ensureManagedTag() || !confirm('Remove alarm configuration from this tag?')) return;
+
+            try {
+                // Update tag to remove alarm config
+                const response = await fetch(`${API_BASE}/api/tags/${currentTag.tag_id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alarm: null })
+                });
+
+                if (response.ok) {
+                    alert('Alarm configuration removed successfully!');
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to remove alarm');
+                }
+            } catch (error) {
+                console.error('Failed to remove alarm:', error);
+                alert('Failed to remove alarm: ' + error.message);
+            }
+        }
+
+        // ==================== EVENT FUNCTIONS ====================
+        // NOTE: Event management has been moved to Backend API
+
         function showCreateEventModal() {
-            alert('Event creation modal coming soon! Use API:\nPOST /api/automation/tags/{tag_id}/events');
+            if (!ensureManagedTag()) return;
+            alert('⚠️ Event management has been moved to Backend.\n\nUse Backend API:\n• POST /api/v1/events - Create event\n• GET /api/v1/events - List events\n\nOr use the main OptiFlow dashboard.');
+            return;
+            // Original code disabled - events managed via Backend
+            document.getElementById('createEventModal').classList.add('show');
+        }
+
+        function closeCreateEventModal() {
+            document.getElementById('createEventModal').classList.remove('show');
+            document.getElementById('createEventForm').reset();
+        }
+
+        async function createEvent(event) {
+            event.preventDefault();
+            if (!ensureManagedTag()) return;
+
+            const payload = {
+                tag_id: currentTag.tag_id,
+                event_type: document.getElementById('event_type').value,
+                condition: document.getElementById('event_condition').value || null,
+                min_interval_seconds: parseFloat(document.getElementById('event_min_interval').value) || 0
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(`Event trigger created successfully!\nID: ${result.trigger_id}`);
+                    closeCreateEventModal();
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to create event: ' + (result.detail || result.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Failed to create event:', error);
+                alert('Failed to create event: ' + error.message);
+            }
         }
 
         function editEvent(eventId) {
-            alert('Edit event: ' + eventId + '\nComing soon!');
+            alert('Edit event functionality requires form pre-population.\nFor now, delete and recreate the event with new settings.\n\nEvent ID: ' + eventId);
         }
 
         async function deleteEvent(eventId) {
-            if (!ensureManagedTag() || !confirm('Delete this event?')) return;
+            if (!ensureManagedTag() || !confirm('Delete this event trigger?')) return;
 
             try {
                 const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/events/${eventId}`, {
@@ -1972,13 +3136,115 @@
             }
         }
 
-        // Action functions
+        // ==================== ACTION FUNCTIONS ====================
+        // NOTE: Action management has been moved to Backend API
+
         function showCreateActionModal() {
-            alert('Action creation modal coming soon! Use API:\nPOST /api/automation/tags/{tag_id}/actions');
+            if (!ensureManagedTag()) return;
+            alert('⚠️ Action management has been moved to Backend.\n\nUse Backend API:\n• POST /api/v1/actions - Create action\n• GET /api/v1/actions - List actions\n\nOr use the main OptiFlow dashboard.');
+            return;
+            // Original code disabled - actions managed via Backend
+            document.getElementById('createActionModal').classList.add('show');
+            updateActionFields();
+        }
+
+        function closeCreateActionModal() {
+            document.getElementById('createActionModal').classList.remove('show');
+            document.getElementById('createActionForm').reset();
+        }
+
+        function updateActionFields() {
+            const actionType = document.getElementById('action_type').value;
+
+            // Hide all field groups
+            document.getElementById('webhookFields').style.display = 'none';
+            document.getElementById('emailFields').style.display = 'none';
+            document.getElementById('mqttFields').style.display = 'none';
+            document.getElementById('logFields').style.display = 'none';
+            document.getElementById('notificationFields').style.display = 'none';
+
+            // Show relevant fields
+            switch (actionType) {
+                case 'webhook':
+                    document.getElementById('webhookFields').style.display = 'block';
+                    break;
+                case 'email':
+                    document.getElementById('emailFields').style.display = 'block';
+                    break;
+                case 'mqtt_publish':
+                    document.getElementById('mqttFields').style.display = 'block';
+                    break;
+                case 'log_message':
+                    document.getElementById('logFields').style.display = 'block';
+                    break;
+                case 'dashboard_notification':
+                    document.getElementById('notificationFields').style.display = 'block';
+                    break;
+            }
+        }
+
+        async function createAction(event) {
+            event.preventDefault();
+            if (!ensureManagedTag()) return;
+
+            const actionType = document.getElementById('action_type').value;
+            const payload = {
+                tag_id: currentTag.tag_id,
+                action_type: actionType
+            };
+
+            // Add type-specific fields
+            switch (actionType) {
+                case 'webhook':
+                    payload.webhook_url = document.getElementById('action_webhook_url').value;
+                    payload.webhook_method = document.getElementById('action_webhook_method').value;
+                    payload.webhook_body_template = document.getElementById('action_webhook_body').value || null;
+                    break;
+                case 'email':
+                    const emailTo = document.getElementById('action_email_to').value;
+                    payload.email_to = emailTo ? emailTo.split(',').map(e => e.trim()) : [];
+                    payload.email_subject_template = document.getElementById('action_email_subject').value || null;
+                    payload.email_body_template = document.getElementById('action_email_body').value || null;
+                    break;
+                case 'mqtt_publish':
+                    payload.mqtt_topic = document.getElementById('action_mqtt_topic').value;
+                    payload.mqtt_payload_template = document.getElementById('action_mqtt_payload').value || null;
+                    break;
+                case 'log_message':
+                    payload.log_level = document.getElementById('action_log_level').value;
+                    payload.log_message_template = document.getElementById('action_log_message').value || null;
+                    break;
+                case 'dashboard_notification':
+                    payload.notification_title = document.getElementById('action_notif_title').value || null;
+                    payload.notification_message = document.getElementById('action_notif_message').value || null;
+                    payload.notification_severity = document.getElementById('action_notif_severity').value;
+                    break;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/automation/tags/${currentTag.tag_id}/actions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(`Action created successfully!\nID: ${result.action_id}`);
+                    closeCreateActionModal();
+                    await selectTag(currentTag.tag_id);
+                } else {
+                    alert('Failed to create action: ' + (result.detail || result.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Failed to create action:', error);
+                alert('Failed to create action: ' + error.message);
+            }
         }
 
         function editAction(actionId) {
-            alert('Edit action: ' + actionId + '\nComing soon!');
+            alert('Edit action functionality requires form pre-population.\nFor now, delete and recreate the action with new settings.\n\nAction ID: ' + actionId);
         }
 
         async function deleteAction(actionId) {

@@ -46,6 +46,179 @@ def get_protocol_manager():
 
 # === TAG ENDPOINTS ===
 
+# IMPORTANT: Static routes must be defined BEFORE parameterized routes
+# to avoid the {tag_name} pattern capturing "all", "batch", etc.
+
+@router.get("/realtime/all")
+async def get_all_realtime_values(
+    adapter_id: Optional[str] = Query(None, description="Filter by adapter ID"),
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Get ALL real-time tag values from cache
+
+    This is the main endpoint for UI dashboards - returns all cached values
+    from subscription-based adapters.
+
+    **Query Parameters**:
+    - `adapter_id`: Filter by specific adapter (optional)
+
+    **Returns**:
+    ```json
+    {
+      "count": 78,
+      "adapters": 2,
+      "tags": {
+        "temp_c": {"value": 45.2, "quality": "Good", "timestamp": "...", "adapter_id": "opcua-001"},
+        "power_kw": {"value": 12.5, "quality": "Good", ...}
+      },
+      "latency_ms": 1.2
+    }
+    ```
+    """
+    start_time = time.time()
+
+    all_values = {}
+    adapter_count = 0
+
+    for adp in pm.adapters.values():
+        # Apply adapter filter if specified
+        if adapter_id and adp.adapter_id != adapter_id:
+            continue
+
+        if not adp.connected:
+            continue
+
+        adapter_count += 1
+
+        # Get values from last_values cache
+        if hasattr(adp, 'last_values') and adp.last_values:
+            # Build a reverse map: address -> tag_name
+            address_to_name = {}
+            for tag in adp.config.tags:
+                addr = tag.get('address')
+                if addr:
+                    address_to_name[addr] = tag.get('name', addr)
+
+            for address, cached_value in adp.last_values.items():
+                tag_name = address_to_name.get(address, address)
+                all_values[tag_name] = {
+                    "value": cached_value.get('value'),
+                    "quality": cached_value.get('quality', 'Good'),
+                    "timestamp": cached_value.get('timestamp'),
+                    "address": address,
+                    "adapter_id": adp.adapter_id,
+                    "protocol": adp.config.protocol_type
+                }
+
+    latency_ms = (time.time() - start_time) * 1000
+
+    return {
+        "count": len(all_values),
+        "adapters": adapter_count,
+        "tags": all_values,
+        "latency_ms": round(latency_ms, 2)
+    }
+
+
+@router.get("/realtime/discovered/{adapter_id}")
+async def get_discovered_tags_realtime(
+    adapter_id: str,
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Get ALL discovered tags from an adapter with real-time values
+
+    This endpoint discovers tags and reads their current values DIRECTLY
+    from the PLC/OPC-UA server (not from subscription cache).
+    Used by the Gateway UI to show all available tags.
+
+    **Returns**:
+    ```json
+    {
+      "adapter_id": "opcua-simulator-001",
+      "count": 53,
+      "connected": true,
+      "tags": [
+        {
+          "name": "temp_c",
+          "address": "ns=2;i=12",
+          "current_value": 45.2,
+          "quality": "good",
+          "data_type": "double",
+          "unit": null,
+          "last_update": "2025-01-19T10:30:45.123Z"
+        }
+      ],
+      "latency_ms": 125.4
+    }
+    ```
+    """
+    start_time = time.time()
+
+    # Find the adapter
+    adapter = pm.adapters.get(adapter_id)
+    if not adapter:
+        raise HTTPException(404, f"Adapter '{adapter_id}' not found")
+
+    # Check if adapter is connected
+    if not adapter.connected:
+        return {
+            "adapter_id": adapter_id,
+            "count": 0,
+            "connected": False,
+            "tags": [],
+            "message": "Adapter not connected",
+            "latency_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    tags_with_values = []
+
+    try:
+        # Trigger discovery if adapter supports it (to populate config.tags)
+        if hasattr(adapter, '_discover_tags'):
+            await adapter._discover_tags()
+
+        # Use the new direct read method if available (OPC-UA adapter)
+        if hasattr(adapter, 'read_all_discovered_tags'):
+            logger.info(f"📖 Using direct read for adapter {adapter_id}")
+            tags_with_values = await adapter.read_all_discovered_tags()
+        else:
+            # Fallback: use cached values from subscriptions
+            logger.info(f"📋 Using cached values for adapter {adapter_id}")
+            discovered_tags = adapter.config.tags if hasattr(adapter.config, 'tags') else []
+            last_values = getattr(adapter, 'last_values', {})
+
+            for tag in discovered_tags:
+                tag_addr = tag.get('address', '')
+                cached = last_values.get(tag_addr, {})
+
+                tags_with_values.append({
+                    "name": tag.get('name') or tag.get('tag_name', tag_addr),
+                    "address": tag_addr,
+                    "current_value": cached.get('value'),
+                    "quality": cached.get('quality', 'unknown'),
+                    "data_type": tag.get('type', tag.get('data_type', 'unknown')),
+                    "unit": tag.get('unit'),
+                    "last_update": cached.get('timestamp'),
+                    "connected": cached.get('value') is not None
+                })
+
+    except Exception as e:
+        logger.error(f"Error getting discovered tags for {adapter_id}: {e}", exc_info=True)
+        # Return empty but don't fail
+
+    latency_ms = (time.time() - start_time) * 1000
+
+    return {
+        "adapter_id": adapter_id,
+        "count": len(tags_with_values),
+        "connected": adapter.connected,
+        "tags": tags_with_values,
+        "latency_ms": round(latency_ms, 2)
+    }
+
+
 @router.get("/realtime/{tag_name}")
 async def get_realtime_tag(
     tag_name: str,
@@ -182,49 +355,37 @@ async def get_realtime_batch(
     start_time = time.time()
 
     try:
-        # Group tags by adapter (for efficient batch reading)
-        tags_by_adapter: Dict[Any, List[str]] = {}
+        results = []
 
+        # Build a map of tag_name -> (adapter, tag_config)
+        tag_to_adapter = {}
         for tag_name in tag_names:
-            found = False
             for adapter in pm.adapters.values():
                 for tag in adapter.config.tags:
                     if tag.get('name') == tag_name:
-                        if adapter not in tags_by_adapter:
-                            tags_by_adapter[adapter] = []
-                        tags_by_adapter[adapter].append(tag_name)
-                        found = True
+                        tag_to_adapter[tag_name] = (adapter, tag)
                         break
-                if found:
+                if tag_name in tag_to_adapter:
                     break
 
-        # Read from all adapters in parallel
-        results = []
-        read_tasks = []
+        # Get values from last_values cache (most reliable for subscription-based adapters)
+        for tag_name, (adapter, tag_config) in tag_to_adapter.items():
+            if not adapter.connected:
+                continue
 
-        for adapter, adapter_tag_names in tags_by_adapter.items():
-            if adapter.connected:
-                read_tasks.append(adapter.read_tags())
+            address = tag_config.get('address')
 
-        # Execute all reads in parallel
-        if read_tasks:
-            all_tags_data = await asyncio.gather(*read_tasks, return_exceptions=True)
-
-            # Flatten results and filter requested tags
-            for tags_data in all_tags_data:
-                if isinstance(tags_data, Exception):
-                    logger.error(f"Error reading tags: {tags_data}")
-                    continue
-
-                for tag_data in tags_data:
-                    if tag_data.tag_name in tag_names:
-                        results.append({
-                            "tag_name": tag_data.tag_name,
-                            "value": tag_data.value,
-                            "quality": tag_data.quality,
-                            "timestamp": tag_data.timestamp,
-                            "address": tag_data.address
-                        })
+            # Try last_values cache first (OPC UA subscriptions, etc.)
+            if hasattr(adapter, 'last_values') and address in adapter.last_values:
+                cached_value = adapter.last_values[address]
+                results.append({
+                    "tag_name": tag_name,
+                    "value": cached_value.get('value'),
+                    "quality": cached_value.get('quality', 'Good'),
+                    "timestamp": cached_value.get('timestamp'),
+                    "address": address,
+                    "adapter_id": adapter.adapter_id
+                })
 
         latency_ms = (time.time() - start_time) * 1000
 
@@ -405,3 +566,479 @@ async def get_adapter_status(
         "scan_rate_ms": adapter.config.scan_rate_ms,
         "extra_config": adapter.config.extra_config
     }
+
+
+@router.get("/managed")
+async def list_managed_tags(
+    adapter_id: Optional[str] = Query(None, description="Filter by adapter ID"),
+    pm=Depends(get_protocol_manager)
+):
+    """
+    List all MANAGED tags (tags saved/configured by user)
+
+    These are tags that were explicitly saved via the Gateway UI,
+    as opposed to discovered tags that are auto-detected but not yet saved.
+
+    **Data Source**: tags_config.json
+
+    **Query Parameters**:
+    - `adapter_id`: Filter by specific adapter
+
+    **Returns**:
+    ```json
+    {
+      "count": 10,
+      "source": "tags_config.json",
+      "tags": [
+        {
+          "tag_id": "tag_abc123",
+          "tag_name": "SILO1_TEMPERATURA",
+          "address": "ns=2;s=TEAG.SILO1.TEMP",
+          "adapter_id": "opcua-001",
+          "data_type": "double",
+          "enabled": true,
+          "historian": {...},
+          "scaling": {...},
+          ...
+        }
+      ]
+    }
+    ```
+    """
+    import json
+    from pathlib import Path
+
+    # Load managed tags from config file
+    config_path = Path(__file__).parent.parent.parent.parent / "config" / "tags_config.json"
+
+    managed_tags = []
+
+    try:
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                all_managed = config.get('tags', [])
+
+                # Apply adapter filter
+                for tag in all_managed:
+                    if adapter_id and tag.get('adapter_id') != adapter_id:
+                        continue
+                    managed_tags.append(tag)
+        else:
+            logger.warning(f"Tags config file not found: {config_path}")
+
+    except Exception as e:
+        logger.error(f"Error loading managed tags: {e}")
+        raise HTTPException(500, f"Error loading managed tags: {str(e)}")
+
+    # Also get realtime values for managed tags
+    for tag in managed_tags:
+        tag_name = tag.get('tag_name')
+        if tag_name:
+            # Try to get current value from adapters
+            for adapter in pm.adapters.values():
+                if adapter.adapter_id != tag.get('adapter_id'):
+                    continue
+
+                address = tag.get('address')
+                if hasattr(adapter, 'last_values') and address and address in adapter.last_values:
+                    cached = adapter.last_values[address]
+                    tag['current_value'] = cached.get('value')
+                    tag['current_quality'] = cached.get('quality', 'Good')
+                    tag['current_timestamp'] = cached.get('timestamp')
+                    tag['connected'] = adapter.connected
+                break
+
+    return {
+        "count": len(managed_tags),
+        "source": "tags_config.json",
+        "tags": managed_tags,
+        "note": "These are user-saved tags. Use Gateway UI to add/remove tags."
+    }
+
+
+# === TAG CRUD OPERATIONS ===
+# These endpoints manage tags_config.json (local Gateway configuration)
+
+from pydantic import BaseModel
+from typing import Optional as OptionalType
+import uuid
+
+
+class TagCreateRequest(BaseModel):
+    """Request to create a new managed tag"""
+    tag_name: str
+    address: str
+    data_type: str = "double"  # Will be auto-detected from PLC if available
+    adapter_id: str
+    enabled: bool = True
+    read_only: bool = True
+    metadata: Optional[Dict[str, Any]] = None
+    historian: Optional[Dict[str, Any]] = None
+    alarm: Optional[Dict[str, Any]] = None
+    scaling: Optional[Dict[str, Any]] = None
+
+
+class TagUpdateRequest(BaseModel):
+    """Request to update a managed tag"""
+    tag_name: OptionalType[str] = None
+    enabled: OptionalType[bool] = None
+    read_only: OptionalType[bool] = None
+    metadata: OptionalType[Dict[str, Any]] = None
+    historian: OptionalType[Dict[str, Any]] = None
+    alarm: OptionalType[Any] = None  # Can be dict or null to remove
+    scaling: OptionalType[Dict[str, Any]] = None
+    deadband: OptionalType[float] = None
+    remove_alarm: OptionalType[bool] = None  # Explicit flag to remove alarm
+
+
+def _load_tags_config() -> Dict[str, Any]:
+    """Load tags_config.json"""
+    import json
+    from pathlib import Path
+
+    config_path = Path(__file__).parent.parent.parent.parent / "config" / "tags_config.json"
+
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            return json.load(f)
+
+    # Return default structure
+    return {
+        "tags": [],
+        "groups": [],
+        "templates": [],
+        "metadata": {
+            "version": "1.0",
+            "updated_at": datetime.now().isoformat()
+        }
+    }
+
+
+def _save_tags_config(config: Dict[str, Any]):
+    """Save tags_config.json"""
+    import json
+    from pathlib import Path
+
+    config_path = Path(__file__).parent.parent.parent.parent / "config" / "tags_config.json"
+
+    # Update metadata
+    config["metadata"] = config.get("metadata", {})
+    config["metadata"]["updated_at"] = datetime.now().isoformat()
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+
+    logger.info(f"✅ Saved tags config to {config_path}")
+
+
+@router.get("/export/csv")
+async def export_tags_csv(
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Export all managed tags as CSV
+    """
+    from fastapi.responses import Response
+
+    config = _load_tags_config()
+    tags = config.get("tags", [])
+
+    # Build CSV
+    csv_lines = ["tag_id,tag_name,address,data_type,adapter_id,enabled,engineering_units,description"]
+
+    for tag in tags:
+        csv_lines.append(",".join([
+            tag.get("tag_id", ""),
+            tag.get("tag_name", ""),
+            tag.get("address", ""),
+            tag.get("data_type", ""),
+            tag.get("adapter_id", ""),
+            str(tag.get("enabled", True)).lower(),
+            tag.get("metadata", {}).get("engineering_units", ""),
+            tag.get("metadata", {}).get("description", "").replace(",", ";")
+        ]))
+
+    csv_content = "\n".join(csv_lines)
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=tags_export.csv"}
+    )
+
+
+@router.get("/")
+async def list_all_managed_tags(
+    pm=Depends(get_protocol_manager)
+):
+    """
+    List all managed tags (from tags_config.json)
+
+    This endpoint returns an array of tags for UI compatibility.
+    Use /managed for detailed response with metadata.
+    """
+    config = _load_tags_config()
+    managed_tags = config.get("tags", [])
+
+    # Enrich with realtime values
+    for tag in managed_tags:
+        adapter_id = tag.get("adapter_id")
+        address = tag.get("address")
+
+        for adapter in pm.adapters.values():
+            if adapter.adapter_id == adapter_id:
+                if hasattr(adapter, 'last_values') and address and address in adapter.last_values:
+                    cached = adapter.last_values[address]
+                    tag['current_value'] = cached.get('value')
+                    tag['current_quality'] = cached.get('quality', 'Good')
+                    tag['current_timestamp'] = cached.get('timestamp')
+                    tag['connected'] = adapter.connected
+                break
+
+    return managed_tags
+
+
+@router.post("/")
+async def create_tag(
+    request: TagCreateRequest,
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Create a new managed tag
+
+    The tag will be saved to tags_config.json and used by:
+    - Alarm Evaluator (for alarm thresholds)
+    - Historian (for data logging)
+    - Gateway UI
+
+    **Note**: data_type is auto-detected from PLC when possible
+    """
+    config = _load_tags_config()
+
+    # Check if tag with same name already exists
+    for existing_tag in config.get("tags", []):
+        if existing_tag.get("tag_name") == request.tag_name:
+            raise HTTPException(400, f"Tag with name '{request.tag_name}' already exists")
+
+    # Try to auto-detect data_type from adapter if not specified
+    detected_data_type = request.data_type
+
+    for adapter in pm.adapters.values():
+        if adapter.adapter_id == request.adapter_id:
+            # Check last_values for this address
+            if hasattr(adapter, 'last_values') and request.address in adapter.last_values:
+                cached = adapter.last_values[request.address]
+                value = cached.get('value')
+
+                # Auto-detect type from value
+                if isinstance(value, bool):
+                    detected_data_type = "boolean"
+                elif isinstance(value, int):
+                    detected_data_type = "int32"
+                elif isinstance(value, float):
+                    detected_data_type = "double"
+                elif isinstance(value, str):
+                    detected_data_type = "string"
+
+                logger.info(f"Auto-detected data_type for {request.tag_name}: {detected_data_type} (from value: {type(value).__name__})")
+            break
+
+    # Generate tag_id
+    tag_id = f"tag_{uuid.uuid4().hex[:8]}"
+
+    # Build tag object
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    new_tag = {
+        "tag_id": tag_id,
+        "tag_name": request.tag_name,
+        "address": request.address,
+        "data_type": detected_data_type,
+        "protocol_type": "opcua",  # Default, could be detected from adapter
+        "adapter_id": request.adapter_id,
+        "enabled": request.enabled,
+        "read_only": request.read_only,
+        "quality": "Good",
+        "scaling": request.scaling,
+        "deadband": None,
+        "historian": request.historian or {
+            "enabled": True,
+            "mode": "on_change",
+            "interval_ms": 1000,
+            "retention_days": None,
+            "compress": True,
+            "exception_deadband": None
+        },
+        "alarm": request.alarm,
+        "advanced_alarms": [],
+        "validation": None,
+        "formula": None,
+        "event_triggers": [],
+        "actions": [],
+        "metadata": request.metadata or {
+            "description": "",
+            "engineering_units": "",
+            "asset_id": None,
+            "asset_name": None,
+            "location": None,
+            "pid_tag": None,
+            "custom_properties": {}
+        },
+        "group_path": None,
+        "tags": [],
+        "current_value": None,
+        "current_value_timestamp": None,
+        "last_good_value": None,
+        "last_change_timestamp": None,
+        "read_count": 0,
+        "error_count": 0,
+        "last_error": None,
+        "created_at": now,
+        "updated_at": now
+    }
+
+    # Add to config
+    if "tags" not in config:
+        config["tags"] = []
+
+    config["tags"].append(new_tag)
+
+    # Save
+    _save_tags_config(config)
+
+    logger.info(f"✅ Created tag: {request.tag_name} (id: {tag_id}, data_type: {detected_data_type})")
+
+    return {
+        "success": True,
+        "tag_id": tag_id,
+        "tag_name": request.tag_name,
+        "data_type": detected_data_type,
+        "message": f"Tag '{request.tag_name}' created successfully"
+    }
+
+
+@router.put("/{tag_id}")
+async def update_tag(
+    tag_id: str,
+    request: TagUpdateRequest
+):
+    """
+    Update a managed tag
+
+    Only updates fields that are provided (partial update)
+    """
+    config = _load_tags_config()
+
+    tag_found = False
+    for tag in config.get("tags", []):
+        if tag.get("tag_id") == tag_id:
+            tag_found = True
+
+            # Update provided fields
+            if request.tag_name is not None:
+                tag["tag_name"] = request.tag_name
+            if request.enabled is not None:
+                tag["enabled"] = request.enabled
+            if request.read_only is not None:
+                tag["read_only"] = request.read_only
+            if request.metadata is not None:
+                tag["metadata"] = {**tag.get("metadata", {}), **request.metadata}
+            if request.historian is not None:
+                tag["historian"] = {**tag.get("historian", {}), **request.historian}
+
+            # Handle alarm - can be dict (update) or explicit None (remove)
+            # Check if 'alarm' key was sent in the request body
+            if 'alarm' in (request.model_dump(exclude_unset=True) if hasattr(request, 'model_dump') else request.dict(exclude_unset=True)):
+                if request.alarm is None:
+                    # Explicitly set to None means remove alarm
+                    tag["alarm"] = None
+                    logger.info(f"Removed alarm config from tag {tag_id}")
+                else:
+                    # Update alarm config
+                    tag["alarm"] = request.alarm
+                    logger.info(f"Updated alarm config for tag {tag_id}: {request.alarm}")
+
+            if request.scaling is not None:
+                tag["scaling"] = request.scaling
+            if request.deadband is not None:
+                tag["deadband"] = request.deadband
+
+            tag["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            break
+
+    if not tag_found:
+        raise HTTPException(404, f"Tag '{tag_id}' not found")
+
+    _save_tags_config(config)
+
+    logger.info(f"✅ Updated tag: {tag_id}")
+
+    return {
+        "success": True,
+        "tag_id": tag_id,
+        "message": f"Tag updated successfully"
+    }
+
+
+@router.delete("/{tag_id}")
+async def delete_tag(tag_id: str):
+    """
+    Delete a managed tag
+    """
+    config = _load_tags_config()
+
+    original_count = len(config.get("tags", []))
+    config["tags"] = [t for t in config.get("tags", []) if t.get("tag_id") != tag_id]
+
+    if len(config["tags"]) == original_count:
+        raise HTTPException(404, f"Tag '{tag_id}' not found")
+
+    _save_tags_config(config)
+
+    logger.info(f"✅ Deleted tag: {tag_id}")
+
+    return {
+        "success": True,
+        "tag_id": tag_id,
+        "message": f"Tag deleted successfully"
+    }
+
+
+# IMPORTANT: This parameterized route MUST be at the END to avoid capturing
+# routes like /export/csv, /list, /managed, etc.
+@router.get("/{tag_id}")
+async def get_tag_by_id(
+    tag_id: str,
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Get a specific managed tag by ID
+
+    NOTE: This route is placed at the end to avoid capturing static routes.
+    """
+    # Skip if tag_id matches a static route name
+    static_routes = {'export', 'list', 'managed', 'realtime', 'search', 'adapter'}
+    if tag_id.split('/')[0] in static_routes:
+        raise HTTPException(404, f"Invalid route: {tag_id}")
+
+    config = _load_tags_config()
+
+    for tag in config.get("tags", []):
+        if tag.get("tag_id") == tag_id:
+            # Add realtime value if available
+            adapter_id = tag.get("adapter_id")
+            address = tag.get("address")
+
+            for adapter in pm.adapters.values():
+                if adapter.adapter_id == adapter_id:
+                    if hasattr(adapter, 'last_values') and address in adapter.last_values:
+                        cached = adapter.last_values[address]
+                        tag['current_value'] = cached.get('value')
+                        tag['current_quality'] = cached.get('quality', 'Good')
+                        tag['current_timestamp'] = cached.get('timestamp')
+                    break
+
+            return tag
+
+    raise HTTPException(404, f"Tag '{tag_id}' not found")

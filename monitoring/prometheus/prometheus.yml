@@ -38,9 +38,9 @@ scrape_configs:
   # BACKEND API (FastAPI)
   # ======================================================================
   - job_name: 'optiflow-backend'
-    metrics_path: '/metrics'
+    metrics_path: '/api/v1/metrics'
     static_configs:
-      - targets: ['backend:8000']
+      - targets: ['optiflow-backend:8000']
         labels:
           service: 'backend'
           component: 'api'
@@ -54,9 +54,9 @@ scrape_configs:
   - job_name: 'optiflow-gateway'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['gateway:8001']
+      - targets: ['optiflow-gateway:8080']
         labels:
-          service: 'gateway'
+          service: 'edge-gateway'
           component: 'device-manager'
           app: 'optiflow'
     scrape_interval: 10s        # Frequente para monitorar devices

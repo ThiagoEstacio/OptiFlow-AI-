@@ -1,0 +1,157 @@
+# ============================================================================
+# OptiFlow Gateway - Network Policies
+# ============================================================================
+#
+# Restricts network traffic to/from gateway pods for security.
+#
+# Requirements:
+#   - Network plugin that supports NetworkPolicy (Calico, Cilium, etc.)
+#   - CNI with policy enforcement enabled
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-network-policy
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+spec:
+  # Apply to gateway pods
+  podSelector:
+    matchLabels:
+      app: optiflow
+      component: gateway
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Ingress rules (who can access the gateway)
+  ingress:
+    # Allow traffic from same namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow traffic from ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow traffic from monitoring namespace (Prometheus)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow traffic from optiflow backend namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: optiflow
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  # Egress rules (what the gateway can access)
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow Kafka (within cluster)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: optiflow
+      ports:
+        - protocol: TCP
+          port: 9092  # Kafka
+        - protocol: TCP
+          port: 9093  # Kafka SSL
+
+    # Allow Redis (within cluster)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: optiflow
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # Allow backend API (within cluster)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: optiflow
+      ports:
+        - protocol: TCP
+          port: 8000
+
+    # Allow OPC-UA servers (plant network)
+    # IMPORTANT: In production, restrict to specific CIDRs
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16  # Plant network CIDR
+            except:
+              - 192.168.255.0/24   # Reserved subnet
+      ports:
+        - protocol: TCP
+          port: 4840  # OPC-UA default port
+
+    # Allow Modbus TCP (plant network)
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 502
+
+    # Allow MQTT (if needed)
+    - to:
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 1883
+        - protocol: TCP
+          port: 8883  # MQTT TLS
+
+---
+# ============================================================================
+# Default Deny Policy (baseline security)
+# ============================================================================
+#
+# Denies all traffic not explicitly allowed by other policies.
+# Apply this first, then add specific allow policies.
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: optiflow-gateway
+
+spec:
+  podSelector: {}  # Apply to all pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress

@@ -1,0 +1,11 @@
+# ============================================================================
+# OptiFlow Gateway - Kubernetes Namespace
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+    environment: production

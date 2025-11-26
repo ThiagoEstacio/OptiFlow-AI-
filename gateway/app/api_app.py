@@ -29,24 +29,38 @@ except ImportError:
     adapters = None  # Adapters routes optional
 
 try:
-    from app.api.routes import tags_advanced
-except ImportError:
-    tags_advanced = None  # Tags routes optional
-
-try:
     from app.api.routes import tags_realtime
 except ImportError:
     tags_realtime = None  # Realtime tags routes optional
 
 try:
-    from app.api.routes import tags_automation
+    from app.api.routes import formulas
 except ImportError:
-    tags_automation = None  # Automation routes optional
+    formulas = None  # Formula engine routes optional
 
 try:
     from app.api.routes import websocket
 except ImportError:
     websocket = None  # WebSocket routes optional
+
+try:
+    from app.api.routes import security
+except ImportError:
+    security = None  # Security routes optional
+
+try:
+    from app.api.routes import config_sync
+except ImportError:
+    config_sync = None  # Config sync routes optional
+
+try:
+    from app.api.routes import alarms as alarms_routes
+except ImportError:
+    alarms_routes = None  # Alarm routes optional
+
+# DEPRECATED - Moved to Backend:
+# - tags_advanced (Tag CRUD) -> Backend: /api/v1/tags
+# - tags_automation (Alarms, Events, Actions) -> Backend: /api/v1/alarms, /api/v1/events
 
 
 # Pydantic models
@@ -96,21 +110,33 @@ if adapters:
 
 # Include tag routers
 # - tags_realtime: For realtime value reads, list, search (used by operational dashboards)
-# - tags_advanced: For enterprise tag config (scaling, deadband, historization)
-# - tags_automation: For formulas, alarms, events, actions (advanced automation)
 if tags_realtime:
     app.include_router(tags_realtime.router, prefix="/api/tags", tags=["tags-realtime"])
 
-if tags_advanced:
-    app.include_router(tags_advanced.router, prefix="/api/tags", tags=["tags-config"])
-
-if tags_automation:
-    app.include_router(tags_automation.router, prefix="/api/automation", tags=["automation"])
+# Formula Engine Routes (local evaluation only)
+if formulas:
+    app.include_router(formulas.router, prefix="/api", tags=["formulas"])
+    logger.info("✅ Formula engine routes mounted at /api/formulas")
 
 # WebSocket Routes for real-time streaming
 if websocket:
     app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
     logger.info("✅ WebSocket routes mounted at /ws")
+
+# Security Routes
+if security:
+    app.include_router(security.router, prefix="/api", tags=["security"])
+    logger.info("✅ Security routes mounted at /api/security")
+
+# Config Sync Routes (Backend → Gateway)
+if config_sync:
+    app.include_router(config_sync.router, prefix="/api", tags=["config-sync"])
+    logger.info("✅ Config sync routes mounted at /api/config")
+
+# Alarm Routes (Gateway is the source of alarms)
+if alarms_routes:
+    app.include_router(alarms_routes.router, prefix="/api/alarms", tags=["alarms"])
+    logger.info("✅ Alarm routes mounted at /api/alarms")
 
 # Mount static files for UI
 static_path = Path(__file__).parent / "static"
@@ -142,6 +168,38 @@ async def api_root():
 async def health():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/api/compression/stats")
+async def get_compression_stats():
+    """
+    Get compression statistics
+
+    Returns SDT (Swinging Door Trending) compression statistics
+    """
+    try:
+        from app.services.compression import get_compressor
+        compressor = get_compressor()
+        return compressor.get_statistics()
+    except ImportError:
+        return {
+            "total_received": 0,
+            "total_archived": 0,
+            "total_compressed": 0,
+            "compression_ratio_percent": 0,
+            "configured_tags": 0,
+            "note": "Compression service not available"
+        }
+    except Exception as e:
+        logger.error(f"Error getting compression stats: {e}")
+        return {
+            "total_received": 0,
+            "total_archived": 0,
+            "total_compressed": 0,
+            "compression_ratio_percent": 0,
+            "configured_tags": 0,
+            "error": str(e)
+        }
 
 
 @app.get("/metrics")

@@ -1,0 +1,203 @@
+# ============================================================================
+# OptiFlow Gateway - Docker Compose (Microservice Architecture)
+# ============================================================================
+#
+# Usage:
+#   Development:
+#     docker-compose -f docker-compose.microservice.yml up
+#
+#   Production:
+#     docker-compose -f docker-compose.microservice.yml -f docker-compose.prod.yml up -d
+#
+#   Stop:
+#     docker-compose -f docker-compose.microservice.yml down
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Gateway Edge Service
+  # ==========================================================================
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile.microservice
+    image: optiflow-gateway:edge
+    container_name: optiflow-gateway-edge
+    hostname: gateway-edge
+
+    # Development mode by default
+    environment:
+      - MODE=development
+      - HOST=0.0.0.0
+      - PORT=8080
+      - GATEWAY_ID=gateway-001
+      - GATEWAY_NAME=OptiFlow Gateway Edge
+      - LOG_LEVEL=info
+
+      # Kafka connection (optional)
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=raw_tags
+
+      # Backend connection (optional)
+      - BACKEND_URL=http://backend:8000
+
+    ports:
+      - "8080:8080"  # REST API + WebSocket
+
+    volumes:
+      # Configuration
+      - ./config:/app/config:ro
+
+      # Data persistence (buffer, cache)
+      - gateway-data:/app/data
+
+      # Logs
+      - gateway-logs:/app/logs
+
+      # Development: Mount source code for hot-reload
+      - ./app:/app/app:ro
+
+    networks:
+      - optiflow-network
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits (adjust based on plant size)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # Kafka (Optional - for cloud integration)
+  # ==========================================================================
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: optiflow-kafka
+    hostname: kafka
+
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+
+    ports:
+      - "9092:9092"
+
+    volumes:
+      - kafka-data:/bitnami/kafka
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # Kafka needs more memory
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+
+  # ==========================================================================
+  # Redis (Optional - for L2 cache)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: optiflow-redis
+    hostname: redis
+
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis-data:/data
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  optiflow-network:
+    driver: bridge
+    name: optiflow-network
+
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  # Gateway data (SQLite buffer, cache)
+  gateway-data:
+    driver: local
+
+  # Gateway logs
+  gateway-logs:
+    driver: local
+
+  # Kafka data
+  kafka-data:
+    driver: local
+
+  # Redis data
+  redis-data:
+    driver: local

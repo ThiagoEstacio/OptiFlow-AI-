@@ -1,0 +1,78 @@
+# ============================================================================
+# OptiFlow Gateway - Kubernetes Ingress
+# ============================================================================
+#
+# Exposes gateway via HTTP/HTTPS with path-based routing.
+#
+# Requirements:
+# - Ingress controller (nginx, traefik, etc.)
+# - TLS certificate (for HTTPS)
+#
+# Access:
+#   http://gateway.plant.local/api/health
+#   ws://gateway.plant.local/ws/alarms
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway-ingress
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+  annotations:
+    # NGINX annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Allow HTTP for local
+
+    # WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: gateway
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"  # 1 hour
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+    # Rate limiting (protect against DoS)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+
+spec:
+  # Ingress class (depends on cluster)
+  ingressClassName: nginx  # or traefik, haproxy
+
+  # TLS (optional - for HTTPS)
+  # tls:
+  #   - hosts:
+  #       - gateway.plant.local
+  #     secretName: gateway-tls-cert
+
+  # Routing rules
+  rules:
+    - host: gateway.plant.local  # Change to your domain
+      http:
+        paths:
+          # API endpoints (REST)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+
+          # WebSocket endpoint
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+
+          # Root endpoint
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080

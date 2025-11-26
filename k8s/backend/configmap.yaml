@@ -1,0 +1,33 @@
+# ============================================================================
+# OptiFlow - Configuration Maps
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: optiflow-config
+  namespace: optiflow
+  labels:
+    app: optiflow
+data:
+  # Kafka Configuration
+  kafka-bootstrap-servers: "kafka-headless.optiflow.svc.cluster.local:9092"
+
+  # InfluxDB Configuration
+  influxdb-url: "http://influxdb.optiflow.svc.cluster.local:8086"
+  influxdb-org: "optiflow"
+  influxdb-bucket: "timeseries"
+
+  # Gateway Configuration
+  gateway-url: "http://optiflow-gateway.optiflow.svc.cluster.local:8080"
+
+  # Consumer Configuration
+  consumer-topic: "raw_tags"
+  consumer-group-id: "optiflow-consumer"
+  consumer-batch-size: "100"
+
+  # Frontend Configuration
+  frontend-api-url: "http://optiflow-backend.optiflow.svc.cluster.local:8000"
+
+  # AI/ML Configuration
+  ollama-url: "http://ollama.optiflow.svc.cluster.local:11434"
+  ollama-model: "qwen3:0.6b"

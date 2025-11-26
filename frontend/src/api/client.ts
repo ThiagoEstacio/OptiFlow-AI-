@@ -398,7 +398,8 @@ class ApiClient {
       const response = await this.client.get<AlarmEvent[]>('/api/v1/alarms/active');
       return response.data;
     }
-    const response = await this.client.get<AlarmEvent[]>('/api/v1/alarms/events/', { params });
+    // For non-active params, use /history endpoint
+    const response = await this.client.get<AlarmEvent[]>('/api/v1/alarms/history', { params });
     return response.data;
   }
 

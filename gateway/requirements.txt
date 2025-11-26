@@ -24,12 +24,18 @@ pyyaml==6.0.1
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
+# Security
+pyjwt==2.8.0
+
 # Local Storage (offline buffer)
 sqlalchemy==2.0.23
 aiosqlite==0.19.0
 
 # Kafka Integration
 aiokafka==0.10.0
+
+# Monitoring
+prometheus_client==0.19.0
 
 # Logging
 loguru==0.7.2

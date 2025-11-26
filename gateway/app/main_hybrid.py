@@ -275,10 +275,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # === IMPORT API ROUTES ===
-from app.api.routes import tags, websocket
+from app.api.routes import tags, websocket, security
 
 # REST API Routes
 app.include_router(tags.router, prefix="/api/tags", tags=["Tags"])
+app.include_router(security.router, prefix="/api", tags=["Security"])
 
 # WebSocket Routes
 app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])

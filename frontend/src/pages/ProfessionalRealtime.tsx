@@ -1,8 +1,10 @@
 /**
- * Professional Real-time Page - Live Industrial Data Monitoring
- * Real-time tag monitoring with WebSocket updates
+ * Professional Real-time Overview - Executive Dashboard
+ *
+ * Overview page showing system health, adapter status, and key metrics.
+ * For detailed tag list, use /realtime/tags
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Container,
@@ -12,144 +14,189 @@ import {
   Chip,
   Avatar,
   IconButton,
-  ToggleButtonGroup,
-  ToggleButton,
-  alpha,
+  Button,
+  LinearProgress,
   useTheme
 } from '@mui/material';
 import { Grid } from '../components/GridWrapper';
 import {
-  Speed,
   Refresh,
-  ViewModule,
-  ViewList,
   Circle,
-  SignalCellularAlt
+  SignalCellularAlt,
+  Memory,
+  Hub,
+  CheckCircle,
+  Warning,
+  ArrowForward,
+  Speed,
+  Thermostat,
+  Water,
+  ElectricBolt
 } from '@mui/icons-material';
 import { GaugeWidget } from '../components/professional/GaugeWidget';
-import { StatWidget } from '../components/professional/StatWidget';
 import { ChartWidget } from '../components/professional/ChartWidget';
-import { useRealtimeData, useWebSocketStatus, SimulatorUpdate } from '../hooks/useRealtimeData';
-import apiClient from '../api/client';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-interface TagData {
-  id: string;
-  name: string;
-  value: number;
-  unit: string;
-  deviceType?: string;
-  quality?: 'good' | 'uncertain' | 'bad';
-}
+// Gateway Edge API URL
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8080';
 
 interface ChartDataPoint {
   time: string;
   value: number;
 }
 
+interface RealtimeTagValue {
+  value: number;
+  quality: string;
+  timestamp: string;
+  address: string;
+  adapter_id: string;
+  protocol: string;
+}
+
+interface GatewayRealtimeAllResponse {
+  count: number;
+  adapters: number;
+  tags: Record<string, RealtimeTagValue>;
+  latency_ms?: number;
+}
+
+interface AdapterInfo {
+  adapter_id: string;
+  adapter_name: string;
+  protocol_type: string;
+  enabled: boolean;
+  connected: boolean;
+  running: boolean;
+  tags_count: number;
+  host: string;
+  port: number;
+}
+
+interface SystemStats {
+  totalTags: number;
+  connectedAdapters: number;
+  totalAdapters: number;
+  goodQualityTags: number;
+  latencyMs: number;
+}
+
 export const ProfessionalRealtime: React.FC = () => {
   const theme = useTheme();
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [tags, setTags] = useState<TagData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [adapters, setAdapters] = useState<AdapterInfo[]>([]);
+  const [stats, setStats] = useState<SystemStats>({
+    totalTags: 0,
+    connectedAdapters: 0,
+    totalAdapters: 0,
+    goodQualityTags: 0,
+    latencyMs: 0
+  });
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // WebSocket connection status
-  const isConnected = useWebSocketStatus();
-
-  // Real-time simulator updates from WebSocket
-  const { data: simulatorData } = useRealtimeData<SimulatorUpdate>('simulator_update');
-
-  // Previous values for trend calculation
-  const [prevValues, setPrevValues] = useState({
-    production_rate: 0,
+  // Key metrics from real-time data
+  const [metrics, setMetrics] = useState({
+    flow: 0,
     temperature: 0,
-    pressure: 0,
+    tankLevel: 0,
     power: 0
   });
 
-  // Load historical chart data on mount
-  useEffect(() => {
-    loadTags();
-    loadHistoricalData();
-  }, []);
+  // Previous values for trend calculation
+  const [prevValues, setPrevValues] = useState({
+    flow: 0,
+    temperature: 0,
+    tankLevel: 0,
+    power: 0
+  });
 
-  // Update chart data when simulator updates arrive
-  useEffect(() => {
-    if (simulatorData?.tags) {
-      const flowValue = simulatorData.tags['SLD01_FLOW_TPH_PV'] || 0;
-      const timestamp = new Date(simulatorData.timestamp);
-
-      setChartData(prev => {
-        const newPoint = {
-          time: timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          value: flowValue
-        };
-
-        // Keep last 20 points (rolling window)
-        const updated = [...prev, newPoint];
-        return updated.slice(-20);
-      });
-    }
-  }, [simulatorData]);
-
-  const loadTags = async () => {
+  // Fetch all data from Gateway Edge
+  const fetchData = useCallback(async () => {
     try {
-      const tagsData = await apiClient.getTags();
-      setTags(tagsData.slice(0, 12) as any); // Show first 12 tags
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading tags:', error);
-      setLoading(false);
-    }
-  };
+      const [realtimeResponse, adaptersResponse] = await Promise.all([
+        axios.get<GatewayRealtimeAllResponse>(`${GATEWAY_URL}/api/tags/realtime/all`),
+        axios.get<AdapterInfo[]>(`${GATEWAY_URL}/api/adapters/`)
+      ]);
 
-  const loadHistoricalData = async () => {
-    try {
-      const response = await apiClient.get(
-        '/api/v1/tags/timeseries/SLD01_FLOW_TPH_PV?start_minutes_ago=5'
-      );
-      const result = response.data;
-      if (result && result.data && result.data.length > 0) {
-        const historicalPoints = result.data.map((point: any) => ({
-          time: new Date(point.timestamp).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-          value: point.value
-        }));
-        setChartData(historicalPoints.slice(-20)); // Keep last 20 points
+      if (realtimeResponse.data?.tags) {
+        setIsConnected(true);
+        setLastUpdate(new Date());
+
+        const realtimeTags = realtimeResponse.data.tags;
+        const tagEntries = Object.entries(realtimeTags);
+
+        // Calculate stats
+        const goodQuality = tagEntries.filter(([_, t]) => t.quality === 'Good').length;
+
+        setStats({
+          totalTags: realtimeResponse.data.count,
+          connectedAdapters: adaptersResponse.data.filter(a => a.connected).length,
+          totalAdapters: adaptersResponse.data.length,
+          goodQualityTags: goodQuality,
+          latencyMs: realtimeResponse.data.latency_ms || 0
+        });
+
+        setAdapters(adaptersResponse.data);
+
+        // Find key metrics by tag name
+        const getTagValue = (name: string) => realtimeTags[name]?.value || 0;
+
+        const pumpFlow = getTagValue('Pump 1 Flow');
+        const pumpTemp = getTagValue('Pump 1 Temperature');
+        const tankLevel = getTagValue('Tank 1 Level');
+        const totalPower = getTagValue('Total Power');
+
+        // Store previous values for trend
+        setPrevValues({
+          flow: metrics.flow,
+          temperature: metrics.temperature,
+          tankLevel: metrics.tankLevel,
+          power: metrics.power
+        });
+
+        // Update metrics
+        setMetrics({
+          flow: pumpFlow,
+          temperature: pumpTemp / 10,
+          tankLevel: tankLevel,
+          power: totalPower
+        });
+
+        // Update chart with flow data
+        const timestamp = new Date();
+        setChartData(prev => {
+          const newPoint = {
+            time: timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            value: pumpFlow
+          };
+          const updated = [...prev, newPoint];
+          return updated.slice(-20);
+        });
       }
     } catch (error) {
-      console.error('Error loading historical data:', error);
+      console.error('Error fetching data:', error);
+      setIsConnected(false);
     }
-  };
+  }, [metrics]);
 
-  // Update tags when simulator data arrives
+  // Initial load and polling
   useEffect(() => {
-    if (simulatorData?.tags && tags.length > 0) {
-      setTags(prev =>
-        prev.map(tag => {
-          const tagValue = simulatorData.tags[tag.id];
-          if (tagValue !== undefined) {
-            return { ...tag, value: tagValue, quality: 'good' as const };
-          }
-          return tag;
-        })
-      );
-    }
-  }, [simulatorData]);
+    fetchData();
+    intervalRef.current = setInterval(fetchData, 2000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
-  // Track previous values for trend calculation
-  useEffect(() => {
-    if (simulatorData?.tags && simulatorData?.status) {
-      setPrevValues({
-        production_rate: simulatorData.tags['SLD01_FLOW_TPH_PV'] || 0,
-        temperature: simulatorData.tags['CORR01_TEMP_C_PV'] || 0,
-        pressure: simulatorData.status.system.warehouse_level_pct || 0,
-        power: simulatorData.tags['SLD01_POWER_KW_PV'] || 0
-      });
-    }
-  }, [simulatorData]);
+  const qualityPercentage = stats.totalTags > 0
+    ? Math.round((stats.goodQualityTags / stats.totalTags) * 100)
+    : 0;
 
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', pb: 4 }}>
@@ -157,7 +204,7 @@ export const ProfessionalRealtime: React.FC = () => {
       <Paper
         elevation={0}
         sx={{
-          background: `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`,
+          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
           color: 'white',
           borderRadius: 0,
           mb: 3
@@ -168,15 +215,14 @@ export const ProfessionalRealtime: React.FC = () => {
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>
                 <Typography variant="h4" fontWeight={700} gutterBottom>
-                  Real-time Monitoring
+                  Real-time Overview
                 </Typography>
                 <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                  Live industrial data streaming and visualization
+                  System health and key performance indicators
                 </Typography>
               </Box>
 
               <Stack direction="row" spacing={2} alignItems="center">
-                {/* Connection Status */}
                 <Chip
                   icon={
                     <Circle
@@ -189,27 +235,16 @@ export const ProfessionalRealtime: React.FC = () => {
                       }}
                     />
                   }
-                  label={isConnected ? 'Live' : 'Disconnected'}
+                  label={isConnected ? 'Gateway Connected' : 'Disconnected'}
                   sx={{
-                    bgcolor: isConnected
-                      ? 'rgba(76, 175, 80, 0.2)'
-                      : 'rgba(255, 255, 255, 0.2)',
+                    bgcolor: isConnected ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 87, 34, 0.3)',
                     color: 'white',
-                    fontWeight: 600,
-                    backdropFilter: 'blur(10px)'
+                    fontWeight: 600
                   }}
                 />
-
-                <Avatar
-                  sx={{
-                    width: 64,
-                    height: 64,
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                >
-                  <SignalCellularAlt sx={{ fontSize: 32 }} />
-                </Avatar>
+                <IconButton onClick={fetchData} sx={{ color: 'white' }}>
+                  <Refresh />
+                </IconButton>
               </Stack>
             </Stack>
           </Box>
@@ -217,51 +252,156 @@ export const ProfessionalRealtime: React.FC = () => {
       </Paper>
 
       <Container maxWidth="xl">
-        {/* Controls */}
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h6" fontWeight={600}>
-            Live Metrics
+        {/* System KPIs */}
+        <Grid container spacing={3} mb={3}>
+          <Grid xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 3, borderRadius: 2, height: '100%' }}>
+              <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+                <Avatar sx={{ bgcolor: theme.palette.primary.light }}>
+                  <Memory />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight={700}>{stats.totalTags}</Typography>
+                  <Typography variant="body2" color="text.secondary">Managed Tags</Typography>
+                </Box>
+              </Stack>
+              <Button
+                size="small"
+                endIcon={<ArrowForward />}
+                onClick={() => navigate('/realtime/tags')}
+              >
+                View All Tags
+              </Button>
+            </Paper>
+          </Grid>
+
+          <Grid xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 3, borderRadius: 2, height: '100%' }}>
+              <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+                <Avatar sx={{ bgcolor: theme.palette.success.light }}>
+                  <Hub />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight={700}>
+                    {stats.connectedAdapters}/{stats.totalAdapters}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">Adapters Online</Typography>
+                </Box>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={(stats.connectedAdapters / Math.max(stats.totalAdapters, 1)) * 100}
+                color="success"
+                sx={{ height: 8, borderRadius: 4 }}
+              />
+            </Paper>
+          </Grid>
+
+          <Grid xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 3, borderRadius: 2, height: '100%' }}>
+              <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+                <Avatar sx={{ bgcolor: qualityPercentage > 90 ? theme.palette.success.light : theme.palette.warning.light }}>
+                  <CheckCircle />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight={700}>{qualityPercentage}%</Typography>
+                  <Typography variant="body2" color="text.secondary">Signal Quality</Typography>
+                </Box>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={qualityPercentage}
+                color={qualityPercentage > 90 ? 'success' : 'warning'}
+                sx={{ height: 8, borderRadius: 4 }}
+              />
+            </Paper>
+          </Grid>
+
+          <Grid xs={12} sm={6} md={3}>
+            <Paper sx={{ p: 3, borderRadius: 2, height: '100%' }}>
+              <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+                <Avatar sx={{ bgcolor: theme.palette.info.light }}>
+                  <SignalCellularAlt />
+                </Avatar>
+                <Box>
+                  <Typography variant="h4" fontWeight={700}>
+                    {stats.latencyMs.toFixed(1)}ms
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">Response Time</Typography>
+                </Box>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Last update: {lastUpdate?.toLocaleTimeString() || 'N/A'}
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* Adapters Status */}
+        <Paper sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+          <Typography variant="h6" fontWeight={600} mb={2}>
+            Adapter Status
           </Typography>
-
-          <Stack direction="row" spacing={2}>
-            <IconButton onClick={loadTags} color="primary">
-              <Refresh />
-            </IconButton>
-
-            <ToggleButtonGroup
-              value={viewMode}
-              exclusive
-              onChange={(e, newMode) => newMode && setViewMode(newMode)}
-              size="small"
-            >
-              <ToggleButton value="grid">
-                <ViewModule />
-              </ToggleButton>
-              <ToggleButton value="list">
-                <ViewList />
-              </ToggleButton>
-            </ToggleButtonGroup>
-          </Stack>
-        </Stack>
+          <Grid container spacing={2}>
+            {adapters.map((adapter) => (
+              <Grid key={adapter.adapter_id} xs={12} sm={6} md={4}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderColor: adapter.connected ? 'success.main' : 'error.main',
+                    borderWidth: 2
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Box>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Chip
+                          size="small"
+                          label={adapter.protocol_type.toUpperCase()}
+                          color={adapter.protocol_type === 'modbus' ? 'primary' : 'secondary'}
+                        />
+                        {adapter.connected ? (
+                          <CheckCircle fontSize="small" color="success" />
+                        ) : (
+                          <Warning fontSize="small" color="error" />
+                        )}
+                      </Stack>
+                      <Typography variant="subtitle1" fontWeight={600} mt={1}>
+                        {adapter.adapter_name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {adapter.host}:{adapter.port}
+                      </Typography>
+                    </Box>
+                    <Box textAlign="right">
+                      <Typography variant="h5" fontWeight={700} color="primary">
+                        {adapter.tags_count}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">tags</Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
 
         {/* Key Metrics - Gauges */}
+        <Typography variant="h6" fontWeight={600} mb={2}>
+          Key Process Metrics
+        </Typography>
         <Grid container spacing={3} mb={3}>
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Shiploader Flow"
-              value={simulatorData?.tags['SLD01_FLOW_TPH_PV'] || 0}
+              title="Pump 1 Flow"
+              value={metrics.flow}
               min={0}
-              max={2500}
-              unit="t/h"
-              thresholds={{ low: 1000, medium: 1500, high: 2000 }}
-              trend={
-                simulatorData?.tags['SLD01_FLOW_TPH_PV'] ?? 0 > prevValues.production_rate
-                  ? 'up'
-                  : simulatorData?.tags['SLD01_FLOW_TPH_PV'] ?? 0 < prevValues.production_rate
-                  ? 'down'
-                  : 'neutral'
-              }
-              trendValue={`${simulatorData?.tags['SLD01_SETPOINT_TPH_PV']?.toFixed(0) || 0} t/h target`}
+              max={200}
+              unit="L/min"
+              thresholds={{ low: 80, medium: 120, high: 160 }}
+              trend={metrics.flow > prevValues.flow ? 'up' : metrics.flow < prevValues.flow ? 'down' : 'neutral'}
+              trendValue="150 L/min target"
               subtitle="Production rate"
               size="medium"
             />
@@ -269,39 +409,27 @@ export const ProfessionalRealtime: React.FC = () => {
 
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Belt Temperature"
-              value={simulatorData?.tags['CORR01_TEMP_C_PV'] || 0}
+              title="Pump Temperature"
+              value={metrics.temperature}
               min={0}
               max={100}
               unit="°C"
-              thresholds={{ low: 50, medium: 70, high: 85 }}
-              trend={
-                simulatorData?.tags['CORR01_TEMP_C_PV'] ?? 0 > prevValues.temperature
-                  ? 'up'
-                  : simulatorData?.tags['CORR01_TEMP_C_PV'] ?? 0 < prevValues.temperature
-                  ? 'down'
-                  : 'neutral'
-              }
-              subtitle="Conveyor CORR01"
+              thresholds={{ low: 40, medium: 60, high: 80 }}
+              trend={metrics.temperature > prevValues.temperature ? 'up' : metrics.temperature < prevValues.temperature ? 'down' : 'neutral'}
+              subtitle="Pump 1 Motor"
               size="medium"
             />
           </Grid>
 
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Warehouse Level"
-              value={simulatorData?.status?.system?.warehouse_level_pct || 0}
+              title="Tank 1 Level"
+              value={metrics.tankLevel}
               min={0}
               max={100}
               unit="%"
               thresholds={{ low: 30, medium: 60, high: 85 }}
-              trend={
-                simulatorData?.status?.system?.warehouse_level_pct ?? 0 > prevValues.pressure
-                  ? 'up'
-                  : simulatorData?.status?.system?.warehouse_level_pct ?? 0 < prevValues.pressure
-                  ? 'down'
-                  : 'neutral'
-              }
+              trend={metrics.tankLevel > prevValues.tankLevel ? 'up' : metrics.tankLevel < prevValues.tankLevel ? 'down' : 'neutral'}
               subtitle="Storage capacity"
               size="medium"
             />
@@ -310,66 +438,37 @@ export const ProfessionalRealtime: React.FC = () => {
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
               title="Total Power"
-              value={simulatorData?.tags['SLD01_POWER_KW_PV'] || 0}
+              value={metrics.power}
               min={0}
-              max={500}
+              max={1000}
               unit="kW"
-              thresholds={{ low: 200, medium: 350, high: 450 }}
-              trend={
-                simulatorData?.tags['SLD01_POWER_KW_PV'] ?? 0 > prevValues.power
-                  ? 'up'
-                  : simulatorData?.tags['SLD01_POWER_KW_PV'] ?? 0 < prevValues.power
-                  ? 'down'
-                  : 'neutral'
-              }
-              trendValue={`${simulatorData?.status?.system?.kWh_per_ton?.toFixed(2) || 0} kWh/t`}
-              subtitle="Shiploader power"
+              thresholds={{ low: 400, medium: 600, high: 800 }}
+              trend={metrics.power > prevValues.power ? 'up' : metrics.power < prevValues.power ? 'down' : 'neutral'}
+              trendValue="System consumption"
+              subtitle="Plant power"
               size="medium"
             />
           </Grid>
         </Grid>
 
         {/* Live Chart */}
-        <Grid container spacing={3} mb={3}>
+        <Grid container spacing={3}>
           <Grid xs={12}>
             <ChartWidget
-              title="Production Rate Trend"
-              subtitle="Last 5 minutes"
+              title="Flow Rate Trend"
+              subtitle="Real-time data from Gateway Edge"
               data={chartData}
               type="line"
               dataKey="value"
               xAxisKey="time"
-              color="success"
+              color="primary"
               height={300}
-              trend="up"
-              trendValue="+5.2%"
+              trend={metrics.flow > prevValues.flow ? 'up' : metrics.flow < prevValues.flow ? 'down' : 'neutral'}
+              trendValue={lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}
               showGrid
             />
           </Grid>
         </Grid>
-
-        {/* Tag Grid */}
-        <Paper sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h6" fontWeight={600} mb={3}>
-            All Tags ({tags.length})
-          </Typography>
-
-          <Grid container spacing={2}>
-            {tags.map((tag) => (
-              <Grid key={tag.id} xs={12} sm={6} md={4} lg={3}>
-                <StatWidget
-                  title={tag.name}
-                  value={tag.value?.toFixed(1) || '0.0'}
-                  icon={<Speed />}
-                  color="primary"
-                  subtitle={tag.unit || ''}
-                  footer={tag.deviceType || 'Sensor'}
-                  loading={loading}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
       </Container>
     </Box>
   );

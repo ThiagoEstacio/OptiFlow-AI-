@@ -1,0 +1,77 @@
+# ============================================================================
+# OptiFlow Gateway - Development Overlay
+# ============================================================================
+#
+# Deploy with:
+#   kubectl apply -k gateway/k8s/overlays/development
+# ============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: optiflow-gateway-dev
+
+# Inherit from base
+resources:
+  - ../../
+
+# Namespace override
+nameSuffix: -dev
+
+# Labels for development
+commonLabels:
+  environment: development
+
+# Image override (use latest for dev)
+images:
+  - name: optiflow-gateway
+    newTag: latest
+
+# Patches for development
+patches:
+  # Reduce resources for development
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gateway
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: gateway
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                env:
+                  - name: MODE
+                    value: "development"
+                  - name: LOG_LEVEL
+                    value: "debug"
+
+  # Disable HPA for development
+  - patch: |
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: gateway-hpa
+
+  # Disable NetworkPolicy for development
+  - patch: |
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: gateway-network-policy
+
+  - patch: |
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: default-deny-all

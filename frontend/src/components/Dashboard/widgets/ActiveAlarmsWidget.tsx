@@ -25,9 +25,8 @@ const ActiveAlarmsWidget: React.FC<ActiveAlarmsWidgetProps> = ({ widget }) => {
         setError(null);
 
         // Fetch active alarms from API
-        const response = await apiClient.get('/api/v1/alarms/events', {
+        const response = await apiClient.get('/api/v1/alarms/active', {
           params: {
-            state: 'active', // Only active alarms
             limit: 10, // Limit to recent 10
           },
         });

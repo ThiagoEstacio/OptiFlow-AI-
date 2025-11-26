@@ -116,41 +116,38 @@ async def get_latest_value(
                 logger.debug(f"Cache HIT for {tag_id} (age: {age:.2f}s)")
                 return cached_value
         
-        # Check if tag_id is a UUID or a name
+        # Check if tag_id is a UUID or a name/identifier
         actual_tag_id = tag_id
-        
-        # If not a valid UUID format, try to find by name
+
+        # If not a valid UUID format, try to find by name in PostgreSQL
+        # If not found, use the tag_id directly (for Gateway-generated IDs like pump1_flow, tag_xxxxx)
         try:
             UUID(tag_id)
         except ValueError:
-            # It's a name, lookup the UUID
+            # It's a name/identifier, try to lookup the UUID in PostgreSQL
             result = await db.execute(
                 select(Tag).where(Tag.name == tag_id)
             )
             tag = result.scalars().first()  # Get first match if duplicates exist
-            
+
             if tag:
                 actual_tag_id = str(tag.id)
                 logger.debug(f"Resolved tag name '{tag_id}' to UUID '{actual_tag_id}'")
             else:
-                logger.warning(f"Tag not found with name: {tag_id}")
-                response = {
-                    "value": None,
-                    "timestamp": now.isoformat() + "Z",
-                    "quality": "tag_not_found"
-                }
-                # Cache negative result briefly
-                _latest_value_cache[tag_id] = (response, now)
-                return response
+                # Tag not found in PostgreSQL - use tag_id directly
+                # This supports Gateway-generated IDs (pump1_flow, tag_xxxxxx)
+                # that are stored directly in InfluxDB without PostgreSQL registration
+                logger.debug(f"Tag '{tag_id}' not in PostgreSQL, querying InfluxDB directly")
+                actual_tag_id = tag_id
         
         # Query last 10 seconds from InfluxDB
         end_time = now
         start_time = end_time - timedelta(seconds=10)
-        
-        data = influxdb_service.query_tag_data(
+
+        data = await influxdb_service.query_tag_data(
             tag_id=actual_tag_id,
-            start_time=start_time,
-            end_time=end_time
+            start=start_time,
+            end=end_time
         )
         
         if data and len(data) > 0:
@@ -204,18 +201,16 @@ async def query_tag_data(
     Query historical data for a tag
     """
     try:
-        data = influxdb_service.query_tag_data(
-            str(tag_id),
-            start_time,
-            end_time,
-            aggregation,
-            interval
+        data = await influxdb_service.query_tag_data(
+            tag_id=str(tag_id),
+            start=start_time,
+            end=end_time or datetime.utcnow()
         )
 
         return {
             "tag_id": str(tag_id),
             "data": data,
-            "count": len(data)
+            "count": len(data) if data else 0
         }
     except Exception as e:
         return {

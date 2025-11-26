@@ -1,0 +1,496 @@
+# ============================================================================
+# OptiFlow Platform - Full Stack Docker Compose
+# ============================================================================
+#
+# Arquitetura completa:
+#   Simulator (PLC Virtual) → Gateway → Kafka → Backend → Frontend
+#
+# Usage:
+#   # Desenvolvimento/Demo
+#   docker-compose -f docker-compose.full.yml up
+#
+#   # Produção (com builds)
+#   docker-compose -f docker-compose.full.yml up --build -d
+#
+#   # Para tudo
+#   docker-compose -f docker-compose.full.yml down
+#
+# Access:
+#   - Frontend: http://localhost:3000
+#   - Backend API: http://localhost:8000
+#   - Gateway API: http://localhost:8080
+#   - Simulator API: http://localhost:4850
+#   - Simulator OPC-UA: opc.tcp://localhost:4840
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # SIMULATOR - Virtual PLC (Grain Terminal)
+  # ==========================================================================
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    image: optiflow-simulator:latest
+    container_name: optiflow-simulator
+    hostname: simulator
+
+    ports:
+      - "4840:4840"  # OPC-UA server (Gateway conecta)
+      - "4850:4850"  # REST API (controle)
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:4850/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # GATEWAY - Edge Computing (Protocol Adapters + Local API)
+  # ==========================================================================
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile.microservice
+    image: optiflow-gateway:edge
+    container_name: optiflow-gateway
+    hostname: gateway
+
+    ports:
+      - "8080:8080"  # REST API + WebSocket
+
+    environment:
+      - MODE=production
+      - WORKERS=2
+      - GATEWAY_ID=gateway-001
+      - GATEWAY_NAME=OptiFlow Gateway (Demo)
+      - LOG_LEVEL=info
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=raw_tags
+
+    volumes:
+      - ./gateway/config:/app/config:ro
+      - gateway-data:/app/data
+
+    networks:
+      - optiflow-network
+
+    depends_on:
+      - simulator
+      - kafka
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # KAFKA - Message Broker
+  # ==========================================================================
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: optiflow-kafka
+    hostname: kafka
+
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+
+    ports:
+      - "9092:9092"
+
+    volumes:
+      - kafka-data:/bitnami/kafka
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # BACKEND - FastAPI Application
+  # ==========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: optiflow-backend:latest
+    container_name: optiflow-backend
+    hostname: backend
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      - DATABASE_URL=postgresql://optiflow_user:optiflow_password@postgres:5432/optiflow
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=optiflow-influx-token
+      - INFLUXDB_ORG=optiflow
+      - INFLUXDB_BUCKET=optiflow
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - OLLAMA_BASE_URL=http://ollama:11434
+
+    volumes:
+      - ./backend/app:/app/app:ro  # Dev: hot-reload
+
+    networks:
+      - optiflow-network
+
+    depends_on:
+      - postgres
+      - influxdb
+      - kafka
+      - redis
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # POSTGRES - Relational Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: optiflow-postgres
+    hostname: postgres
+
+    environment:
+      - POSTGRES_USER=optiflow_user
+      - POSTGRES_PASSWORD=optiflow_password
+      - POSTGRES_DB=optiflow
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U optiflow_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # INFLUXDB - Time-Series Database
+  # ==========================================================================
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: optiflow-influxdb
+    hostname: influxdb
+
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=optiflow123
+      - DOCKER_INFLUXDB_INIT_ORG=optiflow
+      - DOCKER_INFLUXDB_INIT_BUCKET=optiflow
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=optiflow-influx-token
+
+    ports:
+      - "8086:8086"
+
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # REDIS - Cache & Session Store
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: optiflow-redis
+    hostname: redis
+
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis-data:/data
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # OLLAMA - LLM Server (AI Agent)
+  # ==========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: optiflow-ollama
+    hostname: ollama
+
+    ports:
+      - "11434:11434"
+
+    volumes:
+      - ollama-data:/root/.ollama
+
+    networks:
+      - optiflow-network
+
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 8G
+        reservations:
+          cpus: '1.0'
+          memory: 4G
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ==========================================================================
+  # FRONTEND - React Application
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: optiflow-frontend:latest
+    container_name: optiflow-frontend
+    hostname: frontend
+
+    ports:
+      - "3000:80"
+
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_GATEWAY_URL=http://localhost:8080
+      - REACT_APP_WS_URL=ws://localhost:8080/ws/alarms
+
+    networks:
+      - optiflow-network
+
+    depends_on:
+      - backend
+      - gateway
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+# ==============================================================================
+# NETWORKS
+# ==============================================================================
+networks:
+  optiflow-network:
+    driver: bridge
+    name: optiflow-network
+
+
+# ==============================================================================
+# VOLUMES
+# ==============================================================================
+volumes:
+  # Gateway
+  gateway-data:
+    driver: local
+
+  # Kafka
+  kafka-data:
+    driver: local
+
+  # PostgreSQL
+  postgres-data:
+    driver: local
+
+  # InfluxDB
+  influxdb-data:
+    driver: local
+
+  # Redis
+  redis-data:
+    driver: local
+
+  # Ollama
+  ollama-data:
+    driver: local

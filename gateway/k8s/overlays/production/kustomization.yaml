@@ -1,0 +1,100 @@
+# ============================================================================
+# OptiFlow Gateway - Production Overlay
+# ============================================================================
+#
+# Deploy with:
+#   kubectl apply -k gateway/k8s/overlays/production
+# ============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: optiflow-gateway
+
+# Inherit from base
+resources:
+  - ../../
+
+# Labels for production
+commonLabels:
+  environment: production
+
+# Image override (use specific version for production)
+images:
+  - name: optiflow-gateway
+    newTag: v2.0.0
+
+# Patches for production
+patches:
+  # Production-ready configuration
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gateway
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: gateway
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 1Gi
+                  limits:
+                    cpu: 4000m
+                    memory: 4Gi
+                env:
+                  - name: MODE
+                    value: "production"
+                  - name: LOG_LEVEL
+                    value: "info"
+                  - name: WORKERS
+                    value: "8"
+            # Node affinity for production (dedicated nodes)
+            affinity:
+              nodeAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: node-role.kubernetes.io/gateway
+                          operator: In
+                          values:
+                            - "true"
+              # Anti-affinity (spread across nodes)
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app: optiflow
+                          component: gateway
+                      topologyKey: kubernetes.io/hostname
+
+  # Production HPA settings
+  - patch: |
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: gateway-hpa
+      spec:
+        minReplicas: 2
+        maxReplicas: 10
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 60
+
+  # Production PDB settings
+  - patch: |
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: gateway-pdb
+      spec:
+        minAvailable: 2

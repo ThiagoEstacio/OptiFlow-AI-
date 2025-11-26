@@ -1,0 +1,107 @@
+# ============================================================================
+# OptiFlow Gateway - Horizontal Pod Autoscaler
+# ============================================================================
+#
+# Automatically scales gateway pods based on CPU/memory utilization.
+#
+# For edge deployments (single node):
+#   - Usually set replicas to 1 (no scaling)
+#   - HPA disabled or set minReplicas=maxReplicas=1
+#
+# For cloud deployments:
+#   - Enable HPA with appropriate thresholds
+#   - Ensure stateless operation (no local SQLite buffer)
+#
+# Requirements:
+#   - metrics-server installed in cluster
+#   - Resource requests defined in deployment
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-hpa
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+
+  # Scaling limits
+  minReplicas: 1  # Minimum pods
+  maxReplicas: 5  # Maximum pods (adjust based on capacity)
+
+  # Scaling metrics
+  metrics:
+    # Scale based on CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70  # Scale up when >70% CPU
+
+    # Scale based on memory utilization
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80  # Scale up when >80% memory
+
+  # Scaling behavior (prevent flapping)
+  behavior:
+    # Scale up behavior
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Wait 60s before scaling up
+      policies:
+        - type: Pods
+          value: 2        # Max 2 pods at a time
+          periodSeconds: 60
+        - type: Percent
+          value: 100      # Max 100% increase
+          periodSeconds: 60
+      selectPolicy: Max
+
+    # Scale down behavior (slower than scale up)
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
+      policies:
+        - type: Pods
+          value: 1        # Remove 1 pod at a time
+          periodSeconds: 120
+        - type: Percent
+          value: 25       # Max 25% decrease
+          periodSeconds: 120
+      selectPolicy: Min
+
+---
+# ============================================================================
+# Pod Disruption Budget (for HA deployments)
+# ============================================================================
+#
+# Ensures minimum availability during voluntary disruptions
+# (node drain, rolling updates, etc.)
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway-pdb
+  namespace: optiflow-gateway
+  labels:
+    app: optiflow
+    component: gateway
+
+spec:
+  # Minimum available pods (at least 1 must be running)
+  minAvailable: 1
+  # Or use maxUnavailable: 1
+
+  selector:
+    matchLabels:
+      app: optiflow
+      component: gateway

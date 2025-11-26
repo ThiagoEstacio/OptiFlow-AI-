@@ -113,6 +113,7 @@ def get_config_path():
 async def list_adapters(
     protocol: Optional[str] = Query(None, description="Filter by protocol type"),
     enabled_only: bool = Query(False, description="Show only enabled adapters"),
+    verify_connection: bool = Query(False, description="Verify actual connection with health check"),
     pm=Depends(get_protocol_manager)
 ):
     """
@@ -121,6 +122,7 @@ async def list_adapters(
     **Query Parameters**:
     - `protocol`: Filter by protocol type (opcua, modbus, mqtt)
     - `enabled_only`: Show only enabled adapters
+    - `verify_connection`: Perform actual health check to verify connection status
 
     **Returns**: List of adapter configurations
     """
@@ -137,6 +139,19 @@ async def list_adapters(
         # Get adapter_name from extra_config or use adapter_id
         adapter_name = adapter.config.extra_config.get('adapter_name', adapter_id)
 
+        # Verify actual connection status if requested
+        actual_connected = adapter.connected
+        if verify_connection and adapter.connected:
+            try:
+                # Perform actual health check
+                if hasattr(adapter, 'health_check'):
+                    actual_connected = await adapter.health_check()
+                    if not actual_connected:
+                        logger.warning(f"⚠️  Adapter '{adapter_id}' reports connected but health check failed")
+            except Exception as e:
+                logger.error(f"❌ Health check error for '{adapter_id}': {e}")
+                actual_connected = False
+
         adapters_list.append(AdapterResponse(
             adapter_id=adapter_id,
             adapter_name=adapter_name,
@@ -144,7 +159,7 @@ async def list_adapters(
             enabled=adapter.config.enabled,
             host=adapter.config.host,
             port=adapter.config.port,
-            connected=adapter.connected,
+            connected=actual_connected,
             running=adapter.running,
             tags_count=len(adapter.config.tags),
             scan_rate_ms=adapter.config.scan_rate_ms,
@@ -602,6 +617,99 @@ async def get_adapter_statistics(
         "endpoint": f"{adapter.config.host}:{adapter.config.port}",
         "scan_rate_ms": adapter.config.scan_rate_ms
     }
+
+
+@router.get("/{adapter_id}/health")
+async def health_check_adapter(
+    adapter_id: str,
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Perform real health check on adapter connection
+
+    **IMPORTANT**: This endpoint performs an actual read from the device
+    to verify the connection is truly working, not just reported as connected.
+
+    **Path Parameters**:
+    - `adapter_id`: Adapter to health check
+
+    **Returns**: Actual health status with verification
+    """
+    adapter = pm.adapters.get(adapter_id)
+
+    if not adapter:
+        raise HTTPException(404, f"Adapter '{adapter_id}' not found")
+
+    # Get adapter_name from extra_config or use adapter_id as fallback
+    adapter_name = adapter.config.extra_config.get('adapter_name', adapter_id)
+
+    result = {
+        "adapter_id": adapter_id,
+        "adapter_name": adapter_name,
+        "protocol": adapter.config.protocol_type,
+        "reported_connected": adapter.connected,
+        "reported_running": adapter.running,
+        "verified_connected": False,
+        "can_read_data": False,
+        "message": "",
+        "tags_readable": 0,
+        "tags_total": len(adapter.config.tags)
+    }
+
+    # Check if adapter reports connected
+    if not adapter.connected:
+        result["message"] = "Adapter reports disconnected"
+        return result
+
+    if not adapter.running:
+        result["message"] = "Adapter is not running"
+        return result
+
+    # Perform actual health check
+    try:
+        if hasattr(adapter, 'health_check'):
+            health_ok = await adapter.health_check()
+            result["verified_connected"] = health_ok
+
+            if not health_ok:
+                result["message"] = "Health check failed - connection may be stale"
+                # Update adapter status to reflect reality
+                adapter.connected = False
+                return result
+        else:
+            # No health check method - assume connected status is accurate
+            result["verified_connected"] = adapter.connected
+
+    except Exception as e:
+        result["message"] = f"Health check error: {str(e)}"
+        result["verified_connected"] = False
+        adapter.connected = False
+        return result
+
+    # Try to actually read some data to verify we can communicate
+    try:
+        if hasattr(adapter, 'read_all_discovered_tags'):
+            tags_data = await adapter.read_all_discovered_tags()
+            readable_count = sum(1 for t in tags_data if t.get('connected', False))
+            result["can_read_data"] = readable_count > 0
+            result["tags_readable"] = readable_count
+            result["message"] = f"Verified: {readable_count}/{len(tags_data)} tags readable"
+        elif hasattr(adapter, 'read_tags'):
+            tags_data = await adapter.read_tags()
+            readable_count = sum(1 for t in tags_data if t.quality == 'good')
+            result["can_read_data"] = readable_count > 0
+            result["tags_readable"] = readable_count
+            result["message"] = f"Verified: {readable_count}/{len(tags_data)} tags readable"
+        else:
+            result["can_read_data"] = result["verified_connected"]
+            result["message"] = "Connection verified (no read method available)"
+
+    except Exception as e:
+        result["can_read_data"] = False
+        result["message"] = f"Data read failed: {str(e)}"
+        logger.error(f"❌ Data read verification failed for '{adapter_id}': {e}")
+
+    return result
 
 
 @router.post("/{adapter_id}/discover")

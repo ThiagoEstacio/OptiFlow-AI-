@@ -176,6 +176,64 @@ async def get_formula_examples():
     }
 
 
+# ==================== FORMULA ENGINE STATUS ====================
+
+@router.get("/formulas/engine/status")
+async def get_formula_engine_status():
+    """
+    Get Formula Engine status and statistics
+
+    Returns engine state, registered formulas count, and performance metrics.
+    """
+    from app.services.formula_engine import get_formula_engine
+
+    engine = get_formula_engine()
+    stats = engine.get_stats()
+
+    return {
+        "status": "running",
+        "engine_stats": stats,
+        "formulas": engine.list_formulas()
+    }
+
+
+@router.post("/formulas/engine/evaluate-all")
+async def evaluate_all_formulas():
+    """
+    Manually trigger evaluation of all registered formulas
+
+    Useful for testing or forcing recalculation.
+    """
+    from app.services.formula_engine import get_formula_engine
+
+    engine = get_formula_engine()
+    await engine.evaluate_all()
+
+    return {
+        "success": True,
+        "message": "All formulas evaluated",
+        "stats": engine.get_stats()
+    }
+
+
+@router.get("/formulas/{tag_id}/info")
+async def get_formula_info(tag_id: str):
+    """
+    Get detailed information about a specific formula
+
+    Includes expression, input tags, current value, and dependents.
+    """
+    from app.services.formula_engine import get_formula_engine
+
+    engine = get_formula_engine()
+    info = engine.get_formula_info(tag_id)
+
+    if not info:
+        raise HTTPException(404, f"No formula registered for tag {tag_id}")
+
+    return info
+
+
 # ==================== ADVANCED ALARMS ====================
 
 class AdvancedAlarmCreateRequest(BaseModel):
@@ -397,6 +455,32 @@ async def list_tag_events(tag_id: str):
     }
 
 
+@router.delete("/tags/{tag_id}/events/{trigger_id}")
+async def delete_event_trigger(tag_id: str, trigger_id: str):
+    """Delete an event trigger"""
+    tm = get_tag_manager()
+    tag = await tm.get_tag(tag_id)
+
+    if not tag:
+        raise HTTPException(404, f"Tag {tag_id} not found")
+
+    # Find and remove trigger
+    original_count = len(tag.event_triggers)
+    tag.event_triggers = [t for t in tag.event_triggers if t.trigger_id != trigger_id]
+
+    if len(tag.event_triggers) == original_count:
+        raise HTTPException(404, f"Event trigger {trigger_id} not found")
+
+    await tm.update_tag(tag_id, {"event_triggers": tag.event_triggers})
+
+    return {
+        "success": True,
+        "tag_id": tag_id,
+        "trigger_id": trigger_id,
+        "message": "Event trigger deleted"
+    }
+
+
 # ==================== AUTOMATED ACTIONS ====================
 
 class ActionCreateRequest(BaseModel):
@@ -532,6 +616,45 @@ async def list_tag_actions(tag_id: str):
         "tag_id": tag_id,
         "actions": [a.dict() for a in tag.actions],
         "total_actions": len(tag.actions)
+    }
+
+
+@router.delete("/tags/{tag_id}/actions/{action_id}")
+async def delete_action(tag_id: str, action_id: str):
+    """Delete an automated action"""
+    tm = get_tag_manager()
+    tag = await tm.get_tag(tag_id)
+
+    if not tag:
+        raise HTTPException(404, f"Tag {tag_id} not found")
+
+    # Find and remove action
+    original_count = len(tag.actions)
+    tag.actions = [a for a in tag.actions if a.action_id != action_id]
+
+    if len(tag.actions) == original_count:
+        raise HTTPException(404, f"Action {action_id} not found")
+
+    # Also remove action from any triggers/alarms that reference it
+    for trigger in tag.event_triggers:
+        if action_id in trigger.action_ids:
+            trigger.action_ids.remove(action_id)
+
+    for alarm in tag.advanced_alarms:
+        if action_id in alarm.action_ids:
+            alarm.action_ids.remove(action_id)
+
+    await tm.update_tag(tag_id, {
+        "actions": tag.actions,
+        "event_triggers": tag.event_triggers,
+        "advanced_alarms": tag.advanced_alarms
+    })
+
+    return {
+        "success": True,
+        "tag_id": tag_id,
+        "action_id": action_id,
+        "message": "Action deleted"
     }
 
 

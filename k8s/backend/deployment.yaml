@@ -1,0 +1,157 @@
+# ============================================================================
+# OptiFlow Backend - Kubernetes Deployment
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: optiflow-backend
+  namespace: optiflow
+  labels:
+    app: optiflow
+    component: backend
+    tier: api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: optiflow
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: optiflow
+        component: backend
+        tier: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/api/v1/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: backend
+          image: optiflow-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: optiflow-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: optiflow-secrets
+                  key: redis-url
+            - name: INFLUXDB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: optiflow-config
+                  key: influxdb-url
+            - name: INFLUXDB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: optiflow-secrets
+                  key: influxdb-token
+            - name: INFLUXDB_ORG
+              value: "optiflow"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: optiflow-config
+                  key: kafka-bootstrap-servers
+            - name: GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: optiflow-config
+                  key: gateway-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: optiflow-secrets
+                  key: secret-key
+            - name: CONSUMER_ENABLED
+              value: "true"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: optiflow-models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: optiflow-backend
+  namespace: optiflow
+  labels:
+    app: optiflow
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: optiflow
+    component: backend
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: optiflow-backend-hpa
+  namespace: optiflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: optiflow-backend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

@@ -15,6 +15,7 @@ from app.models.tag_config import (
     DataType, QualityCode, ScalingMode, DeadbandType,
     HistorianMode, PREDEFINED_TEMPLATES
 )
+from app.services.formula_engine import get_formula_engine
 
 
 class TagManager:
@@ -46,10 +47,29 @@ class TagManager:
         """Initialize tag manager"""
         try:
             await self._load_config()
+
+            # Register formulas with the formula engine
+            await self._register_formulas()
+
             logger.info(f"✅ Tag Manager initialized - {len(self.tags)} tags, {len(self.groups)} groups, {len(self.templates)} templates")
         except Exception as e:
             logger.error(f"❌ Failed to initialize Tag Manager: {e}", exc_info=True)
             raise
+
+    async def _register_formulas(self):
+        """Register all tag formulas with the formula engine"""
+        formula_engine = get_formula_engine()
+        registered_count = 0
+
+        for tag_id, tag in self.tags.items():
+            if tag.formula and tag.formula.enabled:
+                if formula_engine.register_formula(tag_id, tag.formula):
+                    registered_count += 1
+                else:
+                    logger.warning(f"Failed to register formula for {tag_id} (cycle detected?)")
+
+        if registered_count > 0:
+            logger.info(f"📊 Registered {registered_count} calculated tag formulas")
 
     async def _load_config(self):
         """Load tag configuration from file"""
@@ -404,6 +424,18 @@ class TagManager:
         if should_publish:
             self.tag_values[tag_id] = processed_value
             self.last_published[tag_id] = timestamp
+
+            # Notify formula engine of value change (for calculated tags)
+            try:
+                formula_engine = get_formula_engine()
+                formula_engine.update_tag_value(
+                    tag.tag_name,
+                    processed_value,
+                    quality=str(quality),
+                    timestamp=timestamp
+                )
+            except Exception as e:
+                logger.debug(f"Formula engine update failed: {e}")
 
         # Update tag statistics
         tag.current_value = processed_value

@@ -1,0 +1,18 @@
+# ============================================================================
+# OptiFlow - Kubernetes Namespaces
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: optiflow
+  labels:
+    app.kubernetes.io/name: optiflow
+    app.kubernetes.io/part-of: optiflow-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: optiflow-monitoring
+  labels:
+    app.kubernetes.io/name: optiflow-monitoring
+    app.kubernetes.io/part-of: optiflow-platform

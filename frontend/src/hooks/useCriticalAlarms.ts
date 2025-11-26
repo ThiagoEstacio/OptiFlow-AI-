@@ -35,7 +35,7 @@ export const useCriticalAlarms = (): UseCriticalAlarmsReturn => {
   // Fetch active critical alarms from backend
   const fetchCriticalAlarms = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/v1/alarms/events?state=ACTIVE');
+      const response = await apiClient.get('/api/v1/alarms/active');
       const alarms = response.data || [];
 
       // Filter for CRITICAL and HIGH severity only
@@ -125,7 +125,25 @@ export const useCriticalAlarms = (): UseCriticalAlarmsReturn => {
   useEffect(() => {
     const handleWebSocketMessage = (event: MessageEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        // Skip messages from browser extensions or other sources
+        if (event.origin && event.origin !== window.location.origin) {
+          return;
+        }
+
+        // Handle both string and object data
+        let data: any;
+        if (typeof event.data === 'string') {
+          // Only try to parse if it looks like JSON
+          if (event.data.startsWith('{') || event.data.startsWith('[')) {
+            data = JSON.parse(event.data);
+          } else {
+            return; // Not JSON, skip
+          }
+        } else if (typeof event.data === 'object' && event.data !== null) {
+          data = event.data;
+        } else {
+          return; // Unknown format, skip
+        }
 
         // Handle alarm events
         if (data.type === 'alarm_event' && data.alarm) {
@@ -160,8 +178,8 @@ export const useCriticalAlarms = (): UseCriticalAlarmsReturn => {
             });
           }
         }
-      } catch (error) {
-        console.error('Failed to process WebSocket message:', error);
+      } catch {
+        // Silently ignore parse errors from non-alarm messages
       }
     };
 

@@ -1,0 +1,169 @@
+# Gateway Edge Microservice Alerts
+# ================================
+# Alerting rules for Gateway Edge performance and security
+
+groups:
+  - name: gateway-edge-health
+    rules:
+      # Gateway Down Alert
+      - alert: GatewayEdgeDown
+        expr: up{job="optiflow-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: gateway
+          team: platform
+        annotations:
+          summary: "Gateway Edge is down"
+          description: "Gateway Edge microservice has been down for more than 1 minute"
+          runbook_url: "https://docs.optiflow.io/runbooks/gateway-down"
+
+      # No devices connected
+      - alert: GatewayNoDevicesConnected
+        expr: sum(gateway_devices_connected) == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: gateway
+          team: operations
+        annotations:
+          summary: "No devices connected to Gateway"
+          description: "Gateway has no connected devices for more than 2 minutes"
+
+      # Device disconnection
+      - alert: GatewayDeviceDisconnected
+        expr: gateway_device_connection_status == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: gateway
+          team: operations
+        annotations:
+          summary: "Device {{ $labels.device_id }} disconnected"
+          description: "Device {{ $labels.device_id }} ({{ $labels.protocol }}) has been disconnected for more than 1 minute"
+
+  - name: gateway-edge-performance
+    rules:
+      # High tag read latency
+      - alert: GatewayHighReadLatency
+        expr: histogram_quantile(0.95, rate(gateway_tags_read_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: gateway
+          team: platform
+        annotations:
+          summary: "High tag read latency on Gateway"
+          description: "95th percentile tag read latency is {{ $value | printf \"%.2f\" }}s (threshold: 0.5s)"
+
+      # High error rate
+      - alert: GatewayHighErrorRate
+        expr: rate(gateway_tag_read_errors_total[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: gateway
+          team: operations
+        annotations:
+          summary: "High tag read error rate"
+          description: "Gateway is experiencing {{ $value | printf \"%.1f\" }} tag read errors per second"
+
+      # Buffer near full
+      - alert: GatewayBufferNearFull
+        expr: (gateway_buffer_size / gateway_buffer_capacity) > 0.8
+        for: 2m
+        labels:
+          severity: warning
+          component: gateway
+          team: platform
+        annotations:
+          summary: "Gateway buffer nearly full"
+          description: "Gateway buffer is at {{ $value | printf \"%.1f\" }}% capacity"
+
+      # Buffer overflow
+      - alert: GatewayBufferOverflow
+        expr: increase(gateway_buffer_overflows_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: gateway
+          team: platform
+        annotations:
+          summary: "Gateway buffer overflow detected"
+          description: "Data loss may be occurring due to buffer overflow"
+
+  - name: gateway-edge-protocols
+    rules:
+      # OPC-UA subscription issues
+      - alert: GatewayOPCUASubscriptionDown
+        expr: gateway_opcua_subscriptions_active == 0 and gateway_opcua_sessions_active > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: gateway
+          team: operations
+        annotations:
+          summary: "OPC-UA subscriptions inactive"
+          description: "OPC-UA session is active but no subscriptions are receiving data"
+
+      # OPC-UA session lost
+      - alert: GatewayOPCUASessionLost
+        expr: delta(gateway_opcua_sessions_active[5m]) < -1
+        for: 1m
+        labels:
+          severity: warning
+          component: gateway
+          team: operations
+        annotations:
+          summary: "OPC-UA session lost"
+          description: "OPC-UA sessions dropped from {{ $value | printf \"%.0f\" }}"
+
+      # Modbus high response time
+      - alert: GatewayModbusSlowResponse
+        expr: histogram_quantile(0.95, rate(gateway_modbus_response_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: gateway
+          team: operations
+        annotations:
+          summary: "Slow Modbus response time"
+          description: "Modbus 95th percentile response time is {{ $value | printf \"%.2f\" }}s"
+
+      # MQTT disconnection
+      - alert: GatewayMQTTDisconnected
+        expr: gateway_mqtt_connection_status == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: gateway
+          team: operations
+        annotations:
+          summary: "MQTT broker disconnected"
+          description: "Gateway lost connection to MQTT broker"
+
+  - name: gateway-edge-backend
+    rules:
+      # Backend communication failure
+      - alert: GatewayBackendUnreachable
+        expr: gateway_backend_connection_status == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: gateway
+          team: platform
+        annotations:
+          summary: "Backend API unreachable"
+          description: "Gateway cannot communicate with backend API for more than 2 minutes"
+
+      # High backend latency
+      - alert: GatewayBackendHighLatency
+        expr: histogram_quantile(0.95, rate(gateway_backend_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: gateway
+          team: platform
+        annotations:
+          summary: "High backend API latency"
+          description: "Backend API 95th percentile latency is {{ $value | printf \"%.2f\" }}s"

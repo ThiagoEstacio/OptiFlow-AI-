@@ -451,23 +451,20 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️  Kafka producer initialization failed: {e}")
         logger.warning("⚠️  System will continue without Kafka publishing")
 
-    # Initialize Alarm Monitoring Service
+    # Initialize Alarm Consumer (receives alarms from Gateway via Kafka)
+    # NOTE: Alarms are now evaluated in the Gateway and sent via Kafka
+    # The old alarm_monitor_service that read from simulator is deprecated
     try:
-        from app.services.alarm_monitor_service import get_alarm_monitor_service
-        from app.services.alarm_initializer import initialize_default_alarms
-        from app.db.session import AsyncSessionLocal
+        from app.services.alarm_consumer import start_alarm_consumer
 
-        # Initialize default alarm definitions if needed
-        await initialize_default_alarms()
-
-        # Start alarm monitoring
-        alarm_monitor = get_alarm_monitor_service()
-        async with AsyncSessionLocal() as db:
-            await alarm_monitor.start(db)
-        logger.info("✅ Alarm monitoring service initialized and running")
+        await start_alarm_consumer()
+        logger.info("✅ Alarm consumer started - receiving alarms from Gateway via Kafka")
+        logger.info("   Topic: alarm_events")
+        logger.info("   Architecture: Gateway → Kafka → Backend → Frontend")
     except Exception as e:
-        logger.warning(f"⚠️  Alarm monitoring initialization failed: {e}")
-        logger.warning("⚠️  System will continue without automatic alarm monitoring")
+        logger.warning(f"⚠️  Alarm consumer initialization failed: {e}")
+        logger.warning("⚠️  System will continue without Gateway alarm integration")
+        logger.warning("⚠️  Alarms will not be received from Gateway")
 
     # Initialize InfluxDB retention policies and continuous queries (PDCA #10)
     try:
@@ -622,15 +619,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("👋 Shutting down OptiFlow AI Platform...")
 
-    # Stop Alarm Monitoring Service
+    # Stop Alarm Consumer (receives alarms from Gateway)
     try:
-        from app.services.alarm_monitor_service import get_alarm_monitor_service
-        alarm_monitor = get_alarm_monitor_service()
-        if alarm_monitor.is_running:
-            await alarm_monitor.stop()
-            logger.info("✅ Alarm monitoring service stopped")
+        from app.services.alarm_consumer import stop_alarm_consumer
+        await stop_alarm_consumer()
+        logger.info("✅ Alarm consumer stopped")
     except Exception as e:
-        logger.warning(f"⚠️  Failed to stop alarm monitoring: {e}")
+        logger.warning(f"⚠️  Failed to stop alarm consumer: {e}")
 
     # Gateway Service is now a standalone microservice - no shutdown needed here
     logger.info("ℹ️  Gateway microservice runs independently")
