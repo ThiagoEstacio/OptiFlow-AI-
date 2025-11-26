@@ -6,7 +6,19 @@
 import React, { useState, useMemo } from 'react';
 import { useDrag } from 'react-dnd';
 import { Edit2 } from 'lucide-react';
-import type { Tag } from '../../data/portGrainTerminalTags';
+
+// Generic tag interface compatible with Gateway tags
+export interface Tag {
+  id: string;
+  name: string;
+  description?: string;
+  unit?: string;
+  data_type?: string;
+  category?: string;
+  adapter_id?: string;
+  protocol?: string;
+  enabled?: boolean;
+}
 
 interface TagItemProps {
   tag: Tag;
@@ -60,10 +72,20 @@ const TagItem: React.FC<TagItemProps> = ({ tag, onEdit }) => {
           </button>
         </div>
       </div>
-      {tag.category && (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-600 dark:text-gray-300 mt-1">
-          {tag.category}
-        </span>
+      {/* Show adapter/protocol info instead of category for Gateway tags */}
+      {(tag.adapter_id || tag.protocol) && (
+        <div className="flex gap-1 mt-1">
+          {tag.protocol && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+              {tag.protocol}
+            </span>
+          )}
+          {tag.adapter_id && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-600 dark:text-gray-300 truncate max-w-[150px]" title={tag.adapter_id}>
+              {tag.adapter_id.split('-')[0]}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
@@ -78,12 +100,12 @@ interface TagsPanelProps {
 
 export const TagsPanel: React.FC<TagsPanelProps> = ({ tags, loading, onClose, onEditTag }) => {
   const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterProtocol, setFilterProtocol] = useState<string>('all');
 
-  // Get unique categories
-  const categories = useMemo(() => {
-    const cats = new Set(tags.map(t => t.category).filter(Boolean));
-    return ['all', ...Array.from(cats)];
+  // Get unique protocols from tags
+  const protocols = useMemo(() => {
+    const protos = new Set(tags.map(t => t.protocol).filter(Boolean));
+    return ['all', ...Array.from(protos)];
   }, [tags]);
 
   // Filter tags
@@ -91,10 +113,10 @@ export const TagsPanel: React.FC<TagsPanelProps> = ({ tags, loading, onClose, on
     return tags.filter(tag => {
       const matchesSearch = tag.name.toLowerCase().includes(search.toLowerCase()) ||
                            (tag.description?.toLowerCase().includes(search.toLowerCase()) ?? false);
-      const matchesCategory = filterCategory === 'all' || tag.category === filterCategory;
-      return matchesSearch && matchesCategory;
+      const matchesProtocol = filterProtocol === 'all' || tag.protocol === filterProtocol;
+      return matchesSearch && matchesProtocol;
     });
-  }, [tags, search, filterCategory]);
+  }, [tags, search, filterProtocol]);
 
   return (
     <div className="w-80 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
@@ -120,15 +142,15 @@ export const TagsPanel: React.FC<TagsPanelProps> = ({ tags, loading, onClose, on
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
         />
 
-        {/* Category Filter */}
+        {/* Protocol Filter */}
         <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
+          value={filterProtocol}
+          onChange={(e) => setFilterProtocol(e.target.value)}
           className="w-full mt-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
         >
-          {categories.map(cat => (
-            <option key={cat} value={cat}>
-              {cat === 'all' ? 'Todas as Categorias' : cat}
+          {protocols.map(proto => (
+            <option key={proto} value={proto}>
+              {proto === 'all' ? 'Todos os Protocolos' : proto.toUpperCase()}
             </option>
           ))}
         </select>
@@ -139,7 +161,7 @@ export const TagsPanel: React.FC<TagsPanelProps> = ({ tags, loading, onClose, on
         {loading ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            Carregando tags...
+            Carregando tags do Gateway...
           </div>
         ) : filteredTags.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -147,11 +169,14 @@ export const TagsPanel: React.FC<TagsPanelProps> = ({ tags, loading, onClose, on
             {search && (
               <p className="text-sm mt-2">Tente outro termo de busca</p>
             )}
+            {tags.length === 0 && (
+              <p className="text-sm mt-2">Verifique se o Gateway está conectado</p>
+            )}
           </div>
         ) : (
           <>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-              {filteredTags.length} tag{filteredTags.length !== 1 ? 's' : ''}
+              {filteredTags.length} tag{filteredTags.length !== 1 ? 's' : ''} gerenciada{filteredTags.length !== 1 ? 's' : ''}
               {search && ' (filtrado)'}
             </p>
             {filteredTags.map(tag => (
@@ -163,8 +188,11 @@ export const TagsPanel: React.FC<TagsPanelProps> = ({ tags, loading, onClose, on
 
       {/* Help */}
       <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
-        <p className="font-medium">💡 Como usar:</p>
-        <ol className="list-decimal list-inside mt-1 text-xs space-y-1">
+        <p className="font-medium">Gateway Tags</p>
+        <p className="text-xs mt-1 text-blue-600 dark:text-blue-300">
+          Tags gerenciados pelo Gateway Edge (porta 8080)
+        </p>
+        <ol className="list-decimal list-inside mt-2 text-xs space-y-1">
           <li>Arraste uma tag desta lista</li>
           <li>Solte sobre um widget</li>
           <li>Clique em <Edit2 className="w-3 h-3 inline" /> para editar</li>

@@ -5,13 +5,28 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
-import type { Tag } from '../../data/portGrainTerminalTags';
+
+// Generic tag interface that works with both Gateway tags and legacy tags
+export interface EditableTag {
+  id: string;
+  name: string;
+  description?: string;
+  unit?: string;
+  data_type?: string;
+  min_value?: number;
+  max_value?: number;
+  address?: string;
+  adapter_id?: string;
+  protocol?: string;
+  enabled?: boolean;
+  category?: string;
+}
 
 interface TagEditModalProps {
-  tag: Tag;
+  tag: EditableTag;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updatedTag: Tag) => void;
+  onSave: (updatedTag: EditableTag) => void;
 }
 
 export const TagEditModal: React.FC<TagEditModalProps> = ({
@@ -20,7 +35,7 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [formData, setFormData] = useState<Tag>(tag);
+  const [formData, setFormData] = useState<EditableTag>(tag);
 
   useEffect(() => {
     setFormData(tag);
@@ -34,7 +49,7 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
     onClose();
   };
 
-  const handleChange = (field: keyof Tag, value: any) => {
+  const handleChange = (field: keyof EditableTag, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
@@ -77,7 +92,7 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
                 </label>
                 <input
                   type="text"
-                  value={formData.name}
+                  value={formData.name || ''}
                   onChange={(e) => handleChange('name', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   required
@@ -89,11 +104,10 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
                   Descrição
                 </label>
                 <textarea
-                  value={formData.description}
+                  value={formData.description || ''}
                   onChange={(e) => handleChange('description', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   rows={2}
-                  required
                 />
               </div>
 
@@ -104,23 +118,49 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.unit}
+                    value={formData.unit || ''}
                     onChange={(e) => handleChange('unit', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    required
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Categoria
+                    Endereço
                   </label>
                   <input
                     type="text"
-                    value={formData.category}
-                    onChange={(e) => handleChange('category', e.target.value)}
+                    value={formData.address || ''}
+                    onChange={(e) => handleChange('address', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    required
+                    disabled
+                  />
+                </div>
+              </div>
+
+              {/* Protocol and Adapter Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Protocolo
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.protocol || ''}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-600 dark:text-white cursor-not-allowed"
+                    disabled
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Adapter
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.adapter_id || ''}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-600 dark:text-white cursor-not-allowed"
+                    disabled
                   />
                 </div>
               </div>
@@ -139,11 +179,11 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
                   </label>
                   <input
                     type="number"
-                    value={formData.min_value}
-                    onChange={(e) => handleChange('min_value', parseFloat(e.target.value))}
+                    value={formData.min_value ?? ''}
+                    onChange={(e) => handleChange('min_value', e.target.value ? parseFloat(e.target.value) : undefined)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     step="any"
-                    required
+                    placeholder="Opcional"
                   />
                 </div>
 
@@ -153,81 +193,8 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
                   </label>
                   <input
                     type="number"
-                    value={formData.max_value}
-                    onChange={(e) => handleChange('max_value', parseFloat(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    step="any"
-                    required
-                  />
-                </div>
-              </div>
-
-              {formData.normal_range && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Faixa Normal - Mín
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.normal_range.min}
-                      onChange={(e) => handleChange('normal_range', {
-                        ...formData.normal_range!,
-                        min: parseFloat(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                      step="any"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Faixa Normal - Máx
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.normal_range.max}
-                      onChange={(e) => handleChange('normal_range', {
-                        ...formData.normal_range!,
-                        max: parseFloat(e.target.value)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                      step="any"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Alarm Configuration */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                Configuração de Alarmes
-              </h3>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Alarme Alto
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.alarm_high || ''}
-                    onChange={(e) => handleChange('alarm_high', e.target.value ? parseFloat(e.target.value) : undefined)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    step="any"
-                    placeholder="Opcional"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Alarme Baixo
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.alarm_low || ''}
-                    onChange={(e) => handleChange('alarm_low', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    value={formData.max_value ?? ''}
+                    onChange={(e) => handleChange('max_value', e.target.value ? parseFloat(e.target.value) : undefined)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     step="any"
                     placeholder="Opcional"
@@ -242,16 +209,31 @@ export const TagEditModal: React.FC<TagEditModalProps> = ({
                 Tipo de Dado
               </label>
               <select
-                value={formData.data_type}
+                value={formData.data_type || 'double'}
                 onChange={(e) => handleChange('data_type', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                required
               >
+                <option value="double">Double (Decimal)</option>
                 <option value="float">Float (Decimal)</option>
-                <option value="integer">Integer (Inteiro)</option>
+                <option value="int32">Int32 (Inteiro)</option>
+                <option value="int16">Int16 (Inteiro curto)</option>
                 <option value="boolean">Boolean (Sim/Não)</option>
                 <option value="string">String (Texto)</option>
               </select>
+            </div>
+
+            {/* Enabled Status */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="enabled"
+                checked={formData.enabled !== false}
+                onChange={(e) => handleChange('enabled', e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Tag habilitada
+              </label>
             </div>
           </div>
 

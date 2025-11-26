@@ -21,8 +21,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MuiThemeWrapper } from './components/professional/MuiThemeWrapper';
 import { AssetProvider } from './contexts/AssetContext';
-import { tagDataSimulator } from './services/tagDataSimulator';
-import { simulatorDataSync } from './services/simulatorDataSync';
 import { websocketService } from './services/websocket';
 import { CriticalAlarmNotification } from './components/CriticalAlarmNotification';
 import { useCriticalAlarms } from './hooks/useCriticalAlarms';
@@ -49,44 +47,31 @@ import { SettingsPage } from './pages/SettingsPage';
 import { TagDetailsPage } from './pages/TagDetailsPage';
 import { ExtendedTagsPage } from './pages/ExtendedTagsPage';
 import { ChatPage } from './pages/ChatPage';
-import { DevicesPage } from './pages/DevicesPage';
-import { TagsPage } from './pages/TagsPage';
-import { GatewayManagementPage } from './pages/GatewayManagementPage';
+// DevicesPage, TagsPage, GatewayManagementPage removed - managed via Gateway UI at localhost:8080/ui/
 import DashboardsList from './pages/DashboardsList';
 import DashboardBuilder from './pages/DashboardBuilder';
 import SimulatorPage from './pages/SimulatorPage';
 import DashboardBuilderPage from './pages/DashboardBuilderPage';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import { AIMonitoringDashboard } from './pages/AIMonitoringDashboard';
-import { TagConfiguration } from './pages/TagConfiguration';
+// TagConfiguration removed - managed via Gateway UI at localhost:8080/ui/
 import { ReportsDashboard } from './pages/ReportsDashboard';
+import { TagHistoricalTrends } from './pages/TagHistoricalTrends';
+// GatewayEdgePage removed - using external Gateway UI at localhost:8080/ui/
 
 function App() {
   // PDCA #5: Critical alarm notification system
   const { currentAlarm, acknowledgeAlarm, dismissAlarm } = useCriticalAlarms();
 
-  // 🚀 Start simulator and WebSocket on app initialization
+  // 🚀 Connect to WebSocket on app initialization
   useEffect(() => {
-    console.log('🚀 Starting Grain Terminal Simulator...');
-    tagDataSimulator.start();
-
     // Connect to real-time WebSocket server
     const wsUrl = 'ws://localhost:8000/api/v1/ws/simulator/stream';
     console.log('🔌 Connecting to WebSocket:', wsUrl);
     websocketService.connect(wsUrl);
 
-    // Start syncing data to backend after 2 seconds (let simulator stabilize)
-    const syncTimeout = setTimeout(() => {
-      console.log('🔄 Starting data sync to backend...');
-      simulatorDataSync.start();
-    }, 2000);
-
     return () => {
-      clearTimeout(syncTimeout);
-      console.log('⏹️ Stopping Grain Terminal Simulator...');
       websocketService.disconnect();
-      simulatorDataSync.stop();
-      tagDataSimulator.stop();
     };
   }, []);
 
@@ -142,6 +127,7 @@ function App() {
                   <Route path="realtime/tags" element={<RealtimeTagsMonitor />} />
                   <Route path="realtime/tags/:id" element={<TagDetailsPage />} />
                   <Route path="realtime/extended" element={<ExtendedTagsPage />} />
+                  <Route path="realtime/trends" element={<TagHistoricalTrends />} />
 
                   {/* ========================================
                       🚨 MODULE 3: ALARMS (Events & History)
@@ -164,14 +150,10 @@ function App() {
                   <Route path="analytics/chat" element={<ChatPage />} />
 
                   {/* ========================================
-                      ⚙️ MODULE 5: SETTINGS (Configuration)
+                      ⚙️ MODULE 5: SETTINGS (User Preferences Only)
+                      Device/Tag config moved to Gateway UI
                       ======================================== */}
                   <Route path="settings" element={<SettingsPage />} />
-                  <Route path="settings/devices" element={<DevicesPage />} />
-                  <Route path="settings/tags" element={<TagsPage />} />
-                  <Route path="settings/tag-configuration" element={<TagConfiguration />} />
-                  <Route path="settings/gateways" element={<GatewayManagementPage />} />
-                  <Route path="settings/users" element={<SettingsPage />} />
 
                   {/* ========================================
                       📊 MODULE 6: REPORTS (Export & Download)
@@ -201,8 +183,15 @@ function App() {
                   <Route path="simulator" element={<Navigate to="/settings" replace />} />
                   <Route path="simulador" element={<Navigate to="/settings" replace />} />
                   <Route path="sites" element={<Navigate to="/settings" replace />} />
-                  <Route path="devices" element={<Navigate to="/settings/devices" replace />} />
-                  <Route path="gateways" element={<Navigate to="/settings/gateways" replace />} />
+                  <Route path="devices" element={<Navigate to="/settings" replace />} />
+                  <Route path="settings/devices" element={<Navigate to="/settings" replace />} />
+                  <Route path="settings/tags" element={<Navigate to="/settings" replace />} />
+                  <Route path="settings/tag-configuration" element={<Navigate to="/settings" replace />} />
+                  <Route path="settings/users" element={<Navigate to="/settings" replace />} />
+                  <Route path="gateways" element={<Navigate to="/settings" replace />} />
+                  <Route path="settings/gateways" element={<Navigate to="/settings" replace />} />
+                  <Route path="gateway-edge" element={<Navigate to="/settings" replace />} />
+                  <Route path="gateway-edge/*" element={<Navigate to="/settings" replace />} />
                   <Route path="admin" element={<Navigate to="/settings" replace />} />
                   <Route path="quality" element={<Navigate to="/analytics" replace />} />
                   <Route path="executive/:siteId" element={<Navigate to="/dashboard" replace />} />

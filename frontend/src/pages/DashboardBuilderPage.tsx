@@ -14,12 +14,14 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Save, FolderOpen, FileDown, Settings, Grid3X3, Layout, Zap, Sparkles, FolderTree } from 'lucide-react';
-import { useAppDispatch, useAppSelector } from '../store';
-import { fetchTags } from '../store/slices/tagsSlice';
+import { Save, FolderOpen, Settings, Grid3X3, Layout, Sparkles, FolderTree } from 'lucide-react';
 import { TagsPanel } from '../components/DashboardBuilder/TagsPanel';
 import { AssetTreePanel } from '../components/DashboardBuilder/AssetTreePanel';
 import { TagEditModal } from '../components/DashboardBuilder/TagEditModal';
+import { gatewayEdgeApi } from '../api/gatewayEdge';
+
+// Gateway Edge URL
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8080';
 import { WidgetCanvas } from '../components/DashboardBuilder/WidgetCanvas';
 import { WidgetToolbar } from '../components/DashboardBuilder/WidgetToolbar';
 import { PropertyPanel } from '../components/DashboardBuilder/PropertyPanel';
@@ -27,13 +29,11 @@ import { GridBackground } from '../components/DashboardBuilder/GridBackground';
 import { TemplateSelector } from '../components/DashboardBuilder/TemplateSelector';
 import { DashboardManager } from '../components/DashboardBuilder/DashboardManager';
 import { AIAssistantPanel } from '../components/DashboardBuilder/AIAssistantPanel';
-import { SimulationControlPanel } from '../components/SimulationControlPanel';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useGridSnapping } from '../hooks/useGridSnapping';
 import { useDashboardManager } from '../hooks/useDashboardManager';
 import { getTemplate, type DashboardTemplate } from '../data/dashboardTemplates';
 import { showToast } from '../utils/toast';
-import { PORT_GRAIN_TERMINAL_TAGS, type Tag as PortTag } from '../data/portGrainTerminalTags';
 
 export interface Widget {
   id: string;
@@ -80,12 +80,26 @@ export interface Widget {
   };
 }
 
-export const DashboardBuilderPage: React.FC = () => {
-  const dispatch = useAppDispatch();
-  const tagsFromStore = useAppSelector((state) => state.tags.items);
-  const loading = useAppSelector((state) => state.tags.loading);
+// Tag type compatible with Gateway managed tags
+interface GatewayTag {
+  id: string;
+  name: string;
+  address?: string;
+  data_type?: string;
+  enabled?: boolean;
+  unit?: string;
+  description?: string;
+  min_value?: number;
+  max_value?: number;
+  adapter_id?: string;
+  protocol?: string;
+}
 
-  // State
+export const DashboardBuilderPage: React.FC = () => {
+  // State - tags now come directly from Gateway, not Redux
+  const [gatewayTags, setGatewayTags] = useState<GatewayTag[]>([]);
+  const [loading, setLoading] = useState(false);
+
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
   const [showTagsPanel, setShowTagsPanel] = useState(true);
@@ -97,13 +111,11 @@ export const DashboardBuilderPage: React.FC = () => {
   // Modal states
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showDashboardManager, setShowDashboardManager] = useState(false);
-  const [showSimulationPanel, setShowSimulationPanel] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  const [tagEditModal, setTagEditModal] = useState<{ isOpen: boolean; tag: PortTag | null }>({
+  const [tagEditModal, setTagEditModal] = useState<{ isOpen: boolean; tag: GatewayTag | null }>({
     isOpen: false,
     tag: null,
   });
-  const [editableTags, setEditableTags] = useState<PortTag[]>(PORT_GRAIN_TERMINAL_TAGS);
 
   // Advanced hooks
   const gridSnapping = useGridSnapping({ gridSize: 10, enabled: true });
@@ -113,24 +125,75 @@ export const DashboardBuilderPage: React.FC = () => {
   const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(null);
 
   // Handle tag edit
-  const handleEditTag = useCallback((tag: PortTag) => {
+  const handleEditTag = useCallback((tag: GatewayTag) => {
     setTagEditModal({ isOpen: true, tag });
   }, []);
 
-  const handleSaveTag = useCallback((updatedTag: PortTag) => {
-    setEditableTags(prev =>
+  const handleSaveTag = useCallback((updatedTag: GatewayTag) => {
+    setGatewayTags(prev =>
       prev.map(t => (t.id === updatedTag.id ? updatedTag : t))
     );
     showToast.success(`Tag "${updatedTag.name}" atualizada com sucesso`);
   }, []);
 
-  // Use editable tags
-  const displayTags = tagsFromStore.length > 0 ? tagsFromStore : editableTags;
+  // Use Gateway tags (managed tags from tags_config.json)
+  const displayTags = gatewayTags;
 
-  // Load tags on mount
+  // Load tags from Gateway on mount (respects architecture: Gateway manages tags)
   useEffect(() => {
-    dispatch(fetchTags({}));
-  }, [dispatch]);
+    const fetchGatewayTags = async () => {
+      setLoading(true);
+      try {
+        // Fetch managed tags directly from Gateway API
+        const response = await fetch(`${GATEWAY_URL}/api/tags/`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const managedTags = await response.json();
+
+        // Transform to compatible format (API returns full tag objects)
+        const tags: GatewayTag[] = managedTags.map((tag: any) => ({
+          id: tag.tag_id,
+          name: tag.tag_name,
+          address: tag.address,
+          data_type: tag.data_type,
+          enabled: tag.enabled,
+          unit: tag.metadata?.engineering_units || undefined,
+          description: tag.metadata?.description || tag.tag_name,
+          min_value: tag.scaling?.eng_min,
+          max_value: tag.scaling?.eng_max,
+          adapter_id: tag.adapter_id,
+          protocol: tag.protocol_type,
+        }));
+
+        setGatewayTags(tags);
+        console.log('✅ Loaded', tags.length, 'managed tags from Gateway');
+      } catch (error) {
+        console.error('❌ Failed to load Gateway tags:', error);
+        // Fallback: try to fetch discovered tags
+        try {
+          const discoveredTags = await gatewayEdgeApi.discoverAllTags();
+          const tags: GatewayTag[] = discoveredTags.map(tag => ({
+            id: tag.tag_name.replace(/\s+/g, '_'),
+            name: tag.tag_name,
+            address: tag.address,
+            data_type: tag.data_type,
+            enabled: true,
+            unit: tag.unit,
+            description: tag.description || tag.display_name,
+            adapter_id: tag.adapter_id,
+            protocol: tag.protocol,
+          }));
+          setGatewayTags(tags);
+          console.log('✅ Loaded', tags.length, 'discovered tags from Gateway (fallback)');
+        } catch (fallbackError) {
+          console.error('❌ Failed to load any Gateway tags:', fallbackError);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGatewayTags();
+  }, []);
 
   // Add new widget
   const handleAddWidget = useCallback((type: Widget['type']) => {
@@ -510,16 +573,6 @@ export const DashboardBuilderPage: React.FC = () => {
                 <span>Properties</span>
               </button>
 
-              {/* Simulation Control */}
-              <button
-                onClick={() => setShowSimulationPanel(!showSimulationPanel)}
-                className="flex items-center space-x-1 px-3 py-2 text-sm bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 hover:bg-orange-200 dark:hover:bg-orange-800 rounded transition-colors"
-                title="Simulation Control"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Simulation</span>
-              </button>
-
               {/* Theme Toggle */}
               <ThemeToggle variant="icon" size="md" />
 
@@ -661,15 +714,6 @@ export const DashboardBuilderPage: React.FC = () => {
           />
         )}
 
-        {/* Simulation Control Panel Modal */}
-        {showSimulationPanel && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="max-w-2xl w-full">
-              <SimulationControlPanel onClose={() => setShowSimulationPanel(false)} />
-            </div>
-          </div>
-        )}
-
         {/* AI Assistant Panel */}
         {showAIAssistant && (
           <AIAssistantPanel
@@ -678,8 +722,7 @@ export const DashboardBuilderPage: React.FC = () => {
             onAddWidgets={(newWidgets) => {
               console.log('Receiving widgets from AI:', newWidgets);
               console.log('Current widgets before:', widgets.length);
-              console.log('🔍 DashboardBuilderPage - displayTags count:', displayTags.length);
-              console.log('🔍 DashboardBuilderPage - tagsFromStore count:', tagsFromStore.length);
+              console.log('🔍 DashboardBuilderPage - Gateway tags count:', displayTags.length);
               setWidgets(prev => {
                 const updated = [...prev, ...newWidgets];
                 console.log('Widgets after adding:', updated.length);
