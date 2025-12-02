@@ -20,5 +20,5 @@ export type {
 } from './HighPerformanceTrend';
 
 // Existing charts
-export { default as MultiSeriesChart } from './MultiSeriesChart';
-export { default as TimeSeriesChart } from './TimeSeriesChart';
+export { MultiSeriesChart } from './MultiSeriesChart';
+export { TimeSeriesChart } from './TimeSeriesChart';

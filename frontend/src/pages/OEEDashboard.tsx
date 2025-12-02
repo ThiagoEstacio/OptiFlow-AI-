@@ -2239,13 +2239,14 @@ export const OEEDashboard: React.FC = () => {
       {/* Sprint 6: Global Filter Bar */}
       <Box sx={{ px: 3, pt: 2 }}>
         <FilterBar
-          showEquipmentFilter={true}
-          showAreaFilter={true}
-          showStatusFilter={true}
-          showOeeFilter={true}
+          showEquipments={true}
+          showAreas={true}
+          showStatuses={true}
           compact={false}
         />
-        <DrillDownBreadcrumb sx={{ mt: 1 }} />
+        <Box sx={{ mt: 1 }}>
+          <DrillDownBreadcrumb />
+        </Box>
       </Box>
 
       {/* Main Content */}

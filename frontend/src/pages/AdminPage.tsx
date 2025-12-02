@@ -106,9 +106,9 @@ const AdminPage: React.FC = () => {
     try {
       // Fetch system metrics
       try {
-        const metricsData = await apiClient.get('/api/v1/admin/system/metrics');
-        if (metricsData) {
-          setSystemMetrics(metricsData);
+        const metricsResponse = await apiClient.get('/api/v1/admin/system/metrics');
+        if (metricsResponse.data) {
+          setSystemMetrics(metricsResponse.data);
         }
       } catch (err) {
         console.warn('System metrics endpoint not available');
@@ -116,9 +116,9 @@ const AdminPage: React.FC = () => {
 
       // Fetch Docker containers
       try {
-        const containersData = await apiClient.get('/api/v1/admin/docker/containers');
-        if (Array.isArray(containersData)) {
-          const formattedContainers = containersData.map((c: any) => ({
+        const containersResponse = await apiClient.get('/api/v1/admin/docker/containers');
+        if (Array.isArray(containersResponse.data)) {
+          const formattedContainers = containersResponse.data.map((c: any) => ({
             name: c.name,
             status: c.health,
             health: c.health,
@@ -134,7 +134,8 @@ const AdminPage: React.FC = () => {
 
       // Fetch GPU info
       try {
-        const gpuData = await apiClient.get('/api/v1/admin/gpu/info');
+        const gpuResponse = await apiClient.get('/api/v1/admin/gpu/info');
+        const gpuData = gpuResponse.data;
         if (gpuData && gpuData.available) {
           setGPUInfo({
             available: true,
@@ -153,9 +154,9 @@ const AdminPage: React.FC = () => {
 
       // Fetch services health
       try {
-        const servicesData = await apiClient.get('/api/v1/admin/services/health');
-        if (Array.isArray(servicesData)) {
-          setServices(servicesData.map((s: any) => ({
+        const servicesResponse = await apiClient.get('/api/v1/admin/services/health');
+        if (Array.isArray(servicesResponse.data)) {
+          setServices(servicesResponse.data.map((s: any) => ({
             name: s.name,
             status: s.status,
             url: s.url,
@@ -173,7 +174,8 @@ const AdminPage: React.FC = () => {
 
       // Fallback to simulator GPU info
       try {
-        const simData = await apiClient.get('/api/v1/simulator/status');
+        const simResponse = await apiClient.get('/api/v1/simulator/status');
+        const simData = simResponse.data;
 
         if (simData.dem_physics?.gpu_info) {
           setGPUInfo({

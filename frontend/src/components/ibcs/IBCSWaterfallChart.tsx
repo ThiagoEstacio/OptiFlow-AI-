@@ -410,13 +410,7 @@ export const IBCSWaterfallChart: React.FC<IBCSWaterfallChartProps> = ({
                   ...IBCSTypography.valueSmall,
                   fontWeight: 600,
                 }}
-                fill={(entry: ProcessedWaterfallPoint) =>
-                  entry.type === 'positive'
-                    ? IBCSColors.positive
-                    : entry.type === 'negative'
-                    ? IBCSColors.negative
-                    : IBCSColors.labelText
-                }
+                fill={IBCSColors.labelText}
               />
             )}
           </Bar>

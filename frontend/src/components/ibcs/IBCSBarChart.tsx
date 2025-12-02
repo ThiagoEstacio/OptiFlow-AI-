@@ -61,7 +61,7 @@ interface IBCSBarChartProps {
 
 const IBCSTooltip: React.FC<{
   active?: boolean;
-  payload?: Array<{ value: number; name: string; dataKey: string }>;
+  payload?: Array<{ value: number; name: string; dataKey: string; payload?: IBCSDataPoint }>;
   label?: string;
   unit?: string;
 }> = ({ active, payload, label, unit = '' }) => {

@@ -80,7 +80,10 @@ import { REFRESH_INTERVALS } from '../utils/constants';
 import { LoadingState, ErrorState } from '../components/shared';
 
 // Sprint 6: Cross-filtering integration
-import { FilterBar, DrillDownBreadcrumb, useFilterStore, useURLFilters } from '../components/filters';
+import { FilterBar, DrillDownBreadcrumb, useFilterStore, useURLFilters, CrossFilterPanel } from '../components/filters';
+import { ClickableKPI } from '../components/professional/ClickableKPI';
+import { QualityIndicator, StaleDataBanner } from '../components/industrial/QualityIndicator';
+import type { KPIType } from '../stores/dashboardSelectionStore';
 
 // Types
 interface KPIData {
@@ -1660,16 +1663,19 @@ export const ExecutiveDashboardPage: React.FC = () => {
         </Container>
       </Paper>
 
-      {/* Sprint 6: Global Filter Bar */}
+      {/* Sprint 6: Global Filter Bar with Cross-Filtering */}
       <Container maxWidth="xl" sx={{ mt: 2, mb: 2 }}>
         <FilterBar
-          showEquipmentFilter={true}
-          showAreaFilter={true}
-          showStatusFilter={false}
-          showOeeFilter={true}
+          showEquipments={true}
+          showAreas={true}
+          showStatuses={false}
           compact={true}
         />
-        <DrillDownBreadcrumb sx={{ mt: 1 }} />
+        <Box sx={{ mt: 1 }}>
+          <DrillDownBreadcrumb />
+        </Box>
+        {/* Cross-Filter Panel - Shows active selections */}
+        <CrossFilterPanel position="top" collapsible={true} />
       </Container>
 
       <Container maxWidth="xl">
@@ -1686,38 +1692,67 @@ export const ExecutiveDashboardPage: React.FC = () => {
 
         {overview && (
           <>
-            {/* KPI Cards */}
+            {/* KPI Cards - Interactive with Cross-Filtering */}
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6} lg={3}>
-                <KPICard
+                <ClickableKPI
+                  type="oee"
                   title="OEE"
+                  value={overview.kpis.oee.value}
+                  target={overview.kpis.oee.target}
+                  trend={overview.kpis.oee.trend}
+                  trendData={trendData?.data?.slice(-12).map(d => d.value) || []}
                   icon={<Speed />}
-                  kpi={overview.kpis.oee}
-                  color={theme.palette.primary.main}
+                  color="primary"
+                  format="percent"
+                  drillThroughPage="/oee-dashboard"
+                  showSparkline={true}
+                  showTarget={true}
                 />
               </Grid>
               <Grid item xs={12} sm={6} lg={3}>
-                <KPICard
+                <ClickableKPI
+                  type="availability"
                   title="Disponibilidade"
+                  value={overview.kpis.availability.value}
+                  target={overview.kpis.availability.target}
+                  trend={overview.kpis.availability.trend}
                   icon={<Timer />}
-                  kpi={overview.kpis.availability}
-                  color={theme.palette.success.main}
+                  color="success"
+                  format="percent"
+                  drillThroughPage="/oee-dashboard"
+                  showSparkline={false}
+                  showTarget={true}
                 />
               </Grid>
               <Grid item xs={12} sm={6} lg={3}>
-                <KPICard
+                <ClickableKPI
+                  type="performance"
                   title="Performance"
+                  value={overview.kpis.performance.value}
+                  target={overview.kpis.performance.target}
+                  trend={overview.kpis.performance.trend}
                   icon={<Bolt />}
-                  kpi={overview.kpis.performance}
-                  color={theme.palette.warning.main}
+                  color="warning"
+                  format="percent"
+                  drillThroughPage="/oee-dashboard"
+                  showSparkline={false}
+                  showTarget={true}
                 />
               </Grid>
               <Grid item xs={12} sm={6} lg={3}>
-                <KPICard
+                <ClickableKPI
+                  type="quality"
                   title="Qualidade"
+                  value={overview.kpis.quality.value}
+                  target={overview.kpis.quality.target}
+                  trend={overview.kpis.quality.trend}
                   icon={<VerifiedUser />}
-                  kpi={overview.kpis.quality}
-                  color={theme.palette.info.main}
+                  color="info"
+                  format="percent"
+                  drillThroughPage="/oee-dashboard"
+                  showSparkline={false}
+                  showTarget={true}
                 />
               </Grid>
             </Grid>
