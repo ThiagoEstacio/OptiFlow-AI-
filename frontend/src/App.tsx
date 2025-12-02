@@ -24,6 +24,7 @@ import { AssetProvider } from './contexts/AssetContext';
 import { websocketService } from './services/websocket';
 import { CriticalAlarmNotification } from './components/CriticalAlarmNotification';
 import { useCriticalAlarms } from './hooks/useCriticalAlarms';
+import FloatingChat from './components/FloatingChat';
 
 // ========================================
 // 📊 CORE PAGES (5 principais)
@@ -212,6 +213,8 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </BrowserRouter>
+              {/* 🤖 Floating AI Chat - disponível em toda aplicação */}
+              <FloatingChat />
           </AssetProvider>
           </MuiThemeWrapper>
         </ThemeProvider>
