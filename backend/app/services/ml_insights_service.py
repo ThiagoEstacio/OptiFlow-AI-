@@ -44,12 +44,35 @@ try:
 except ImportError:
     TENSORFLOW_AVAILABLE = False
 
-from app.models.alarm import AlarmEvent
+from app.models.alarm import AlarmEvent, AlarmDefinition
 # Comentando imports que podem não existir - usando apenas AlarmEvent
 # from app.models.operational_data import OperationalData
 # from app.models.external_data import ExternalData
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_numpy_types(obj):
+    """
+    Recursivamente converte tipos numpy para tipos Python nativos para serialização JSON
+    """
+    if isinstance(obj, dict):
+        return {k: _convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+    elif hasattr(obj, 'isoformat'):  # datetime objects
+        return obj.isoformat()
+    return obj
 
 
 class MLInsightsService:
@@ -183,6 +206,9 @@ class MLInsightsService:
         }
 
         logger.info(f"Insights gerados com sucesso: {len([i for i in insights if not isinstance(i, Exception)])}/6")
+
+        # Converter tipos numpy para serialização JSON
+        result = _convert_numpy_types(result)
 
         # Armazenar no cache
         try:
@@ -393,14 +419,16 @@ class MLInsightsService:
         end_time: datetime
     ) -> pd.DataFrame:
         """
-        Busca dados de alarmes do PostgreSQL
+        Busca dados de alarmes do PostgreSQL com nomes dos equipamentos
         """
         try:
             from sqlalchemy import select, and_
-            from sqlalchemy.orm import joinedload
+            from sqlalchemy.orm import joinedload, selectinload
 
-            # Buscar alarmes no período (sem filtro de organização por enquanto)
-            query = select(AlarmEvent).where(
+            # Buscar alarmes no período com join para AlarmDefinition
+            query = select(AlarmEvent).options(
+                selectinload(AlarmEvent.definition)
+            ).where(
                 and_(
                     AlarmEvent.trigger_timestamp >= start_time,
                     AlarmEvent.trigger_timestamp <= end_time
@@ -422,10 +450,34 @@ class MLInsightsService:
                 if hasattr(alarm, 'clear_timestamp') and alarm.clear_timestamp:
                     duration_minutes = (alarm.clear_timestamp - alarm.trigger_timestamp).total_seconds() / 60
 
+                # Determinar severidade baseada no tipo de alarme ou duração
+                severity = 'medium'  # Default
+                if duration_minutes > 120:
+                    severity = 'critical'
+                elif duration_minutes < 30:
+                    severity = 'low'
+
+                # Extrair nome do equipamento do nome do alarme
+                # Formato esperado: ALARME_EQUIP01_TIPO ou nome_do_alarme
+                equipment_name = 'EQUIPMENT_01'
+                if hasattr(alarm, 'definition') and alarm.definition:
+                    alarm_name = alarm.definition.name
+                    # Tentar extrair equipamento do nome (ex: ALARME_CORR01_TEMP -> CORR01)
+                    if alarm_name:
+                        parts = alarm_name.split('_')
+                        if len(parts) >= 2:
+                            # Pegar o segundo elemento (nome do equipamento)
+                            equipment_name = parts[1] if parts[0] == 'ALARME' else parts[0]
+                        else:
+                            equipment_name = alarm_name
+                elif hasattr(alarm, 'definition_id'):
+                    equipment_name = str(alarm.definition_id)[:8]  # Primeiros 8 chars do UUID
+
                 alarm_data.append({
                     'timestamp': alarm.trigger_timestamp,
-                    'equipment_id': str(alarm.definition_id) if hasattr(alarm, 'definition_id') else 'EQUIPMENT_01',
+                    'equipment_id': equipment_name,
                     'alarm_type': alarm.state.value if hasattr(alarm, 'state') else 'active',
+                    'severity': severity,
                     'duration_minutes': duration_minutes,
                     'resolved': alarm.state.value == 'cleared' if hasattr(alarm, 'state') else False
                 })

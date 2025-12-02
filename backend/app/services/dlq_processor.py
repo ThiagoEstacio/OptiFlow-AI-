@@ -15,6 +15,7 @@ Features:
 import logging
 import asyncio
 import json
+import socket
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -90,14 +91,27 @@ class DLQProcessor:
         
         try:
             bootstrap_servers = settings.KAFKA_BOOTSTRAP_SERVERS
-            
+
+            # Generate stable instance ID for static membership (prevents rebalancing)
+            instance_id = f"dlq-{socket.gethostname()}"
+
             self.consumer = AIOKafkaConsumer(
                 self.topic,
                 bootstrap_servers=bootstrap_servers,
                 group_id=self.group_id,
                 value_deserializer=lambda v: json.loads(v.decode('utf-8')),
                 auto_offset_reset='earliest',
-                enable_auto_commit=False
+                enable_auto_commit=False,
+                # === SPRINT 1: Kafka Consumer Stability Fixes ===
+                # Increased timeouts to prevent "Heartbeat session expired"
+                session_timeout_ms=45000,       # 45s (default 10s) - time before consumer considered dead
+                heartbeat_interval_ms=15000,    # 15s (default 3s) - heartbeat frequency
+                max_poll_interval_ms=300000,    # 5 min - max time between polls
+                # Static membership - prevents rebalancing on restart
+                group_instance_id=instance_id,
+                # Request handling
+                request_timeout_ms=40000,       # 40s - request timeout
+                retry_backoff_ms=500,           # 500ms - backoff between retries
             )
             
             await self.consumer.start()

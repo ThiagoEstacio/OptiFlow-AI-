@@ -18,6 +18,7 @@ This replaces the old alarm_monitor_service that read from the simulator.
 
 import logging
 import asyncio
+import socket
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 import json
@@ -99,6 +100,9 @@ class AlarmEventConsumer:
         try:
             logger.info("🚀 Starting Alarm Event Consumer...")
 
+            # Generate stable instance ID for static membership (prevents rebalancing)
+            instance_id = f"alarm-{socket.gethostname()}"
+
             self.consumer = AIOKafkaConsumer(
                 self.topic,
                 bootstrap_servers=self.bootstrap_servers,
@@ -106,7 +110,17 @@ class AlarmEventConsumer:
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')),
                 auto_offset_reset='earliest',
                 enable_auto_commit=True,
-                auto_commit_interval_ms=5000
+                auto_commit_interval_ms=5000,
+                # === SPRINT 1: Kafka Consumer Stability Fixes ===
+                # Increased timeouts to prevent "Heartbeat session expired"
+                session_timeout_ms=45000,       # 45s (default 10s) - time before consumer considered dead
+                heartbeat_interval_ms=15000,    # 15s (default 3s) - heartbeat frequency
+                max_poll_interval_ms=300000,    # 5 min - max time between polls
+                # Static membership - prevents rebalancing on restart
+                group_instance_id=instance_id,
+                # Request handling
+                request_timeout_ms=40000,       # 40s - request timeout
+                retry_backoff_ms=500,           # 500ms - backoff between retries
             )
 
             await self.consumer.start()

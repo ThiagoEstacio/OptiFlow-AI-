@@ -36,6 +36,7 @@ except ImportError:
 from app.core.config import settings
 from app.services.influxdb import influxdb_service
 from app.services.circuit_breaker import CircuitBreaker
+from app.services.persistent_buffer import PersistentBuffer
 
 # Redis for deduplication
 try:
@@ -138,6 +139,18 @@ class TimeSeriesConsumer:
             name="influxdb_writer"
         )
 
+        # === SPRINT 1: Persistent buffer for circuit breaker recovery ===
+        # When circuit is OPEN, data goes to this buffer instead of being lost
+        # When circuit closes, buffer is automatically flushed to InfluxDB
+        self._persistent_buffer = PersistentBuffer(
+            name="influxdb_recovery",
+            max_size=100000,          # Max 100k points
+            ttl_seconds=3600,         # 1 hour TTL
+            flush_batch_size=500      # 500 points per flush batch
+        )
+        self._buffer_flush_task = None
+        self._previous_circuit_state = None
+
     async def start(self, max_retries: int = 5, initial_delay: float = 2.0):
         """
         Start Kafka consumer with retry logic
@@ -156,6 +169,10 @@ class TimeSeriesConsumer:
             try:
                 logger.info(f"🔌 Kafka consumer connection attempt {attempt + 1}/{max_retries} to {bootstrap_servers}")
 
+                # Generate stable instance ID for static membership
+                import socket
+                instance_id = f"timeseries-{socket.gethostname()}"
+
                 self.consumer = AIOKafkaConsumer(
                     self.topic,
                     bootstrap_servers=bootstrap_servers,
@@ -163,7 +180,17 @@ class TimeSeriesConsumer:
                     value_deserializer=lambda v: json.loads(v.decode('utf-8')),
                     auto_offset_reset='earliest',  # Start from beginning if no offset
                     enable_auto_commit=False,  # Manual commit after successful write
-                    max_poll_records=self.current_batch_size
+                    max_poll_records=self.current_batch_size,
+                    # === SPRINT 1: Kafka Consumer Stability Fixes ===
+                    # Increased timeouts to prevent unnecessary rebalances
+                    session_timeout_ms=45000,      # 45s (default 10s) - time before consumer considered dead
+                    heartbeat_interval_ms=15000,   # 15s (default 3s) - heartbeat frequency
+                    max_poll_interval_ms=300000,   # 5 min (default 5 min) - max time between polls
+                    # Static membership - prevents rebalance on restart within session timeout
+                    group_instance_id=instance_id,
+                    # Retry settings
+                    request_timeout_ms=40000,      # 40s request timeout
+                    retry_backoff_ms=500,          # 500ms between retries
                 )
 
                 await self.consumer.start()
@@ -184,6 +211,11 @@ class TimeSeriesConsumer:
                         )
                         await self._redis_client.ping()
                         logger.info("✅ Redis connected for deduplication cache")
+
+                        # === SPRINT 1: Connect persistent buffer to Redis ===
+                        await self._persistent_buffer.connect(self._redis_client)
+                        logger.info("✅ Persistent buffer connected to Redis")
+
                     except Exception as e:
                         logger.warning(f"⚠️  Redis connection failed: {e}, using in-memory dedup")
                         self._use_redis = False
@@ -215,6 +247,14 @@ class TimeSeriesConsumer:
             except Exception as e:
                 logger.error(f"Error stopping Kafka consumer: {e}")
         
+        # Disconnect persistent buffer
+        if self._persistent_buffer:
+            try:
+                await self._persistent_buffer.disconnect()
+                logger.info("✅ Persistent buffer disconnected")
+            except Exception as e:
+                logger.error(f"Error disconnecting persistent buffer: {e}")
+
         # Close Redis connection
         if self._redis_client:
             try:
@@ -324,22 +364,48 @@ class TimeSeriesConsumer:
 
     async def _write_batch(self, batch: List[Dict[str, Any]]):
         """
-        Write batch of messages to InfluxDB with circuit breaker protection
+        Write batch of messages to InfluxDB with circuit breaker protection.
+
+        === SPRINT 1: Persistent Buffer Integration ===
+        When circuit breaker is OPEN:
+        - Data is buffered to Redis (persistent buffer)
+        - NOT lost or sent to DLQ immediately
+
+        When circuit breaker transitions to CLOSED:
+        - Buffer is automatically flushed to InfluxDB
+        - Data is recovered in order (FIFO)
 
         Args:
             batch: List of tag data dictionaries
 
         Returns:
-            True if write succeeded, False if failed or circuit is open
+            True if write succeeded (or buffered successfully), False if failed
         """
+        # === SPRINT 1: Check for circuit state transition and trigger flush ===
+        current_state = self._influxdb_circuit_breaker.state.value
+        if self._previous_circuit_state == "open" and current_state == "closed":
+            logger.info("🔄 Circuit breaker recovered! Starting buffer flush...")
+            asyncio.create_task(self._flush_persistent_buffer())
+        self._previous_circuit_state = current_state
+
         # Check if circuit breaker is open (InfluxDB is down)
         if self._influxdb_circuit_breaker.is_open:
+            # === SPRINT 1: Buffer data instead of losing it ===
             logger.warning(
-                f"⚡ Circuit breaker OPEN - skipping write of {len(batch)} points "
-                f"(InfluxDB unavailable, will retry after {self._influxdb_circuit_breaker.config.timeout}s)"
+                f"⚡ Circuit breaker OPEN - buffering {len(batch)} points "
+                f"(InfluxDB unavailable, will recover when circuit closes)"
             )
-            self._errors += 1
-            return False
+
+            # Try to buffer the data
+            buffered = await self._persistent_buffer.buffer(batch)
+            if buffered > 0:
+                logger.info(f"📦 Buffered {buffered}/{len(batch)} points for recovery")
+                return True  # Consider buffered as "success" to commit offset
+            else:
+                # Buffer failed (Redis down?) - send to DLQ as last resort
+                logger.error(f"❌ Buffer failed, sending {len(batch)} points to DLQ")
+                self._errors += len(batch)
+                return False
 
         try:
             start = time.time()
@@ -373,15 +439,27 @@ class TimeSeriesConsumer:
                     f"(total: {self._messages_processed}) - {latency_ms:.1f}ms "
                     f"[circuit: {self._influxdb_circuit_breaker.state.value}]"
                 )
+
+                # === SPRINT 1: Check if we should flush buffer after successful write ===
+                buffer_size = await self._persistent_buffer.size()
+                if buffer_size > 0 and self._influxdb_circuit_breaker.is_closed:
+                    logger.info(f"📦 Buffer has {buffer_size} points, scheduling flush...")
+                    asyncio.create_task(self._flush_persistent_buffer())
+
                 return True
             else:
                 # Circuit breaker blocked the call or write failed
-                logger.error(
-                    f"❌ Failed to write batch of {len(batch)} points to InfluxDB "
+                # === SPRINT 1: Buffer the data instead of losing it ===
+                logger.warning(
+                    f"⚠️ Write failed, buffering {len(batch)} points "
                     f"[circuit: {self._influxdb_circuit_breaker.state.value}]"
                 )
-                self._errors += 1
-                return False
+                buffered = await self._persistent_buffer.buffer(batch)
+                if buffered > 0:
+                    return True  # Buffered successfully
+                else:
+                    self._errors += 1
+                    return False
 
         except Exception as e:
             # This exception is caught by circuit breaker, but log it anyway
@@ -389,8 +467,38 @@ class TimeSeriesConsumer:
                 f"❌ Error writing batch to InfluxDB: {e} "
                 f"[circuit: {self._influxdb_circuit_breaker.state.value}]"
             )
-            self._errors += 1
-            return False
+
+            # === SPRINT 1: Try to buffer even on exception ===
+            buffered = await self._persistent_buffer.buffer(batch)
+            if buffered == 0:
+                self._errors += 1
+            return buffered > 0
+
+    async def _flush_persistent_buffer(self):
+        """
+        Flush buffered data to InfluxDB.
+
+        Called automatically when:
+        - Circuit breaker transitions from OPEN to CLOSED
+        - A successful write happens while buffer is not empty
+        """
+        def _write_to_influx(data_points: List[Dict[str, Any]]) -> bool:
+            """Wrapper for InfluxDB write that matches buffer flush signature."""
+            try:
+                return influxdb_service.write_batch(data_points)
+            except Exception as e:
+                logger.error(f"❌ Error writing buffered data: {e}")
+                return False
+
+        try:
+            success, failed = await self._persistent_buffer.flush(_write_to_influx)
+            if success > 0:
+                self._messages_processed += success
+                logger.info(f"✅ Recovered {success} buffered points to InfluxDB")
+            if failed > 0:
+                logger.warning(f"⚠️ Failed to recover {failed} buffered points")
+        except Exception as e:
+            logger.error(f"❌ Error flushing persistent buffer: {e}")
 
     async def _send_to_dlq(self, batch: List[Dict[str, Any]], reason: str = ""):
         """Send failed batch to Dead Letter Queue"""
@@ -467,13 +575,28 @@ class TimeSeriesConsumer:
             logger.error(f"Error marking as processed: {e}, using in-memory fallback")
             self._processed_message_ids.add(message_id)
 
-    def get_stats(self) -> Dict[str, int]:
-        """Get consumer statistics"""
+    async def get_stats_async(self) -> Dict[str, Any]:
+        """Get consumer statistics (async version with buffer stats)"""
+        buffer_size = await self._persistent_buffer.size() if self._persistent_buffer else 0
         return {
             'messages_processed': self._messages_processed,
             'batches_written': self._batches_written,
             'errors': self._errors,
-            'circuit_breaker': self._influxdb_circuit_breaker.get_stats()
+            'circuit_breaker': self._influxdb_circuit_breaker.get_stats(),
+            'persistent_buffer': {
+                **self._persistent_buffer.get_stats(),
+                'current_size': buffer_size
+            }
+        }
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get consumer statistics (sync version)"""
+        return {
+            'messages_processed': self._messages_processed,
+            'batches_written': self._batches_written,
+            'errors': self._errors,
+            'circuit_breaker': self._influxdb_circuit_breaker.get_stats(),
+            'persistent_buffer': self._persistent_buffer.get_stats() if self._persistent_buffer else {}
         }
 
 
