@@ -24,6 +24,8 @@ from app.api.v1.endpoints import (
     ai_engineering,
     advanced_features,
     executive,
+    executive_summary,
+    executive_report,
     gbm_data,
     historical_analysis,
     gateway_config,
@@ -32,7 +34,11 @@ from app.api.v1.endpoints import (
     ml_compare,
     ml_models,
     ml_drift,
+    ml_insights,
     dashboards,
+    dashboard_stats,
+    oee,
+    oee_prediction,
     opcua_tags,
     reports,
     data_quality,
@@ -69,6 +75,8 @@ api_router.include_router(operations.router, prefix="/operations", tags=["Port O
 api_router.include_router(ai_engineering.router, prefix="/ai-engineering", tags=["AI Engineering Tools"])
 api_router.include_router(advanced_features.router, prefix="/advanced", tags=["Advanced Features"])
 api_router.include_router(executive.router, prefix="/executive", tags=["Executive Dashboard & ROI"])
+api_router.include_router(executive_summary.router, prefix="/executive-summary", tags=["Executive Summary & KPIs"])
+api_router.include_router(executive_report.router, prefix="/executive-report", tags=["Executive Report PDF Generation"])
 api_router.include_router(gbm_data.router, prefix="/gbm", tags=["GBM Logistics Data Import & Insights"])
 api_router.include_router(historical_analysis.router, prefix="/historical", tags=["Historical Analysis & Trends"])
 api_router.include_router(gateway_config.router, prefix="/gateway-config", tags=["Gateway Configuration & OPC-UA Discovery"])
@@ -76,7 +84,11 @@ api_router.include_router(cache.router, prefix="/cache", tags=["Cache Management
 api_router.include_router(ml_compare.router, prefix="/ml", tags=["ML Model Comparison & A/B Testing"])
 api_router.include_router(ml_models.router, prefix="/ml/models", tags=["ML Model Training & Management"])
 api_router.include_router(ml_drift.router, prefix="/ml/drift", tags=["ML Drift Detection & Monitoring"])
+api_router.include_router(ml_insights.router, prefix="/ml", tags=["ML Insights & Analytics"])
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["Dashboards & Widgets"])
+api_router.include_router(dashboard_stats.router, prefix="/dashboard", tags=["Dashboard Statistics"])
+api_router.include_router(oee.router, prefix="/oee", tags=["OEE - Overall Equipment Effectiveness"])
+api_router.include_router(oee_prediction.router, tags=["OEE Predictions & Early Warnings"])
 api_router.include_router(opcua_tags.router, prefix="/opcua", tags=["OPC UA Tag Browser"])
 api_router.include_router(reports.router, prefix="/reports", tags=["Reports & Export"])
 api_router.include_router(data_quality.router, prefix="/data-quality", tags=["Data Quality Analytics"])

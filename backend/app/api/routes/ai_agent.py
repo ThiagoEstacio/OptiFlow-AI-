@@ -63,11 +63,18 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ToolCallRequest(BaseModel):
+    """Direct tool call request (bypasses LLM)"""
+    name: str
+    arguments: Dict[str, Any]
+
+
 class DashboardAgentRequest(BaseModel):
     message: str
     context: Optional[Dict[str, Any]] = None
     available_tags: Optional[List[Dict[str, Any]]] = None
     current_widgets: Optional[List[Dict[str, Any]]] = None
+    tool_call: Optional[ToolCallRequest] = None  # Direct tool execution
 
 
 class WidgetConfig(BaseModel):
@@ -82,42 +89,88 @@ class DashboardAgentResponse(BaseModel):
     response: str
     widgets: Optional[List[WidgetConfig]] = None
     suggestions: Optional[List[str]] = None
+    tool_result: Optional[Dict[str, Any]] = None  # Raw tool result data
 
+
+# =============================================================================
+# SYSTEM PROMPTS - Analista Sênior PCO/PCM/Qualidade (Indústria 4.0)
+# =============================================================================
 
 # System prompt for DATA-DRIVEN analysis (with pre-fetched data)
-SYSTEM_PROMPT_WITH_DATA = """Você é um Analista de Manutenção Preditiva (PCM/PCO) especializado em análise de dados industriais.
+SYSTEM_PROMPT_WITH_DATA = """Você é um ANALISTA SÊNIOR de PCO (Planejamento e Controle de Operações), PCM (Planejamento e Controle da Manutenção) e QUALIDADE, atuando 24h em uma PLATAFORMA DE INDÚSTRIA 4.0.
+
+## SEU PAPEL:
+- Monitorar continuamente o processo industrial
+- Detectar anomalias e desvios de comportamento
+- Prever falhas e problemas de qualidade
+- Sugerir ações de operação e manutenção
+- Apoiar decisões com BASE EM DADOS, não opinião
+
+Você une: Ferramentas de Qualidade (Ishikawa, 5 Porquês, Pareto, CEP), Ciência de Dados, Machine Learning, visão de PCO, PCM e Qualidade.
 
 ## DADOS DISPONÍVEIS:
 {data_context}
 
-## SUA MISSÃO:
-Analise os dados acima e forneça:
-1. 📊 **Situação Atual**: Resumo dos valores/status
-2. 🔍 **Análise Técnica**: Identificar padrões, anomalias, tendências
-3. 💡 **Recomendações**: Ações concretas baseadas nos dados
+## SUA ANÁLISE DEVE CONTER:
 
-## FORMATO DE RESPOSTA:
-- Use Markdown com emojis
-- Seja conciso e objetivo
-- Foque em insights acionáveis
-- Cite valores específicos dos dados
+1) 📊 **VISÃO GERAL**
+   - Resumo em 2-3 frases do cenário atual
+
+2) 🔍 **PRINCIPAIS INSIGHTS** (3-5 pontos)
+   - Desvios, tendências, anomalias detectadas
+   - Diferenças entre turnos/máquinas/linhas (se aplicável)
+   - Impactos em produção, manutenção, qualidade
+
+3) 🎯 **DIAGNÓSTICO PROVÁVEL**
+   - O que está acontecendo e por quê
+   - Nível de confiança: alta | média | baixa
+
+4) ⚙️ **RECOMENDAÇÕES PCO** (Operação)
+   - Ajuste de ritmo, priorização, gargalos
+
+5) 🔧 **RECOMENDAÇÕES PCM** (Manutenção)
+   - Inspeções, verificações, programação
+
+6) ✅ **RECOMENDAÇÕES QUALIDADE**
+   - Estabilização do processo, redução de rejeito
+
+## REGRAS:
+- NUNCA assuma que o sistema escreve no processo (somente leitura)
+- Seja TRANSPARENTE sobre incertezas
+- NÃO invente números - use os dados fornecidos
+- Pense como quem está na SALA DE CONTROLE: prático e orientado à ação
+- Use Markdown com emojis para clareza
 
 ## CONTEXTO DO USUÁRIO:
 Pergunta: {user_query}
 
-Analise os dados e responda de forma técnica e precisa."""
+Analise os dados acima e responda como um Analista Sênior, transformando dados em INSIGHTS ACIONÁVEIS."""
 
-# Fallback prompt (when no tools available)
-SYSTEM_PROMPT_TEMPLATE = """OptiFlow AI - Analista Industrial
+# Fallback prompt (when no tools available or for tool-calling mode)
+SYSTEM_PROMPT_TEMPLATE = """OptiFlow AI - Analista Sênior PCO/PCM/Qualidade
+
+Você é um ANALISTA SÊNIOR de Indústria 4.0 especializado em:
+- PCO: gargalos, capacidade, eficiência, OEE
+- PCM: manutenção preditiva, falhas, MTBF/MTTR
+- Qualidade: CEP, defeitos, variabilidade, Pareto
 
 {tools}
 
-REGRAS:
-1) SEMPRE busque dados reais usando ferramentas
-2) Use blocos ```tool para chamar ferramentas
-3) Português, conciso, Markdown+emojis
+## COMO AGIR:
+1. ENTENDER o cenário e variáveis críticas
+2. ANALISAR padrões, tendências, correlações
+3. DIAGNOSTICAR causas prováveis
+4. RECOMENDAR ações práticas
 
-FORMATO: 📊 Dados → 🔍 Análise → 💡 Ações"""
+## FORMATO:
+📊 **Situação** → 🔍 **Análise** → 🎯 **Diagnóstico** → 💡 **Ações**
+
+## REGRAS:
+- SEMPRE busque dados reais usando ferramentas antes de responder
+- Use blocos ```tool para chamar ferramentas
+- Português, conciso, Markdown com emojis
+- Seja transparente sobre incertezas
+- Priorize por criticidade/impacto"""
 
 
 def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[Dict]:
@@ -195,14 +248,21 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
 
     logger.error(f"🔑 Extracted keywords: {keywords}")
 
-    # Try exact match first
+    # Try exact match first - EXPANDED to also check keywords for exact matches
     for tag in available_tags:
         tag_name = tag.get('name', '').lower()
         tag_id = tag.get('id', '').lower()
 
         # Check if query mentions the exact tag name or ID
         if tag_name in query_lower or tag_id in query_lower:
+            logger.error(f"✅ EXACT MATCH: tag_name='{tag_name}' or tag_id='{tag_id}' found in query")
             return tag
+
+        # Also check if any extracted keyword IS the exact tag name (e.g., "por_carregamento")
+        for keyword in keywords:
+            if keyword == tag_name or keyword == tag_id:
+                logger.error(f"✅ KEYWORD EXACT MATCH: keyword='{keyword}' matches tag")
+                return tag
 
     # PRIORITY: If measurement type identified, find tag with matching type
     if measurement_type:
@@ -285,6 +345,17 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
     return available_tags[0]
 
 
+def _get_trend_icon(trend: str) -> str:
+    """Get icon for trend direction"""
+    if trend == "up":
+        return "📈"
+    elif trend == "down":
+        return "📉"
+    elif trend == "stable":
+        return "➡️"
+    return ""
+
+
 async def pre_execute_tools_from_query(
     query: str,
     available_tags: Optional[List[Dict]],
@@ -300,13 +371,21 @@ async def pre_execute_tools_from_query(
     data_results = []
 
     # Pattern 1: Realtime value queries
+    # EXPANDED: Now includes "valor de {tag}", "qual o valor de {tag}", direct tag names
     realtime_patterns = [
         'temperatura atual', 'pressão atual', 'valor atual', 'velocidade atual',
         'qual a temperatura', 'qual a pressão', 'qual o valor',
-        'quanto está', 'quanto é', 'mostre'
+        'quanto está', 'quanto é', 'mostre', 'valor de', 'valor do', 'valor da',
+        'qual é o valor', 'me mostre o valor', 'leitura de', 'leitura do', 'leitura da'
     ]
 
-    if any(pattern in query_lower for pattern in realtime_patterns):
+    # Also detect direct tag name queries (e.g., "por_carregamento" or "ELEV01_TEMP")
+    # If the query contains a tag-like name pattern (word with underscore or specific format)
+    import re
+    tag_name_pattern = re.search(r'\b([a-zA-Z][a-zA-Z0-9_]*(?:_[a-zA-Z0-9]+)+)\b', query)
+    has_tag_name_in_query = tag_name_pattern is not None
+
+    if any(pattern in query_lower for pattern in realtime_patterns) or has_tag_name_in_query:
         # Try to find a tag via props first, then fall back to regex in the user text
         matched_tag = None
         tag_id = None
@@ -410,7 +489,11 @@ async def pre_execute_tools_from_query(
         'atenção', 'atencao', 'warning', 'aviso'
     ]
 
-    if any(pattern in query_lower for pattern in alarm_patterns):
+    # Frequency patterns - when present, skip Pattern 4 (active alarms) and use Pattern 5 (frequency analysis)
+    frequency_patterns = ['frequência', 'frequency', 'chattering', 'flood', 'taxa', 'quantas vezes', 'how often', 'histórico', 'history', 'vezes', 'ocorrências', 'ocorrencias']
+    is_frequency_query = any(pattern in query_lower for pattern in frequency_patterns)
+
+    if any(pattern in query_lower for pattern in alarm_patterns) and not is_frequency_query:
         logger.error(f"🚨 PRE-EXECUTE: Alarm query detected: '{query}'")
 
         # Detect severity filter from query
@@ -482,17 +565,18 @@ async def pre_execute_tools_from_query(
                         break
 
         # Execute get_active_alarms tool
-        alarm_args = {"limit": 20}
+        alarm_args = {"limit": 100}
         if severity:
             alarm_args["severity"] = severity
-            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(severity={severity}, limit=20)")
+            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(severity={severity}, limit=100)")
         else:
-            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(limit=20)")
+            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(limit=100)")
 
         result = await toolkit.execute_tool("get_active_alarms", alarm_args)
 
         if result.success and result.data:
             alarms = result.data.get('alarms', [])
+            total_active = result.data.get('total_active_alarms', len(alarms))
 
             # Filter by equipment if detected
             if equipment_filter and alarms:
@@ -507,13 +591,14 @@ async def pre_execute_tools_from_query(
 
                 logger.error(f"📊 Filtered {len(filtered_alarms)} alarms from {len(alarms)} total")
                 alarms = filtered_alarms
+                total_active = len(filtered_alarms)  # Update count for filtered results
 
             if alarms:
                 alarm_count = len(alarms)
                 severity_filter_text = f" ({severity.upper()})" if severity else ""
                 equipment_filter_text = f" do equipamento {equipment_filter}" if equipment_filter else ""
 
-                data_results.append(f"**🚨 Alarmes Ativos{severity_filter_text}{equipment_filter_text}**: {alarm_count} alarme(s)")
+                data_results.append(f"**🚨 Alarmes Ativos{severity_filter_text}{equipment_filter_text}**: {total_active} alarme(s)")
                 data_results.append("")
 
                 for i, alarm in enumerate(alarms[:10], 1):  # Show max 10 alarms
@@ -549,10 +634,43 @@ async def pre_execute_tools_from_query(
             data_results.append("❌ **Erro ao buscar alarmes ativos**")
 
     # Pattern 5: Alarm frequency analysis queries (NEW)
-    frequency_patterns = ['frequência', 'frequency', 'chattering', 'flood', 'taxa', 'quantas vezes', 'how often']
+    # Uses is_frequency_query already defined above
 
-    if any(pattern in query_lower for pattern in frequency_patterns) and any(pattern in query_lower for pattern in alarm_patterns):
+    logger.error(f"🔍 DEBUG: is_frequency_query={is_frequency_query}, alarm_pattern_match={any(pattern in query_lower for pattern in alarm_patterns)}")
+
+    if is_frequency_query and any(pattern in query_lower for pattern in alarm_patterns):
         logger.error(f"📊 PRE-EXECUTE: Alarm frequency analysis detected: '{query}'")
+
+        # Detect specific alarm name filter from query (e.g., "LOAD PCT", "LOAD_PCT")
+        alarm_name_filter = None
+        # Common alarm name patterns to extract
+        import re
+
+        # Multiple patterns to try (in order of specificity)
+        alarm_patterns = [
+            # "alarme de LOAD PCT aparece/ocorre"
+            r'alarme\s+(?:de\s+)?([A-Za-z0-9_\s]+?)(?:\s+aparece|\s+ocorre)',
+            # "alarme LOAD PCT" or "alarme de LOAD PCT" followed by various endings
+            r'alarme\s+(?:de\s+)?([A-Za-z][A-Za-z0-9_\s]{2,20})(?:\s+nos|\s+nas|\s+no|\s+na|\s+em|\s+durante|\?|$)',
+            # "frequência do alarme LOAD_PCT"
+            r'frequ[êe]ncia\s+(?:do\s+|da\s+)?alarme\s+([A-Za-z][A-Za-z0-9_\s]{2,20})',
+            # Direct alarm name pattern like "LOAD_PCT" or "LOAD PCT"
+            r'\b(LOAD[_\s]?PCT[_\s]?[A-Za-z0-9_]*)\b',
+            # Any word_word pattern that looks like an alarm name
+            r'\b([A-Z][A-Z0-9]*[_][A-Z0-9_]+)\b',
+        ]
+
+        for pattern in alarm_patterns:
+            alarm_name_match = re.search(pattern, query, re.IGNORECASE)
+            if alarm_name_match:
+                alarm_name_filter = alarm_name_match.group(1).strip().upper().replace(' ', '_')
+                # Clean up trailing words like "NOS" or "NAS"
+                alarm_name_filter = re.sub(r'[_]?(NOS|NAS|NO|NA|EM|DURANTE)$', '', alarm_name_filter)
+                if len(alarm_name_filter) >= 4:  # Minimum 4 chars for valid alarm name
+                    logger.error(f"🔍 Detected alarm name filter: {alarm_name_filter} (pattern: {pattern[:30]}...)")
+                    break
+                else:
+                    alarm_name_filter = None
 
         # Detect equipment filter
         equipment_filter = None
@@ -560,7 +678,7 @@ async def pre_execute_tools_from_query(
             equipment_keywords = []
             for word in query_lower.split():
                 clean_word = word.strip('.,?!;:')
-                if clean_word not in ['qual', 'quais', 'a', 'o', 'do', 'da', 'no', 'na', 'frequência', 'alarme', 'alarmes']:
+                if clean_word not in ['qual', 'quais', 'a', 'o', 'do', 'da', 'no', 'na', 'frequência', 'alarme', 'alarmes', 'quantas', 'vezes', 'aparece', 'ocorre']:
                     if len(clean_word) >= 3:
                         equipment_keywords.append(clean_word)
 
@@ -575,41 +693,63 @@ async def pre_execute_tools_from_query(
                         break
 
         # Execute frequency analysis
+        logger.error(f"🔧 PRE-EXECUTE: Calling analyze_alarm_frequency with equipment_filter={equipment_filter}, alarm_name_filter={alarm_name_filter}")
         result = await toolkit.execute_tool("analyze_alarm_frequency", {
-            "duration": "24h",
-            "equipment_filter": equipment_filter
+            "duration": "7d",  # Use 7 days for better frequency analysis
+            "equipment_filter": equipment_filter,
+            "alarm_name_filter": alarm_name_filter
         })
+        logger.error(f"🔧 PRE-EXECUTE: analyze_alarm_frequency result.success={result.success}, has_data={bool(result.data)}, data_type={type(result.data)}, data_keys={result.data.keys() if isinstance(result.data, dict) else 'N/A'}")
 
         if result.success and result.data:
             freq_data = result.data
             summary = freq_data.get('summary', {})
-            top_alarms = freq_data.get('top_frequent_alarms', [])[:5]
+            top_alarms = freq_data.get('top_frequent_alarms', [])[:10]
             chattering = freq_data.get('chattering_alarms', [])
             insights = freq_data.get('insights', [])
 
-            data_results.append(f"**📊 Análise de Frequência de Alarmes (24h)**")
-            data_results.append("")
-            data_results.append(f"- Total de eventos: {summary.get('total_alarm_events', 0)}")
-            data_results.append(f"- Alarmes/hora: {summary.get('alarms_per_hour', 0):.1f}")
-            data_results.append(f"- Alarmes únicos: {summary.get('unique_alarms', 0)}")
-            data_results.append("")
+            # Filter by alarm name if specified
+            if alarm_name_filter and top_alarms:
+                filtered_alarms = [a for a in top_alarms if alarm_name_filter.replace('_', '') in a.get('alarm_name', '').upper().replace('_', '').replace(' ', '')]
+                if filtered_alarms:
+                    top_alarms = filtered_alarms
+                    # Calculate specific count
+                    specific_count = sum(a.get('event_count', 0) for a in filtered_alarms)
+                    data_results.append(f"**📊 Frequência do Alarme '{alarm_name_filter}' (últimos 7 dias)**")
+                    data_results.append("")
+                    data_results.append(f"🔢 **Total de ocorrências: {specific_count} vezes**")
+                    data_results.append("")
+                else:
+                    data_results.append(f"**📊 Análise de Frequência de Alarmes (últimos 7 dias)**")
+                    data_results.append("")
+                    data_results.append(f"⚠️ Alarme '{alarm_name_filter}' não encontrado no histórico.")
+                    data_results.append("")
+            else:
+                data_results.append(f"**📊 Análise de Frequência de Alarmes (últimos 7 dias)**")
+                data_results.append("")
+                data_results.append(f"- Total de eventos: {summary.get('total_alarm_events', 0)}")
+                data_results.append(f"- Alarmes/hora: {summary.get('alarms_per_hour', 0):.1f}")
+                data_results.append(f"- Alarmes únicos: {summary.get('unique_alarms', 0)}")
+                data_results.append("")
 
             if top_alarms:
                 data_results.append("**🔝 Alarmes Mais Frequentes:**")
                 for alarm in top_alarms:
-                    data_results.append(f"  - {alarm['alarm_name']}: {alarm['event_count']} eventos ({alarm['percentage']}%)")
+                    data_results.append(f"  - {alarm['alarm_name']}: {alarm['event_count']} eventos ({alarm.get('percentage', 0)}%)")
                 data_results.append("")
 
             if chattering:
                 data_results.append(f"**🔄 Alarmes Chattering Detectados:** {len(chattering)}")
                 for alarm in chattering[:3]:
-                    data_results.append(f"  - {alarm['alarm_name']}: {alarm['event_count']} eventos, intervalo médio {alarm['avg_interval_minutes']:.1f} min")
+                    data_results.append(f"  - {alarm['alarm_name']}: {alarm['event_count']} eventos, intervalo médio {alarm.get('avg_interval_minutes', 0):.1f} min")
                 data_results.append("")
 
             if insights:
                 data_results.append("**💡 Insights:**")
                 for insight in insights:
                     data_results.append(f"  {insight}")
+        else:
+            data_results.append("❌ **Erro ao analisar frequência de alarmes**")
 
     # Pattern 6: Histogram/distribution queries (NEW)
     histogram_patterns = ['histograma', 'histogram', 'distribuição', 'distribution', 'faixa', 'range']
@@ -729,6 +869,257 @@ async def pre_execute_tools_from_query(
                 for rec in recommendations:
                     data_results.append(f"  {rec}")
 
+    # Pattern 9: Executive Dashboard queries (NEW)
+    executive_patterns = [
+        'executivo', 'executive', 'visão geral', 'overview', 'kpi', 'kpis',
+        'dashboard', 'gerencial', 'diretoria', 'indicadores', 'resumo executivo'
+    ]
+
+    if any(pattern in query_lower for pattern in executive_patterns):
+        logger.info(f"📊 PRE-EXECUTE: Executive dashboard query detected: '{query}'")
+
+        # Detect time range from query
+        time_range = "24h"
+        if "7 dias" in query_lower or "semana" in query_lower or "7d" in query_lower:
+            time_range = "7d"
+        elif "30 dias" in query_lower or "mês" in query_lower or "30d" in query_lower:
+            time_range = "30d"
+
+        result = await toolkit.execute_tool("get_executive_overview", {"time_range": time_range})
+
+        if result.success and result.data:
+            exec_data = result.data
+            kpis = exec_data.get('kpis', {})
+            alarms = exec_data.get('alarms', {})
+            financial = exec_data.get('financial_summary', {})
+
+            data_results.append(f"**📊 Dashboard Executivo ({time_range})**")
+            data_results.append("")
+
+            # KPIs
+            data_results.append("**📈 KPIs Principais:**")
+            oee = kpis.get('oee', {})
+            avail = kpis.get('availability', {})
+            perf = kpis.get('performance', {})
+            qual = kpis.get('quality', {})
+
+            data_results.append(f"  - OEE: {oee.get('value', 0):.1f}% (Meta: {oee.get('target', 85)}%) {_get_trend_icon(oee.get('trend'))}")
+            data_results.append(f"  - Disponibilidade: {avail.get('value', 0):.1f}% (Meta: {avail.get('target', 95)}%) {_get_trend_icon(avail.get('trend'))}")
+            data_results.append(f"  - Performance: {perf.get('value', 0):.1f}% (Meta: {perf.get('target', 90)}%) {_get_trend_icon(perf.get('trend'))}")
+            data_results.append(f"  - Qualidade: {qual.get('value', 0):.1f}% (Meta: {qual.get('target', 99)}%) {_get_trend_icon(qual.get('trend'))}")
+            data_results.append("")
+
+            # Alarms
+            data_results.append("**🚨 Status de Alarmes:**")
+            data_results.append(f"  - Total Ativos: {alarms.get('total_active', 0)}")
+            by_sev = alarms.get('by_severity', {})
+            data_results.append(f"  - Críticos: {by_sev.get('critical', 0)} | Alto: {by_sev.get('high', 0)} | Médio: {by_sev.get('medium', 0)} | Baixo: {by_sev.get('low', 0)}")
+            data_results.append(f"  - MTTR: {alarms.get('mttr_hours', 0):.1f} horas")
+            data_results.append("")
+
+            # Financial
+            if financial:
+                data_results.append("**💰 Resumo Financeiro:**")
+                data_results.append(f"  - Economia Estimada: R$ {financial.get('estimated_savings_today', 0):,.2f}")
+                data_results.append(f"  - Custo Evitado: R$ {financial.get('downtime_cost_avoided', 0):,.2f}")
+                data_results.append(f"  - Projeção Mensal: R$ {financial.get('projected_monthly_savings', 0):,.2f}")
+                data_results.append("")
+
+            # Insights
+            insights = exec_data.get('insights', [])
+            if insights:
+                data_results.append("**💡 Insights:**")
+                for insight in insights[:3]:
+                    if isinstance(insight, dict):
+                        data_results.append(f"  - [{insight.get('type', 'info').upper()}] {insight.get('title', '')}: {insight.get('description', '')}")
+                    else:
+                        data_results.append(f"  - {insight}")
+
+    # Pattern 10: Energy metrics queries (NEW)
+    energy_patterns = ['energia', 'energy', 'consumo', 'kwh', 'demanda', 'fator de potência', 'conta de luz']
+
+    if any(pattern in query_lower for pattern in energy_patterns):
+        logger.info(f"⚡ PRE-EXECUTE: Energy metrics query detected: '{query}'")
+
+        time_range = "24h"
+        if "7 dias" in query_lower or "semana" in query_lower:
+            time_range = "7d"
+        elif "30 dias" in query_lower or "mês" in query_lower:
+            time_range = "30d"
+
+        result = await toolkit.execute_tool("get_energy_metrics", {"time_range": time_range})
+
+        if result.success and result.data:
+            energy = result.data
+            current = energy.get('current', {})
+            period = energy.get('period', {})
+            forecast = energy.get('forecast', {})
+            bill = energy.get('bill_forecast', {})
+
+            data_results.append(f"**⚡ Métricas de Energia ({time_range})**")
+            data_results.append("")
+            data_results.append("**Consumo Atual:**")
+            data_results.append(f"  - Consumo: {current.get('consumption_kwh', 0):,.0f} kWh")
+            data_results.append(f"  - Demanda: {current.get('demand_kw', 0):,.0f} kW")
+            data_results.append(f"  - Fator de Potência: {current.get('power_factor', 0):.2f}")
+            data_results.append("")
+            data_results.append("**Previsão de Conta:**")
+            data_results.append(f"  - Custo Energia: R$ {bill.get('energy_cost', 0):,.2f}")
+            data_results.append(f"  - Custo Demanda: R$ {bill.get('demand_cost', 0):,.2f}")
+            data_results.append(f"  - Total Estimado: R$ {bill.get('total_estimate', 0):,.2f}")
+
+    # Pattern 11: Production metrics queries (NEW)
+    production_patterns = ['produção', 'production', 'throughput', 'ton/h', 'capacidade', 'meta de produção']
+
+    if any(pattern in query_lower for pattern in production_patterns):
+        logger.info(f"🏭 PRE-EXECUTE: Production metrics query detected: '{query}'")
+
+        time_range = "24h"
+        if "7 dias" in query_lower or "semana" in query_lower:
+            time_range = "7d"
+
+        result = await toolkit.execute_tool("get_production_metrics", {"time_range": time_range})
+
+        if result.success and result.data:
+            prod = result.data
+            current = prod.get('current', {})
+            target = prod.get('target', {})
+            capacity = prod.get('capacity', {})
+
+            data_results.append(f"**🏭 Métricas de Produção ({time_range})**")
+            data_results.append("")
+            data_results.append("**Produção Atual:**")
+            data_results.append(f"  - Throughput: {current.get('throughput_ton_hour', 0):.1f} ton/h")
+            data_results.append(f"  - Utilização: {current.get('utilization_percent', 0):.1f}%")
+            data_results.append(f"  - Tempo de Ciclo: {current.get('cycle_time_minutes', 0):.1f} min")
+            data_results.append("")
+            data_results.append("**Metas:**")
+            data_results.append(f"  - Meta Diária: {target.get('production_target_tons', 0):,.0f} ton")
+            data_results.append(f"  - Atingimento: {target.get('achievement_percent', 0):.1f}%")
+            data_results.append(f"  - Gap: {target.get('gap_tons', 0):+,.0f} ton")
+
+    # Pattern 12: Pareto analysis queries (NEW)
+    pareto_patterns = ['pareto', 'ranking', 'top alarmes', 'principais alarmes', '80/20']
+
+    if any(pattern in query_lower for pattern in pareto_patterns):
+        logger.info(f"📊 PRE-EXECUTE: Pareto analysis query detected: '{query}'")
+
+        result = await toolkit.execute_tool("get_alarm_pareto", {"time_range": "24h", "limit": 10})
+
+        if result.success and result.data:
+            pareto = result.data
+            summary = pareto.get('summary', {})
+            pareto_list = pareto.get('pareto', [])
+
+            data_results.append("**📊 Análise de Pareto - Alarmes (24h)**")
+            data_results.append("")
+            data_results.append(f"- Total de Alarmes: {summary.get('total_alarms', 0)}")
+            data_results.append(f"- Tipos Únicos: {summary.get('unique_types', 0)}")
+            data_results.append(f"- Custo Estimado Total: R$ {summary.get('total_estimated_cost', 0):,.2f}")
+            data_results.append(f"- {summary.get('pareto_efficiency', '')}")
+            data_results.append("")
+            data_results.append("**Top Alarmes:**")
+            for item in pareto_list[:5]:
+                data_results.append(f"  {item['rank']}. {item['alarm_type']}: {item['count']}x ({item['cumulative_percent']:.1f}% acum.)")
+
+    # Pattern 13: Financial summary queries (NEW)
+    financial_patterns = ['financeiro', 'financial', 'economia', 'savings', 'roi', 'custo evitado']
+
+    if any(pattern in query_lower for pattern in financial_patterns):
+        logger.info(f"💰 PRE-EXECUTE: Financial summary query detected: '{query}'")
+
+        result = await toolkit.execute_tool("get_financial_summary", {"time_range": "24h"})
+
+        if result.success and result.data:
+            fin = result.data
+            roi = fin.get('roi_metrics', {})
+            breakdown = fin.get('cost_breakdown', {})
+
+            data_results.append("**💰 Resumo Financeiro (24h)**")
+            data_results.append("")
+            data_results.append(f"- Economia Estimada: R$ {fin.get('estimated_savings_today', 0):,.2f}")
+            data_results.append(f"- Custo Evitado: R$ {fin.get('downtime_cost_avoided', 0):,.2f}")
+            data_results.append(f"- Melhoria de Eficiência: {fin.get('efficiency_improvement', 0):.1f}%")
+            data_results.append(f"- Projeção Mensal: R$ {fin.get('projected_monthly_savings', 0):,.2f}")
+            data_results.append("")
+            data_results.append("**Detalhamento:**")
+            data_results.append(f"  - Energia: R$ {breakdown.get('energy_savings', 0):,.2f}")
+            data_results.append(f"  - Manutenção: R$ {breakdown.get('maintenance_savings', 0):,.2f}")
+            data_results.append(f"  - Produtividade: R$ {breakdown.get('productivity_gains', 0):,.2f}")
+            data_results.append("")
+            data_results.append("**ROI:**")
+            data_results.append(f"  - ROI Mensal: {roi.get('monthly_roi_percent', 0):.1f}%")
+            data_results.append(f"  - Payback: {roi.get('payback_months', 0):.1f} meses")
+
+    # Pattern 14: Maintenance/Predictive queries (NEW)
+    maintenance_patterns = ['manutenção', 'maintenance', 'preditiva', 'predictive', 'health', 'saúde do equipamento', 'falha', 'failure prediction']
+
+    if any(pattern in query_lower for pattern in maintenance_patterns):
+        logger.info(f"🔧 PRE-EXECUTE: Maintenance dashboard query detected: '{query}'")
+
+        result = await toolkit.execute_tool("get_maintenance_dashboard", {"include_predictions": True})
+
+        if result.success and result.data:
+            maint = result.data
+            summary = maint.get('summary', {})
+            at_risk = maint.get('at_risk', [])
+            roi = maint.get('roi', {})
+
+            data_results.append("**🔧 Dashboard de Manutenção Preditiva**")
+            data_results.append("")
+            data_results.append(f"- Total de Equipamentos: {summary.get('total_equipment', 0)}")
+            data_results.append(f"- Em Risco: {summary.get('at_risk_count', 0)}")
+            data_results.append(f"- Health Score Médio: {summary.get('average_health_score', 0):.1f}%")
+            data_results.append(f"- Manutenções em 7d: {summary.get('maintenance_scheduled_7d', 0)}")
+            data_results.append("")
+
+            if at_risk:
+                data_results.append("**⚠️ Equipamentos em Risco:**")
+                for eq in at_risk[:3]:
+                    data_results.append(f"  - {eq['equipment_name']}: Health {eq['health_score']}%, Prob. Falha {eq['failure_probability']:.1f}%")
+                    data_results.append(f"    → {eq['recommended_action']}")
+                data_results.append("")
+
+            data_results.append("**💰 ROI da Manutenção Preditiva:**")
+            data_results.append(f"  - Falhas Prevenidas/Mês: {roi.get('failures_prevented_month', 0)}")
+            data_results.append(f"  - Economia Mensal: R$ {roi.get('monthly_savings', 0):,.2f}")
+            data_results.append(f"  - ROI: {roi.get('roi_percent', 0):.1f}%")
+
+    # Pattern 15: Report generation queries (NEW)
+    report_patterns = ['relatório', 'report', 'pdf', 'exportar', 'gerar relatório', 'generate report']
+
+    if any(pattern in query_lower for pattern in report_patterns):
+        logger.info(f"📄 PRE-EXECUTE: Report generation query detected: '{query}'")
+
+        time_range = "24h"
+        if "7 dias" in query_lower or "semana" in query_lower:
+            time_range = "7d"
+        elif "30 dias" in query_lower or "mês" in query_lower:
+            time_range = "30d"
+
+        result = await toolkit.execute_tool("generate_executive_report", {
+            "time_range": time_range,
+            "include_charts": True
+        })
+
+        if result.success and result.data:
+            report = result.data
+            if report.get('success'):
+                info = report.get('report_info', {})
+                data_results.append("**📄 Relatório Executivo Gerado**")
+                data_results.append("")
+                data_results.append(f"- Título: {info.get('title', 'Relatório Executivo')}")
+                data_results.append(f"- Período: {info.get('time_range', '24h')}")
+                data_results.append(f"- Gerado em: {info.get('generated_at', 'N/A')}")
+                data_results.append(f"- Arquivo: {info.get('filename', 'relatorio.pdf')}")
+                data_results.append("")
+                data_results.append(f"**📥 Download:** {report.get('download_url', '')}")
+                data_results.append("")
+                data_results.append(report.get('instructions', ''))
+            else:
+                data_results.append(f"**❌ Erro ao gerar relatório:** {report.get('error', 'Erro desconhecido')}")
+                data_results.append(f"💡 {report.get('suggestion', '')}")
+
     if data_results:
         return "\n".join(data_results)
 
@@ -786,8 +1177,8 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
                 raise Exception(f"Ollama API error: {response.text}")
 
     try:
-        # Execute through circuit breaker
-        result = ollama_circuit_breaker.call(_ollama_request)
+        # Execute through circuit breaker (using async version for async function)
+        result = await ollama_circuit_breaker.call_async(_ollama_request)
         return result
     except httpx.ConnectError:
         raise HTTPException(
@@ -920,12 +1311,12 @@ async def chat_fallback_mode(
         logger.info("🚨 Detectado: Consulta sobre ALARMES")
         try:
             # Buscar alarmes ativos
-            alarms_result = await toolkit.execute_tool("get_active_alarms", {"limit": 50})
-            
+            alarms_result = await toolkit.execute_tool("get_active_alarms", {"limit": 100})
+
             if alarms_result.success and alarms_result.data:
                 data = alarms_result.data
                 alarms = data.get("alarms", [])
-                total = data.get("total_alarms", 0)
+                total = data.get("total_active_alarms", len(alarms))
                 
                 # Agrupar por severidade
                 by_severity = {"CRITICAL": [], "HIGH": [], "MEDIUM": [], "LOW": []}
@@ -1377,7 +1768,59 @@ async def chat_with_agent(
     # Initialize services
     data_service = DataService(db)
     toolkit = AgentToolkit(data_service)
-    
+
+    # ========================================
+    # DIRECT TOOL CALL: Bypass LLM for programmatic access
+    # ========================================
+    if chat_request.tool_call:
+        try:
+            tool_name = chat_request.tool_call.name
+            tool_args = chat_request.tool_call.arguments
+
+            logger.info(f"🔧 Direct tool call: {tool_name} with args: {tool_args}")
+
+            # Execute tool directly
+            tool_result = await toolkit.execute_tool(tool_name, tool_args)
+
+            # Handle ToolResult object (has success, data, error attributes)
+            if not tool_result.success:
+                return DashboardAgentResponse(
+                    response=f"Erro ao executar ferramenta {tool_name}: {tool_result.error}",
+                    widgets=None,
+                    suggestions=None
+                )
+
+            # Extract data from ToolResult
+            result_data = tool_result.data if hasattr(tool_result, 'data') else {}
+
+            # Check if result_data has error key
+            if isinstance(result_data, dict) and result_data.get("error"):
+                return DashboardAgentResponse(
+                    response=f"Erro ao executar ferramenta {tool_name}: {result_data['error']}",
+                    widgets=None,
+                    suggestions=None
+                )
+
+            # Return tool result with summary AND raw data
+            summary = _summarize_tool_result(tool_name, result_data)
+
+            return DashboardAgentResponse(
+                response=summary,
+                widgets=None,
+                suggestions=_generate_tool_suggestions(tool_name, result_data),
+                tool_result=result_data  # Include raw data for frontend
+            )
+
+        except Exception as e:
+            logger.error(f"Error in direct tool call: {e}")
+            import traceback
+            traceback.print_exc()
+            return DashboardAgentResponse(
+                response=f"Erro ao executar ferramenta: {str(e)}",
+                widgets=None,
+                suggestions=None
+            )
+
     message_lower = chat_request.message.lower()
     
     # === HYBRID DECISION: Fallback vs Qwen ===
@@ -1389,24 +1832,49 @@ async def chat_with_agent(
     ]
 
     # REALTIME VALUE queries - Use fallback for instant response
+    # EXPANDED: Now includes "valor de", "leitura de", and direct tag queries
     realtime_value_keywords = [
         'temperatura atual', 'pressão atual', 'valor atual', 'velocidade atual',
         'qual a temperatura', 'qual a pressão', 'qual o valor', 'qual a velocidade',
         'quanto está', 'quanto é', 'qual está', 'qual é',
-        'me mostre o valor', 'mostre a temperatura', 'mostre a pressão'
+        'me mostre o valor', 'mostre a temperatura', 'mostre a pressão',
+        'valor de', 'valor do', 'valor da', 'leitura de', 'leitura do', 'leitura da'
     ]
 
+    # DETECT TAG NAME IN QUERY: If query contains a tag-like name (word_word format), treat as realtime query
+    import re
+    tag_name_pattern = re.search(r'\b([a-zA-Z][a-zA-Z0-9_]*(?:_[a-zA-Z0-9]+)+)\b', chat_request.message)
+    has_tag_name_in_query = tag_name_pattern is not None
+    if has_tag_name_in_query:
+        logger.error(f"🏷️ DEBUG: Detected tag name pattern in query: {tag_name_pattern.group(1)}")
+
     use_fallback = any(keyword in message_lower for keyword in simple_keywords)
-    use_fallback_realtime = any(keyword in message_lower for keyword in realtime_value_keywords)
+    use_fallback_realtime = any(keyword in message_lower for keyword in realtime_value_keywords) or has_tag_name_in_query
     
     # Use QWEN for complex queries requiring math, logic, or multi-step analysis
     complex_keywords = [
         'média', 'average', 'mean', 'máximo', 'maximum', 'mínimo', 'minimum',
         'comparar', 'compare', 'correlação', 'correlation', 'tendência', 'trend',
         'anomalia', 'anomaly', 'estatística', 'statistic', 'análise', 'analysis',
-        'calcul', 'desvio', 'variação', 'predict'
+        'calcul', 'desvio', 'variação', 'predict',
+        # Frequency analysis keywords
+        'quantas vezes', 'frequência', 'histórico', 'ocorrências', 'aparece', 'ocorre'
     ]
-    
+
+    # EXECUTIVE DASHBOARD keywords - queries about executive metrics, reports, energy, production
+    executive_keywords = [
+        'executivo', 'executive', 'kpi', 'kpis', 'dashboard', 'gerencial', 'diretoria',
+        'visão geral', 'overview', 'indicadores',
+        'energia', 'energy', 'consumo', 'kwh', 'demanda', 'fator de potência', 'conta de luz',
+        'produção', 'production', 'throughput', 'capacidade', 'meta',
+        'pareto', 'ranking', '80/20',
+        'financeiro', 'financial', 'economia', 'savings', 'roi', 'custo',
+        'manutenção preditiva', 'predictive maintenance', 'health score',
+        'relatório', 'relatorio', 'report', 'pdf', 'exportar', 'gerar'
+    ]
+
+    use_qwen_executive = any(keyword in message_lower for keyword in executive_keywords)
+
     # DISCOVERY keywords - queries asking WHAT/WHICH tags/sensors exist
     # These MUST use Qwen to call search_tags() and get_all_tags() tools
     discovery_keywords = [
@@ -1420,11 +1888,17 @@ async def chat_with_agent(
     use_qwen_discovery = any(keyword in message_lower for keyword in discovery_keywords)
 
     # DEBUG: Log classification
-    logger.error(f"🔍 DEBUG: Query classification - fallback_realtime={use_fallback_realtime}, complex={use_qwen}, discovery={use_qwen_discovery}")
+    logger.error(f"🔍 DEBUG: Query classification - fallback_realtime={use_fallback_realtime}, complex={use_qwen}, discovery={use_qwen_discovery}, executive={use_qwen_executive}")
+
+    # PRIORITY 0: Executive dashboard queries → Always use QWEN with PRE-EXECUTE
+    if use_qwen_executive:
+        use_fallback = False
+        use_qwen = True
+        logger.error("📊 DEBUG: EXECUTIVE QUERY detected → Using Qwen with PRE-EXECUTE for executive data")
 
     # PRIORITY 1: Realtime value queries → Use QWEN with PRE-EXECUTE for data-driven analysis
     # Changed: Realtime queries now use Qwen to ensure 2-step architecture (PostgreSQL → InfluxDB)
-    if use_fallback_realtime:
+    elif use_fallback_realtime:
         use_fallback = False
         use_qwen = True
         logger.error("⚡ DEBUG: REALTIME QUERY detected → Using Qwen with PRE-EXECUTE for data fetching")
@@ -1535,6 +2009,28 @@ async def chat_with_agent(
 
     if any(word in message_lower for word in ["oee", "eficiência", "efficiency", "disponibilidade"]):
         core_tool_names.append("calculate_oee")
+
+    # EXECUTIVE DASHBOARD tools
+    if any(word in message_lower for word in ["executivo", "executive", "visão geral", "overview", "kpi", "dashboard", "gerencial", "diretoria"]):
+        core_tool_names.extend(["get_executive_overview", "get_executive_trends"])
+
+    if any(word in message_lower for word in ["energia", "energy", "consumo", "kwh", "demanda", "fator de potência", "conta de luz"]):
+        core_tool_names.append("get_energy_metrics")
+
+    if any(word in message_lower for word in ["produção", "production", "throughput", "ton/h", "capacidade", "meta", "ciclo"]):
+        core_tool_names.append("get_production_metrics")
+
+    if any(word in message_lower for word in ["pareto", "ranking", "top alarmes", "principais alarmes", "80/20"]):
+        core_tool_names.append("get_alarm_pareto")
+
+    if any(word in message_lower for word in ["financeiro", "financial", "economia", "savings", "roi", "custo", "cost"]):
+        core_tool_names.append("get_financial_summary")
+
+    if any(word in message_lower for word in ["manutenção", "maintenance", "preditiva", "predictive", "health", "saúde", "falha", "failure"]):
+        core_tool_names.append("get_maintenance_dashboard")
+
+    if any(word in message_lower for word in ["relatório", "report", "pdf", "exportar", "export", "gerar relatório", "generate report"]):
+        core_tool_names.append("generate_executive_report")
 
     # Filter tools to only relevant ones (reduces prompt tokens by 60-70%)
     relevant_tools = [t for t in all_tools if t.get("name") in set(core_tool_names)]
@@ -2043,6 +2539,154 @@ FORMATO: 📊 Dados → 🔍 Análise → 💡 Ações"""
             "X-Accel-Buffering": "no"  # Disable nginx buffering
         }
     )
+
+
+# ========================================
+# Helper Functions for Direct Tool Calls
+# ========================================
+
+def _summarize_tool_result(tool_name: str, result: Dict[str, Any]) -> str:
+    """Generate a human-readable summary of tool result"""
+
+    if tool_name == "calculate_mtbf_mttr":
+        mtbf = result.get("mtbf_hours")
+        mttr = result.get("mttr_hours")
+        availability = result.get("availability_percent")
+        classification = result.get("reliability_classification", "N/A")
+
+        summary = f"## 🔧 Análise MTBF/MTTR - {result.get('equipment_id', 'Equipamento')}\n\n"
+        summary += f"**Classificação:** {classification}\n\n"
+        summary += "### Métricas Principais\n"
+        summary += f"- **MTBF:** {mtbf:.1f}h ({mtbf/24:.1f} dias)\n" if mtbf else "- **MTBF:** N/A\n"
+        summary += f"- **MTTR:** {mttr:.1f}h\n" if mttr else "- **MTTR:** N/A\n"
+        summary += f"- **Disponibilidade:** {availability:.1f}%\n" if availability else "- **Disponibilidade:** N/A\n"
+        summary += f"- **Falhas no Período:** {result.get('failure_count', 0)}\n\n"
+
+        if result.get("insights"):
+            summary += "### Insights\n"
+            for insight in result["insights"]:
+                summary += f"- {insight}\n"
+
+        if result.get("recommendations"):
+            summary += "\n### Recomendações\n"
+            for rec in result["recommendations"]:
+                summary += f"- {rec}\n"
+
+        return summary
+
+    elif tool_name == "predict_failure":
+        risk_level = result.get("overall_risk_level", "unknown")
+        probability = result.get("failure_probability", 0)
+        priority = result.get("action_priority", "routine")
+
+        risk_icons = {"low": "✅", "medium": "⚡", "high": "⚠️", "critical": "🚨"}
+
+        summary = f"## 🔮 Predição de Falha - {result.get('equipment_id', 'Equipamento')}\n\n"
+        summary += f"**Nível de Risco:** {risk_icons.get(risk_level, '❓')} {risk_level.upper()}\n"
+        summary += f"**Probabilidade de Falha:** {probability*100:.1f}%\n"
+        summary += f"**Prioridade de Ação:** {priority}\n"
+        summary += f"**Confiança:** {result.get('confidence', 0)*100:.0f}%\n\n"
+
+        if result.get("predicted_failure_window"):
+            window = result["predicted_failure_window"]
+            summary += f"### Janela de Falha Prevista\n"
+            summary += f"- **Mais provável:** {window['most_likely_days']} dias\n"
+            summary += f"- **Intervalo:** {window['min_days']}-{window['max_days']} dias\n\n"
+
+        if result.get("risk_factors"):
+            summary += "### Fatores de Risco\n"
+            for factor in result["risk_factors"][:5]:
+                summary += f"- **{factor['tag_id']}** ({factor['risk_score']*100:.0f}%): {factor['primary_concern']}\n"
+
+        if result.get("recommendations"):
+            summary += "\n### Ações Recomendadas\n"
+            for rec in result["recommendations"]:
+                summary += f"- {rec}\n"
+
+        return summary
+
+    elif tool_name == "calculate_spc_limits":
+        stability = result.get("stability_assessment", {}).get("status", "N/A")
+        cpk = result.get("capability_indices", {}).get("cpk")
+        ooc_count = result.get("stability_assessment", {}).get("out_of_control_count", 0)
+
+        stability_icons = {"Estável": "✅", "Marginalmente Estável": "⚡", "Instável": "🚨"}
+
+        summary = f"## 📊 Análise CEP/SPC - {result.get('tag_id', 'Tag')}\n\n"
+        summary += f"**Status:** {stability_icons.get(stability, '❓')} {stability}\n"
+        summary += f"**Pontos Fora de Controle:** {ooc_count}\n\n"
+
+        if result.get("control_limits"):
+            limits = result["control_limits"]
+            chart = limits.get("x_bar_chart") or limits.get("individuals_chart")
+            if chart:
+                summary += "### Limites de Controle\n"
+                summary += f"- **UCL:** {chart['ucl']:.4f}\n"
+                summary += f"- **CL:** {chart['cl']:.4f}\n"
+                summary += f"- **LCL:** {chart['lcl']:.4f}\n\n"
+
+        if cpk is not None:
+            summary += "### Índices de Capabilidade\n"
+            cap = result["capability_indices"]
+            summary += f"- **Cp:** {cap.get('cp', 0):.2f}\n"
+            summary += f"- **Cpk:** {cpk:.2f}\n"
+            summary += f"- **Nível Sigma:** {cap.get('sigma_level', 0):.1f}σ\n"
+            summary += f"- **PPM Estimado:** {cap.get('ppm_estimate', 0):.0f}\n\n"
+
+        if result.get("insights"):
+            summary += "### Insights\n"
+            for insight in result["insights"]:
+                summary += f"- {insight}\n"
+
+        if result.get("recommendations"):
+            summary += "\n### Recomendações\n"
+            for rec in result["recommendations"]:
+                summary += f"- {rec}\n"
+
+        return summary
+
+    else:
+        # Generic summary for other tools
+        return f"## Resultado: {tool_name}\n\n```json\n{json.dumps(result, indent=2, default=str)}\n```"
+
+
+def _generate_tool_suggestions(tool_name: str, result: Dict[str, Any]) -> List[str]:
+    """Generate follow-up suggestions based on tool result"""
+
+    suggestions = []
+
+    if tool_name == "calculate_mtbf_mttr":
+        classification = result.get("reliability_classification")
+        if classification in ["Crítico", "Regular"]:
+            suggestions.append("Analise a predição de falha deste equipamento")
+            suggestions.append("Quais são as causas das últimas paradas?")
+        suggestions.append("Compare a disponibilidade com outros equipamentos")
+        suggestions.append("Qual é a tendência do MTBF nos últimos 3 meses?")
+
+    elif tool_name == "predict_failure":
+        risk_level = result.get("overall_risk_level")
+        if risk_level in ["high", "critical"]:
+            suggestions.append("Quais são os alarmes ativos deste equipamento?")
+            suggestions.append("Mostre a tendência das tags de risco")
+        suggestions.append("Calcule o MTBF/MTTR deste equipamento")
+        suggestions.append("Compare o risco com equipamentos similares")
+
+    elif tool_name == "calculate_spc_limits":
+        stability = result.get("stability_assessment", {}).get("status")
+        if stability == "Instável":
+            suggestions.append("Detecte anomalias nesta tag")
+            suggestions.append("Qual é a tendência dos valores?")
+        suggestions.append("Compare com os limites de especificação")
+        suggestions.append("Analise a correlação com outras tags")
+
+    else:
+        suggestions = [
+            "Mostre mais detalhes",
+            "Analise tendências relacionadas",
+            "Compare com dados históricos"
+        ]
+
+    return suggestions[:4]  # Limit to 4 suggestions
 
 
 @router.post("/tools/test")
