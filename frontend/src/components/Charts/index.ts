@@ -12,6 +12,13 @@ export type {
   HybridTimelineProps,
 } from './HybridTimeline';
 
+export { HighPerformanceTrend } from './HighPerformanceTrend';
+export type {
+  TrendDataPoint,
+  TrendSeries,
+  HighPerformanceTrendProps,
+} from './HighPerformanceTrend';
+
 // Existing charts
 export { default as MultiSeriesChart } from './MultiSeriesChart';
 export { default as TimeSeriesChart } from './TimeSeriesChart';
