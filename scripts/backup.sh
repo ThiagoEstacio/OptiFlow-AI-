@@ -1,17 +1,37 @@
 #!/bin/bash
+# ============================================
+# OptiFlow AI Platform - Automated Backup Script
+# ============================================
 #
-# SmartPort Automated Backup Script
-# Backs up PostgreSQL and InfluxDB databases
+# Backs up PostgreSQL, InfluxDB, Redis, and configuration
 #
+# Usage:
+#   ./backup.sh                    # Full backup
+#   ./backup.sh postgres           # PostgreSQL only
+#   ./backup.sh influxdb           # InfluxDB only
+#   ./backup.sh redis              # Redis only
+#   ./backup.sh config             # Configuration only
+#   ./backup.sh --restore <date>   # Restore from backup (YYYYMMDD)
+#   ./backup.sh verify             # Verify latest backups
+#   ./backup.sh report             # Generate backup report
+#
+# Environment variables:
+#   BACKUP_DIR         - Backup destination (default: /backups)
+#   BACKUP_KEEP_DAYS   - Days to keep backups (default: 30)
+#
+# ============================================
 
 set -e  # Exit on error
 
 # Configuration
-BACKUP_DIR="/backups"
+BACKUP_DIR="${BACKUP_DIR:-/backups}"
 POSTGRES_BACKUP_DIR="$BACKUP_DIR/postgres"
 INFLUX_BACKUP_DIR="$BACKUP_DIR/influxdb"
+REDIS_BACKUP_DIR="$BACKUP_DIR/redis"
+CONFIG_BACKUP_DIR="$BACKUP_DIR/config"
+LOG_DIR="$BACKUP_DIR/logs"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-KEEP_DAYS=${BACKUP_KEEP_DAYS:-7}
+KEEP_DAYS=${BACKUP_KEEP_DAYS:-30}
 
 # Colors for output
 RED='\033[0;31m'
@@ -192,40 +212,191 @@ EOF
 }
 
 # ================================
+# Redis Backup
+# ================================
+backup_redis() {
+    log_info "Backing up Redis database..."
+
+    REDIS_FILE="$REDIS_BACKUP_DIR/optiflow_redis_${TIMESTAMP}.rdb.gz"
+
+    # Trigger BGSAVE
+    if redis-cli -h redis -a "${REDIS_PASSWORD:-optiflow_redis_password}" BGSAVE 2>/dev/null; then
+        sleep 3  # Wait for save to complete
+
+        if [ -f "/data/dump.rdb" ]; then
+            gzip -c /data/dump.rdb > "$REDIS_FILE"
+            SIZE=$(du -h "$REDIS_FILE" | cut -f1)
+            log_info "Redis backup created: $REDIS_FILE ($SIZE)"
+            ln -sf "$(basename "$REDIS_FILE")" "$REDIS_BACKUP_DIR/latest.rdb.gz"
+            return 0
+        fi
+    fi
+
+    log_warn "Redis backup skipped (not available or no data)"
+    return 0
+}
+
+# ================================
+# Configuration Backup
+# ================================
+backup_config() {
+    log_info "Backing up configuration..."
+
+    CONFIG_FILE="$CONFIG_BACKUP_DIR/optiflow_config_${TIMESTAMP}.tar.gz"
+
+    tar -czf "$CONFIG_FILE" \
+        --exclude='*.pyc' \
+        --exclude='__pycache__' \
+        --exclude='node_modules' \
+        --exclude='.git' \
+        -C /app \
+        .env* \
+        docker-compose*.yml \
+        nginx/ \
+        monitoring/ \
+        gateway/config/ \
+        2>/dev/null || true
+
+    if [ -f "$CONFIG_FILE" ]; then
+        SIZE=$(du -h "$CONFIG_FILE" | cut -f1)
+        log_info "Config backup created: $CONFIG_FILE ($SIZE)"
+        ln -sf "$(basename "$CONFIG_FILE")" "$CONFIG_BACKUP_DIR/latest.tar.gz"
+        return 0
+    fi
+
+    log_warn "Config backup may be incomplete"
+    return 0
+}
+
+# ================================
+# Restore from Backup
+# ================================
+restore_backup() {
+    local restore_date=$1
+
+    if [ -z "$restore_date" ]; then
+        log_error "Usage: ./backup.sh --restore YYYYMMDD"
+        exit 1
+    fi
+
+    log_warn "This will restore data from backups dated ${restore_date}"
+    log_warn "Current data will be OVERWRITTEN!"
+    read -p "Are you sure? (type 'yes' to confirm): " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        log_info "Restore cancelled"
+        exit 0
+    fi
+
+    # Restore PostgreSQL
+    local pg_backup=$(ls "${POSTGRES_BACKUP_DIR}/"*${restore_date}*.sql.gz 2>/dev/null | head -1)
+    if [ -n "$pg_backup" ]; then
+        log_info "Restoring PostgreSQL from: ${pg_backup}"
+        gunzip -c "$pg_backup" | psql -U "$POSTGRES_USER" -h "$PGHOST" -d "$POSTGRES_DB"
+        log_info "PostgreSQL restored successfully"
+    else
+        log_warn "No PostgreSQL backup found for date: ${restore_date}"
+    fi
+
+    # Restore InfluxDB
+    local influx_backup=$(ls "${INFLUX_BACKUP_DIR}/"*${restore_date}*.tar.gz 2>/dev/null | head -1)
+    if [ -n "$influx_backup" ]; then
+        log_info "Restoring InfluxDB from: ${influx_backup}"
+        local temp_dir=$(mktemp -d)
+        tar -xzf "$influx_backup" -C "$temp_dir"
+        influx restore "$temp_dir"/* \
+            --host http://influxdb:8086 \
+            --token "$INFLUX_TOKEN" \
+            --org "$INFLUX_ORG" \
+            --full
+        rm -rf "$temp_dir"
+        log_info "InfluxDB restored successfully"
+    else
+        log_warn "No InfluxDB backup found for date: ${restore_date}"
+    fi
+}
+
+# ================================
+# Full Backup
+# ================================
+full_backup() {
+    log_info "Starting full OptiFlow backup..."
+    local start_time=$(date +%s)
+
+    BACKUP_STATUS=0
+
+    if ! backup_postgres; then
+        BACKUP_STATUS=1
+    fi
+
+    if ! backup_influxdb; then
+        BACKUP_STATUS=1
+    fi
+
+    backup_redis || true
+    backup_config || true
+
+    cleanup_old_backups
+
+    if ! verify_backups; then
+        BACKUP_STATUS=1
+        log_error "Backup verification failed!"
+    fi
+
+    generate_report
+
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    if [ $BACKUP_STATUS -eq 0 ]; then
+        log_info "Full backup completed successfully in ${duration}s"
+        exit 0
+    else
+        log_error "Backup completed with errors in ${duration}s"
+        exit 1
+    fi
+}
+
+# ================================
 # Main Execution
 # ================================
 
 # Create backup directories if they don't exist
-mkdir -p "$POSTGRES_BACKUP_DIR" "$INFLUX_BACKUP_DIR"
+mkdir -p "$POSTGRES_BACKUP_DIR" "$INFLUX_BACKUP_DIR" "$REDIS_BACKUP_DIR" "$CONFIG_BACKUP_DIR" "$LOG_DIR"
 
-# Perform backups
-BACKUP_STATUS=0
-
-if ! backup_postgres; then
-    BACKUP_STATUS=1
-fi
-
-if ! backup_influxdb; then
-    BACKUP_STATUS=1
-fi
-
-# Cleanup old backups
-cleanup_old_backups
-
-# Verify backups
-if ! verify_backups; then
-    BACKUP_STATUS=1
-    log_error "Backup verification failed!"
-fi
-
-# Generate report
-generate_report
-
-# Final status
-if [ $BACKUP_STATUS -eq 0 ]; then
-    log_info "Backup completed successfully at $(date)"
+# Check if backup is enabled
+if [ "${BACKUP_ENABLED:-true}" != "true" ]; then
+    log_warn "Backup is disabled. Set BACKUP_ENABLED=true to enable."
     exit 0
-else
-    log_error "Backup completed with errors at $(date)"
-    exit 1
 fi
+
+# Handle command line arguments
+case "${1:-}" in
+    postgres)
+        backup_postgres
+        ;;
+    influxdb)
+        backup_influxdb
+        ;;
+    redis)
+        backup_redis
+        ;;
+    config)
+        backup_config
+        ;;
+    --restore)
+        restore_backup "$2"
+        ;;
+    verify)
+        verify_backups
+        ;;
+    report)
+        generate_report
+        ;;
+    cleanup)
+        cleanup_old_backups
+        ;;
+    *)
+        full_backup
+        ;;
+esac

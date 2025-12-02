@@ -1,119 +1,353 @@
 version: '3.8'
 
-# Production Docker Compose Configuration
-# Uses environment variables from .env.prod file
+# ============================================
+# OptiFlow AI Platform - Production Configuration
+# ============================================
+# Features:
+# - Multi-broker Kafka cluster (3 brokers)
+# - Full monitoring stack (Prometheus, Grafana, Alertmanager)
+# - Secure defaults with environment variables
+# - Health checks on all services
+# - Log rotation and resource limits
+# - OT/IT network segmentation
+# ============================================
+
+# Global logging configuration
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+# Common healthcheck settings
+x-healthcheck: &default-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
 
 services:
+  # ========================================
+  # Core Infrastructure
+  # ========================================
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: smartport-postgres-prod
+    container_name: optiflow-postgres-prod
+    logging: *default-logging
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-optiflow}
+      POSTGRES_USER: ${POSTGRES_USER:-optiflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_INITDB_ARGS: "-E UTF8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups/postgres:/backups
     networks:
-      - smartport-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      <<: *default-healthcheck
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-optiflow}"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    # Production: Don't expose port publicly
-    # ports:
-    #   - "5432:5432"
 
   # InfluxDB Time Series Database
   influxdb:
     image: influxdb:2.7-alpine
-    container_name: smartport-influxdb-prod
+    container_name: optiflow-influxdb-prod
+    logging: *default-logging
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:?INFLUX_PASSWORD is required}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-optiflow}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-timeseries}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:?INFLUX_TOKEN is required}
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_config:/etc/influxdb2
       - ./backups/influxdb:/backups
     networks:
-      - smartport-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
     healthcheck:
+      <<: *default-healthcheck
       test: ["CMD", "influx", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-    # Production: Don't expose port publicly
-    # ports:
-    #   - "8086:8086"
 
   # Redis Cache & Pub/Sub
   redis:
     image: redis:7-alpine
-    container_name: smartport-redis-prod
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    container_name: optiflow-redis-prod
+    logging: *default-logging
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+      --timeout 0
     volumes:
       - redis_data:/data
     networks:
-      - smartport-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      <<: *default-healthcheck
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
-      retries: 5
-    # Production: Don't expose port publicly
-    # ports:
-    #   - "6379:6379"
+
+  # ========================================
+  # Kafka Cluster (3 Brokers)
+  # ========================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: optiflow-zookeeper-prod
+    logging: *default-logging
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+
+  kafka-1:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: optiflow-kafka-1-prod
+    logging: *default-logging
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_COMPRESSION_TYPE: lz4
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: kafka-1
+    volumes:
+      - kafka_1_data:/var/lib/kafka/data
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+
+  kafka-2:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: optiflow-kafka-2-prod
+    logging: *default-logging
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_COMPRESSION_TYPE: lz4
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: kafka-2
+    volumes:
+      - kafka_2_data:/var/lib/kafka/data
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9093"]
+      interval: 10s
+      timeout: 10s
+
+  kafka-3:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: optiflow-kafka-3-prod
+    logging: *default-logging
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9096
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_COMPRESSION_TYPE: lz4
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: kafka-3
+    volumes:
+      - kafka_3_data:/var/lib/kafka/data
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9096"]
+      interval: 10s
+      timeout: 10s
+
+  # ========================================
+  # Application Services
+  # ========================================
 
   # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-    container_name: smartport-backend-prod
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --no-access-log
+    container_name: optiflow-backend-prod
+    logging: *default-logging
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers ${BACKEND_WORKERS:-4}
+      --no-access-log
+      --proxy-headers
     volumes:
       - backend_logs:/app/logs
+      - backend_mlflow:/app/mlruns
+      - ./generated_reports:/app/generated_reports
     environment:
       # Application
-      APP_NAME: "SmartPort Production"
+      APP_NAME: "OptiFlow AI Platform"
       ENVIRONMENT: production
       DEBUG: "false"
-      SECRET_KEY: ${SECRET_KEY}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
 
       # Database - PostgreSQL
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-optiflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-optiflow}
 
       # Database - InfluxDB
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: ${INFLUX_TOKEN}
-      INFLUXDB_ORG: ${INFLUX_ORG}
-      INFLUXDB_BUCKET: ${INFLUX_BUCKET}
+      INFLUXDB_ORG: ${INFLUX_ORG:-optiflow}
+      INFLUXDB_BUCKET: ${INFLUX_BUCKET:-timeseries}
 
       # Database - Redis
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
 
+      # Kafka
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9093,kafka-3:9096
+
       # Security
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
 
       # CORS
-      CORS_ORIGINS: ${CORS_ORIGINS}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["https://optiflow.example.com"]}
 
       # Gateway
-      GATEWAY_API_KEY: ${GATEWAY_API_KEY}
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY:?GATEWAY_API_KEY is required}
+
+      # Ollama (Optional)
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     networks:
-      - smartport-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,72 +355,150 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    # Production: Don't expose directly, use nginx
-    # ports:
-    #   - "8000:8000"
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
 
-  # Gateway (Data Collection)
+  # Celery Worker
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: optiflow-celery-worker-prod
+    logging: *default-logging
+    command: >
+      celery -A app.tasks.celery_app worker
+      --loglevel=info
+      --concurrency=${CELERY_CONCURRENCY:-8}
+      --max-tasks-per-child=100
+    volumes:
+      - backend_mlflow:/app/mlruns
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-optiflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-optiflow}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUX_TOKEN}
+      INFLUXDB_ORG: ${INFLUX_ORG:-optiflow}
+      INFLUXDB_BUCKET: ${INFLUX_BUCKET:-timeseries}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    depends_on:
+      - backend
+      - redis
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: optiflow-celery-beat-prod
+    logging: *default-logging
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    environment:
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    depends_on:
+      - redis
+      - celery-worker
+
+  # Gateway (Edge Data Collection)
   gateway:
     build:
       context: ./gateway
       dockerfile: Dockerfile.prod
-    container_name: smartport-gateway-prod
+    container_name: optiflow-gateway-prod
+    logging: *default-logging
     volumes:
       - gateway_logs:/app/logs
       - gateway_data:/app/data
+      - ./gateway/config:/app/config:ro
     environment:
       API_URL: http://backend:8000
       API_KEY: ${GATEWAY_API_KEY}
       LOG_LEVEL: INFO
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9093,kafka-3:9096
 
-      # InfluxDB
-      INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: ${INFLUX_TOKEN}
-      INFLUXDB_ORG: ${INFLUX_ORG}
-      INFLUXDB_BUCKET: ${INFLUX_BUCKET}
-
-      # Redis
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # Security
+      GATEWAY_API_KEY_ENABLED: "true"
+      GATEWAY_API_KEY: ${GATEWAY_API_KEY}
+      GATEWAY_JWT_ENABLED: "true"
+      GATEWAY_JWT_SECRET: ${JWT_SECRET_KEY}
+      GATEWAY_RATE_LIMIT_ENABLED: "true"
+      GATEWAY_RATE_LIMIT_REQUESTS: "1000"
+      GATEWAY_RATE_LIMIT_WINDOW: "60"
     networks:
-      - smartport-network
+      - ot-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     depends_on:
       - backend
-      - influxdb
-      - redis
-    # For direct device communication, use host network:
-    # network_mode: host
+      - kafka-1
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
 
-  # Frontend Web Application
+  # Frontend (Nginx)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
       args:
-        VITE_API_URL: ${VITE_API_URL}
-    container_name: smartport-frontend-prod
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: optiflow-frontend-prod
+    logging: *default-logging
     networks:
-      - smartport-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     healthcheck:
+      <<: *default-healthcheck
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    # Production: Don't expose directly, use nginx
-    # ports:
-    #   - "80:80"
 
-  # Nginx Reverse Proxy
+  # ========================================
+  # Reverse Proxy & Load Balancer
+  # ========================================
+
   nginx:
     image: nginx:alpine
-    container_name: smartport-nginx-prod
+    container_name: optiflow-nginx-prod
+    logging: *default-logging
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
@@ -195,50 +507,240 @@ services:
       - "80:80"
       - "443:443"
     networks:
-      - smartport-network
+      - it-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
     depends_on:
       - frontend
       - backend
     healthcheck:
+      <<: *default-healthcheck
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Automated Backup Service
+  # ========================================
+  # Monitoring Stack
+  # ========================================
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: optiflow-prometheus-prod
+    logging: *default-logging
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+
+  # Alertmanager
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: optiflow-alertmanager-prod
+    logging: *default-logging
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--cluster.listen-address='
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: optiflow-grafana-prod
+    logging: *default-logging
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-piechart-panel
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+      GF_SMTP_ENABLED: ${GRAFANA_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${GRAFANA_SMTP_HOST:-}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM:-}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+
+  # Node Exporter (Host Metrics)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: optiflow-node-exporter-prod
+    logging: *default-logging
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # cAdvisor (Container Metrics)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: optiflow-cadvisor-prod
+    logging: *default-logging
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: optiflow-postgres-exporter-prod
+    logging: *default-logging
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-optiflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-optiflow}?sslmode=disable"
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    depends_on:
+      - postgres
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: optiflow-redis-exporter-prod
+    logging: *default-logging
+    environment:
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - it-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    depends_on:
+      - redis
+
+  # ========================================
+  # Backup Service
+  # ========================================
+
   backup:
     image: postgres:15-alpine
-    container_name: smartport-backup-prod
+    container_name: optiflow-backup-prod
+    logging: *default-logging
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: ${POSTGRES_USER:-optiflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB:-optiflow}
       PGHOST: postgres
-      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
-      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
       INFLUX_TOKEN: ${INFLUX_TOKEN}
-      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_ORG: ${INFLUX_ORG:-optiflow}
     volumes:
       - ./backups:/backups
       - ./scripts/backup.sh:/backup.sh:ro
     networks:
-      - smartport-network
+      - it-network
     restart: "no"
     depends_on:
       - postgres
       - influxdb
-    # Run backup via cron or manually
     entrypoint: /bin/sh
     command: -c "chmod +x /backup.sh && crond -f"
+    profiles:
+      - backup
 
+# ========================================
+# Networks
+# ========================================
 networks:
-  smartport-network:
+  # OT Network: Gateway ↔ PLCs (isolated, no external access)
+  ot-network:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+  # IT Network: Backend ↔ Frontend ↔ Databases
+  it-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.28.0.0/16
+        - subnet: 172.31.0.0/24
 
+# ========================================
+# Volumes
+# ========================================
 volumes:
   postgres_data:
     driver: local
@@ -248,11 +750,29 @@ volumes:
     driver: local
   redis_data:
     driver: local
+  zookeeper_data:
+    driver: local
+  zookeeper_logs:
+    driver: local
+  kafka_1_data:
+    driver: local
+  kafka_2_data:
+    driver: local
+  kafka_3_data:
+    driver: local
   backend_logs:
+    driver: local
+  backend_mlflow:
     driver: local
   gateway_logs:
     driver: local
   gateway_data:
     driver: local
   nginx_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  grafana_data:
     driver: local

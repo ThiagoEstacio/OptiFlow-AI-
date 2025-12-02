@@ -1,261 +1,260 @@
 {
-  "dashboard": {
-    "title": "OptiFlow - ML Model Metrics",
-    "tags": ["optiflow", "ml", "machine-learning", "anomaly-detection"],
-    "timezone": "browser",
-    "schemaVersion": 16,
-    "version": 0,
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-        "type": "graph",
-        "title": "ML Model F1-Score Trend",
-        "targets": [
-          {
-            "expr": "ml_model_f1_score",
-            "legendFormat": "F1-Score - {{model_name}}",
-            "refId": "A"
-          },
-          {
-            "expr": "ml_model_precision",
-            "legendFormat": "Precision - {{model_name}}",
-            "refId": "B"
-          },
-          {
-            "expr": "ml_model_recall",
-            "legendFormat": "Recall - {{model_name}}",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"format": "percentunit", "label": "Score", "max": 1, "min": 0},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 2,
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-        "type": "graph",
-        "title": "ML Inference Time",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model_name))",
-            "legendFormat": "P50 - {{model_name}}",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model_name))",
-            "legendFormat": "P95 - {{model_name}}",
-            "refId": "B"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model_name))",
-            "legendFormat": "P99 - {{model_name}}",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"format": "s", "label": "Inference Time"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 3,
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-        "type": "graph",
-        "title": "Anomalies Detected Over Time",
-        "targets": [
-          {
-            "expr": "rate(ml_anomalies_detected_total[5m])",
-            "legendFormat": "Anomalies/s - {{model_name}}",
-            "refId": "A"
-          },
-          {
-            "expr": "rate(ml_predictions_total[5m])",
-            "legendFormat": "Predictions/s - {{model_name}}",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"format": "ops", "label": "Rate"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 4,
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-        "type": "graph",
-        "title": "Model Performance Comparison",
-        "targets": [
-          {
-            "expr": "ml_model_f1_score{model_name=\"isolation_forest_optimized\"}",
-            "legendFormat": "Optimized Model",
-            "refId": "A"
-          },
-          {
-            "expr": "ml_model_f1_score{model_name=\"isolation_forest_fast\"}",
-            "legendFormat": "Fast Model",
-            "refId": "B"
-          },
-          {
-            "expr": "ml_model_f1_score{model_name=\"isolation_forest\"}",
-            "legendFormat": "Original Model",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"format": "percentunit", "label": "F1-Score", "max": 1, "min": 0},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 5,
-        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 16},
-        "type": "stat",
-        "title": "Current F1-Score",
-        "targets": [
-          {
-            "expr": "ml_model_f1_score{model_name=\"isolation_forest_optimized\"}",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percentunit",
-            "decimals": 4,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "red"},
-                {"value": 0.7, "color": "yellow"},
-                {"value": 0.9, "color": "green"}
-              ]
-            }
+  "title": "OptiFlow - ML Model Metrics",
+  "uid": "optiflow-ml-metrics",
+  "tags": ["optiflow", "ml", "machine-learning", "anomaly-detection"],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 0,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "type": "graph",
+      "title": "ML Model F1-Score Trend",
+      "targets": [
+        {
+          "expr": "ml_model_f1_score",
+          "legendFormat": "F1-Score - {{model_name}}",
+          "refId": "A"
+        },
+        {
+          "expr": "ml_model_precision",
+          "legendFormat": "Precision - {{model_name}}",
+          "refId": "B"
+        },
+        {
+          "expr": "ml_model_recall",
+          "legendFormat": "Recall - {{model_name}}",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {"format": "percentunit", "label": "Score", "max": 1, "min": 0},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 2,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "type": "graph",
+      "title": "ML Inference Time",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model_name))",
+          "legendFormat": "P50 - {{model_name}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model_name))",
+          "legendFormat": "P95 - {{model_name}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(ml_inference_duration_seconds_bucket[5m])) by (le, model_name))",
+          "legendFormat": "P99 - {{model_name}}",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {"format": "s", "label": "Inference Time"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 3,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "type": "graph",
+      "title": "Anomalies Detected Over Time",
+      "targets": [
+        {
+          "expr": "rate(ml_anomalies_detected_total[5m])",
+          "legendFormat": "Anomalies/s - {{model_name}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(ml_predictions_total[5m])",
+          "legendFormat": "Predictions/s - {{model_name}}",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {"format": "ops", "label": "Rate"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 4,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "type": "graph",
+      "title": "Model Performance Comparison",
+      "targets": [
+        {
+          "expr": "ml_model_f1_score{model_name=\"isolation_forest_optimized\"}",
+          "legendFormat": "Optimized Model",
+          "refId": "A"
+        },
+        {
+          "expr": "ml_model_f1_score{model_name=\"isolation_forest_fast\"}",
+          "legendFormat": "Fast Model",
+          "refId": "B"
+        },
+        {
+          "expr": "ml_model_f1_score{model_name=\"isolation_forest\"}",
+          "legendFormat": "Original Model",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {"format": "percentunit", "label": "F1-Score", "max": 1, "min": 0},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 5,
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 16},
+      "type": "stat",
+      "title": "Current F1-Score",
+      "targets": [
+        {
+          "expr": "ml_model_f1_score{model_name=\"isolation_forest_optimized\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 0.7, "color": "yellow"},
+              {"value": 0.9, "color": "green"}
+            ]
           }
         }
-      },
-      {
-        "id": 6,
-        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 16},
-        "type": "stat",
-        "title": "Avg Inference Time",
-        "targets": [
-          {
-            "expr": "avg(rate(ml_inference_duration_seconds_sum[5m]) / rate(ml_inference_duration_seconds_count[5m]))",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "ms",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "green"},
-                {"value": 50, "color": "yellow"},
-                {"value": 100, "color": "red"}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 7,
-        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 16},
-        "type": "stat",
-        "title": "Anomaly Detection Rate",
-        "targets": [
-          {
-            "expr": "(sum(ml_anomalies_detected_total) / sum(ml_predictions_total)) * 100",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "decimals": 2,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "green"},
-                {"value": 10, "color": "yellow"},
-                {"value": 20, "color": "red"}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 8,
-        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 16},
-        "type": "stat",
-        "title": "Model Features Count",
-        "targets": [
-          {
-            "expr": "ml_model_features_count{model_name=\"isolation_forest_optimized\"}",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "short",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "green"},
-                {"value": 50, "color": "yellow"},
-                {"value": 100, "color": "red"}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 9,
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
-        "type": "table",
-        "title": "Model Comparison Table",
-        "targets": [
-          {
-            "expr": "ml_model_f1_score",
-            "format": "table",
-            "instant": true,
-            "refId": "A"
-          },
-          {
-            "expr": "ml_model_features_count",
-            "format": "table",
-            "instant": true,
-            "refId": "B"
-          },
-          {
-            "expr": "avg(rate(ml_inference_duration_seconds_sum[5m]) / rate(ml_inference_duration_seconds_count[5m])) by (model_name)",
-            "format": "table",
-            "instant": true,
-            "refId": "C"
-          }
-        ],
-        "transformations": [
-          {
-            "id": "merge",
-            "options": {}
-          },
-          {
-            "id": "organize",
-            "options": {
-              "excludeByName": {"Time": true, "__name__": true, "job": true, "instance": true},
-              "renameByName": {
-                "model_name": "Model Name",
-                "Value #A": "F1-Score",
-                "Value #B": "Features",
-                "Value #C": "Avg Inference (s)"
-              }
-            }
-          }
-        ]
       }
-    ]
-  }
+    },
+    {
+      "id": 6,
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 16},
+      "type": "stat",
+      "title": "Avg Inference Time",
+      "targets": [
+        {
+          "expr": "avg(rate(ml_inference_duration_seconds_sum[5m]) / rate(ml_inference_duration_seconds_count[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 50, "color": "yellow"},
+              {"value": 100, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 16},
+      "type": "stat",
+      "title": "Anomaly Detection Rate",
+      "targets": [
+        {
+          "expr": "(sum(ml_anomalies_detected_total) / sum(ml_predictions_total)) * 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 10, "color": "yellow"},
+              {"value": 20, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 16},
+      "type": "stat",
+      "title": "Model Features Count",
+      "targets": [
+        {
+          "expr": "ml_model_features_count{model_name=\"isolation_forest_optimized\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 50, "color": "yellow"},
+              {"value": 100, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
+      "type": "table",
+      "title": "Model Comparison Table",
+      "targets": [
+        {
+          "expr": "ml_model_f1_score",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "ml_model_features_count",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "avg(rate(ml_inference_duration_seconds_sum[5m]) / rate(ml_inference_duration_seconds_count[5m])) by (model_name)",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "__name__": true, "job": true, "instance": true},
+            "renameByName": {
+              "model_name": "Model Name",
+              "Value #A": "F1-Score",
+              "Value #B": "Features",
+              "Value #C": "Avg Inference (s)"
+            }
+          }
+        }
+      ]
+    }
+  ]
 }

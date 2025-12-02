@@ -114,27 +114,19 @@ scrape_configs:
     scrape_interval: 30s        # Menos frequente para containers
 
   # ======================================================================
-  # OLLAMA (LLM Service)
+  # OLLAMA (LLM Service) - DISABLED
+  # Note: Ollama does not expose native Prometheus metrics (/metrics returns 404)
+  # Health is monitored via application-level checks instead
   # ======================================================================
-  - job_name: 'ollama'
-    static_configs:
-      - targets: ['ollama:11434']
-        labels:
-          service: 'ollama'
-          component: 'ai'
-    metrics_path: '/metrics'
-    scrape_interval: 30s
-    scrape_timeout: 5s
+  # - job_name: 'ollama'
+  #   static_configs:
+  #     - targets: ['ollama:11434']
 
   # ======================================================================
-  # MLFLOW (ML Experiment Tracking)
+  # MLFLOW (ML Experiment Tracking) - DISABLED
+  # Note: MLflow does not expose native Prometheus metrics
+  # Health is monitored via application-level checks instead
   # ======================================================================
-  - job_name: 'mlflow'
-    static_configs:
-      - targets: ['mlflow:5000']
-        labels:
-          service: 'mlflow'
-          component: 'ml'
-    metrics_path: '/metrics'
-    scrape_interval: 30s
-    scrape_timeout: 5s
+  # - job_name: 'mlflow'
+  #   static_configs:
+  #     - targets: ['mlflow:5000']

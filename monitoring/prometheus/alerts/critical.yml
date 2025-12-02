@@ -7,7 +7,8 @@ groups:
       # ============================================
       
       - alert: ServiceDown
-        expr: up == 0
+        # Exclude services that don't expose Prometheus metrics (ollama, mlflow)
+        expr: up{job!~"ollama|mlflow"} == 0
         for: 1m
         labels:
           severity: critical
@@ -137,17 +138,17 @@ groups:
           action: "Verificar logs: docker logs smartport-autonomous-agent"
           runbook: "https://docs.optiflow.ai/runbooks/agent-unhealthy"
 
-      - alert: OllamaDown
-        expr: up{job="ollama"} == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: ml_inference
-        annotations:
-          summary: "Ollama LLM Service está DOWN"
-          description: "Serviço de inferência Ollama não está respondendo."
-          action: "Verificar GPU e reiniciar: docker restart smartport-ollama"
-          runbook: "https://docs.optiflow.ai/runbooks/ollama-down"
+      # DISABLED: Ollama does not expose Prometheus metrics natively
+      # Health is monitored via application-level health checks in backend
+      # - alert: OllamaDown
+      #   expr: up{job="ollama"} == 0
+      #   for: 1m
+      #   labels:
+      #     severity: critical
+      #     component: ml_inference
+      #   annotations:
+      #     summary: "Ollama LLM Service está DOWN"
+      #     description: "Serviço de inferência Ollama não está respondendo."
 
       - alert: HighMLInferenceLatency
         expr: |

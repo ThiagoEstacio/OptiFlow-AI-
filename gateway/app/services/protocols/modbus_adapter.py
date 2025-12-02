@@ -31,6 +31,13 @@ except ImportError:
 
 from .base_adapter import BaseProtocolAdapter, ProtocolConfig, TagData
 
+# Import metrics
+try:
+    from app.services.gateway_metrics import get_gateway_metrics
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -157,15 +164,38 @@ class ModbusAdapter(BaseProtocolAdapter):
             if self.client.connected:
                 logger.info(f"✅ Connected to Modbus TCP server")
                 self.connected = True
+
+                # Update metrics
+                if METRICS_AVAILABLE:
+                    metrics = get_gateway_metrics()
+                    metrics.set_devices_connected("modbus", 1)
+                    metrics.set_device_status(self.adapter_id, "modbus", True)
+                    metrics.track_connection_attempt(self.adapter_id, "modbus", True)
+                    metrics.set_tags_total(self.adapter_id, len(self.config.tags))
+
                 return True
             else:
                 logger.error(f"❌ Failed to connect to Modbus TCP server")
                 self.connected = False
+
+                # Update metrics on failure
+                if METRICS_AVAILABLE:
+                    metrics = get_gateway_metrics()
+                    metrics.track_connection_attempt(self.adapter_id, "modbus", False)
+                    metrics.set_device_status(self.adapter_id, "modbus", False)
+
                 return False
 
         except Exception as e:
             logger.error(f"❌ Failed to connect to Modbus TCP server: {e}", exc_info=True)
             self.connected = False
+
+            # Update metrics on failure
+            if METRICS_AVAILABLE:
+                metrics = get_gateway_metrics()
+                metrics.track_connection_attempt(self.adapter_id, "modbus", False)
+                metrics.set_device_status(self.adapter_id, "modbus", False)
+
             return False
 
     def _build_read_plan(self) -> List[ReadGroup]:
@@ -277,6 +307,12 @@ class ModbusAdapter(BaseProtocolAdapter):
 
             self.client = None
             self.connected = False
+
+            # Update metrics
+            if METRICS_AVAILABLE:
+                metrics = get_gateway_metrics()
+                metrics.set_devices_connected("modbus", 0)
+                metrics.set_device_status(self.adapter_id, "modbus", False)
 
         except Exception as e:
             logger.error(f"❌ Error during disconnect: {e}")
@@ -683,6 +719,15 @@ class ModbusAdapter(BaseProtocolAdapter):
                 tag_id=spec.tag_id  # Include tag_id for InfluxDB persistence
             ))
 
+            # Update metrics
+            if METRICS_AVAILABLE:
+                try:
+                    metrics = get_gateway_metrics()
+                    metrics.track_tag_read(self.adapter_id, "modbus", quality, 0.001)
+                    metrics.track_data_collected(self.adapter_id, 1)
+                except Exception:
+                    pass  # Don't let metrics fail the data flow
+
         return results
 
     def _build_tag_data_from_bits(
@@ -720,6 +765,15 @@ class ModbusAdapter(BaseProtocolAdapter):
                 address=spec.address,
                 tag_id=spec.tag_id  # Include tag_id for InfluxDB persistence
             ))
+
+            # Update metrics
+            if METRICS_AVAILABLE:
+                try:
+                    metrics = get_gateway_metrics()
+                    metrics.track_tag_read(self.adapter_id, "modbus", quality, 0.001)
+                    metrics.track_data_collected(self.adapter_id, 1)
+                except Exception:
+                    pass  # Don't let metrics fail the data flow
 
         return results
 

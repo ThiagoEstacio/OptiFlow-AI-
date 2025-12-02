@@ -28,6 +28,13 @@ except ImportError:
 
 from .base_adapter import BaseProtocolAdapter, ProtocolConfig, TagData
 
+# Import metrics
+try:
+    from app.services.gateway_metrics import get_gateway_metrics
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,11 +117,28 @@ class OPCUAAdapter(BaseProtocolAdapter):
             await self._create_subscription()
 
             self.connected = True
+
+            # Update metrics
+            if METRICS_AVAILABLE:
+                metrics = get_gateway_metrics()
+                metrics.set_devices_connected("opc_ua", 1)
+                metrics.set_device_status(self.adapter_id, "opc_ua", True)
+                metrics.track_connection_attempt(self.adapter_id, "opc_ua", True)
+                metrics.set_opcua_sessions(1)
+                metrics.set_tags_total(self.adapter_id, len(self.config.tags))
+
             return True
 
         except Exception as e:
             logger.error(f"❌ Failed to connect to OPC UA server: {e}", exc_info=True)
             self.connected = False
+
+            # Update metrics on failure
+            if METRICS_AVAILABLE:
+                metrics = get_gateway_metrics()
+                metrics.track_connection_attempt(self.adapter_id, "opc_ua", False)
+                metrics.set_device_status(self.adapter_id, "opc_ua", False)
+
             return False
 
     async def disconnect(self):
@@ -145,6 +169,13 @@ class OPCUAAdapter(BaseProtocolAdapter):
             self.subscription = None
             self._monitored_items.clear()
             self.connected = False
+
+            # Update metrics
+            if METRICS_AVAILABLE:
+                metrics = get_gateway_metrics()
+                metrics.set_devices_connected("opc_ua", 0)
+                metrics.set_device_status(self.adapter_id, "opc_ua", False)
+                metrics.set_opcua_sessions(0)
 
         except Exception as e:
             logger.error(f"❌ Error during disconnect: {e}")
@@ -194,6 +225,11 @@ class OPCUAAdapter(BaseProtocolAdapter):
                     logger.error(f"❌ Failed to subscribe to tag {tag_config}: {e}")
 
             logger.info(f"✅ Subscription created - Monitoring {len(self._monitored_items)} tags")
+
+            # Update metrics
+            if METRICS_AVAILABLE:
+                metrics = get_gateway_metrics()
+                metrics.set_opcua_subscriptions(self.adapter_id, 1)
 
         except Exception as e:
             logger.error(f"❌ Failed to create subscription: {e}", exc_info=True)
@@ -269,10 +305,28 @@ class OPCUAAdapter(BaseProtocolAdapter):
             # Using asyncio.create_task to not block the callback
             asyncio.create_task(self._add_to_buffer(tag_data))
 
+            # Update metrics
+            if METRICS_AVAILABLE:
+                try:
+                    metrics = get_gateway_metrics()
+                    metrics.track_tag_read(self.adapter_id, "opc_ua", quality.lower(), 0.001)  # Subscription is nearly instant
+                    metrics.track_opcua_notification(self.adapter_id)
+                    metrics.track_data_collected(self.adapter_id, 1)
+                except Exception:
+                    pass  # Don't let metrics fail the data flow
+
             logger.debug(f"📊 {tag_name}: {value} (quality={quality}, ts={timestamp})")
 
         except Exception as e:
             logger.error(f"❌ Error in subscription handler: {e}", exc_info=True)
+
+            # Track error in metrics
+            if METRICS_AVAILABLE:
+                try:
+                    metrics = get_gateway_metrics()
+                    metrics.track_tag_error(self.adapter_id, "opc_ua", "subscription_error")
+                except Exception:
+                    pass
 
     async def _add_to_buffer(self, tag_data: TagData):
         """Add tag data to buffer (thread-safe)"""

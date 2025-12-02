@@ -1,0 +1,289 @@
+groups:
+  # ==========================================================================
+  # PREDICTIVE HEALTH ALERTS - Detect issues BEFORE they cause failures
+  # ==========================================================================
+
+  - name: predictive_memory
+    interval: 30s
+    rules:
+      # Memory will exceed limit in 1 hour
+      - alert: MemoryExhaustionPredicted
+        expr: |
+          predict_linear(
+            container_memory_usage_bytes{name=~"optiflow.*"}[30m],
+            3600
+          ) > container_spec_memory_limit_bytes{name=~"optiflow.*"} * 0.95
+        for: 10m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} may run out of memory"
+          description: "Based on current growth rate, memory will exceed 95% of limit in ~1 hour. Current: {{ $value | humanize1024 }}B"
+          action: "Consider restarting the container or increasing memory limits"
+
+      # Memory growth rate unusual
+      - alert: AbnormalMemoryGrowth
+        expr: |
+          deriv(container_memory_usage_bytes{name=~"optiflow.*"}[30m]) > 10000000
+        for: 15m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "📈 Container {{ $labels.name }} memory growing rapidly"
+          description: "Memory is increasing at {{ $value | humanize1024 }}B/second. Possible memory leak."
+          action: "Check for memory leaks in the application"
+
+  - name: predictive_disk
+    interval: 1m
+    rules:
+      # Disk will be full in 24 hours
+      - alert: DiskExhaustionIn24Hours
+        expr: |
+          predict_linear(
+            node_filesystem_avail_bytes{mountpoint="/"}[6h],
+            86400
+          ) < 1024 * 1024 * 1024
+        for: 30m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "💾 Disk space may run out in ~24 hours"
+          description: "Based on current usage pattern, disk will have less than 1GB free in 24 hours."
+          action: "Clean up old logs, docker images, or add storage"
+
+      # Disk will be full in 4 hours - CRITICAL
+      - alert: DiskExhaustionIn4Hours
+        expr: |
+          predict_linear(
+            node_filesystem_avail_bytes{mountpoint="/"}[2h],
+            14400
+          ) < 500 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: critical
+          type: predictive
+        annotations:
+          summary: "🚨 CRITICAL: Disk space may run out in ~4 hours"
+          description: "Based on current usage pattern, disk will be critically low soon."
+          action: "IMMEDIATE: Run 'docker system prune' and clean logs"
+
+  - name: predictive_connections
+    interval: 30s
+    rules:
+      # Database connections trending toward limit
+      - alert: DatabaseConnectionsExhaustionPredicted
+        expr: |
+          predict_linear(
+            pg_stat_database_numbackends{datname="optiflow"}[30m],
+            1800
+          ) > pg_settings_max_connections * 0.85
+        for: 10m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "🔗 Database connections may exhaust"
+          description: "At current rate, connection pool will reach 85% in ~30 minutes."
+          action: "Check for connection leaks or increase max_connections"
+
+      # Redis connections trending up
+      - alert: RedisConnectionsGrowing
+        expr: |
+          deriv(redis_connected_clients[15m]) > 1
+        for: 20m
+        labels:
+          severity: info
+          type: predictive
+        annotations:
+          summary: "📊 Redis connections steadily increasing"
+          description: "Redis client connections are growing at {{ $value }}/minute."
+          action: "Monitor for connection leaks in application"
+
+  - name: predictive_performance
+    interval: 30s
+    rules:
+      # API latency trending up
+      - alert: LatencyDegradationDetected
+        expr: |
+          (
+            avg_over_time(
+              histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))[30m:5m]
+            )
+            /
+            avg_over_time(
+              histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))[2h:5m]
+            )
+          ) > 1.5
+        for: 15m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "⏱️ API latency has increased 50%+ in last 30 minutes"
+          description: "Response times are degrading. Investigation recommended."
+          action: "Check database queries, cache hit rates, and resource usage"
+
+      # Error rate trending up
+      - alert: ErrorRateTrendingUp
+        expr: |
+          deriv(
+            rate(http_requests_total{status=~"5.."}[5m])[30m:5m]
+          ) > 0.001
+        for: 15m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "📈 Error rate is trending upward"
+          description: "5xx errors are increasing steadily over the last 30 minutes."
+          action: "Check application logs for new errors"
+
+  - name: predictive_kafka
+    interval: 30s
+    rules:
+      # Kafka lag growing
+      - alert: KafkaLagGrowing
+        expr: |
+          deriv(kafka_consumer_group_lag[10m]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "📥 Kafka consumer lag is growing"
+          description: "Consumer lag increasing at {{ $value }} messages/minute."
+          action: "Check consumer health or scale consumers"
+
+      # Kafka will have significant lag soon
+      - alert: KafkaLagExhaustionPredicted
+        expr: |
+          predict_linear(kafka_consumer_group_lag[30m], 3600) > 50000
+        for: 15m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "⚠️ Kafka lag may become critical in ~1 hour"
+          description: "At current rate, lag will exceed 50k messages in 1 hour."
+          action: "Scale consumers or investigate processing bottlenecks"
+
+  # ==========================================================================
+  # CONTAINER HEALTH TRENDS
+  # ==========================================================================
+  - name: container_health_trends
+    interval: 30s
+    rules:
+      # Container CPU trending toward limit
+      - alert: CPUExhaustionPredicted
+        expr: |
+          predict_linear(
+            rate(container_cpu_usage_seconds_total{name=~"optiflow.*"}[5m])[30m:5m],
+            1800
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "🔥 Container {{ $labels.name }} CPU trending toward 90%"
+          description: "CPU usage will likely exceed 90% in ~30 minutes."
+          action: "Check for infinite loops, heavy computations, or scale resources"
+
+      # Container restart loop detected
+      - alert: ContainerRestartLoop
+        expr: |
+          increase(container_restart_count{name=~"optiflow.*"}[30m]) > 2
+        for: 5m
+        labels:
+          severity: critical
+          type: health
+        annotations:
+          summary: "🔄 Container {{ $labels.name }} is in restart loop"
+          description: "Container has restarted {{ $value }} times in 30 minutes."
+          action: "Check container logs: docker logs {{ $labels.name }}"
+
+  # ==========================================================================
+  # GATEWAY HEALTH TRENDS
+  # ==========================================================================
+  - name: gateway_health_trends
+    interval: 30s
+    rules:
+      # Gateway buffer filling up
+      - alert: GatewayBufferFillingUp
+        expr: |
+          predict_linear(gateway_buffer_size[15m], 1800) > 8000
+        for: 5m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "📦 Gateway buffer may overflow in ~30 minutes"
+          description: "Buffer is filling at an unsustainable rate."
+          action: "Check Kafka connectivity and consumer health"
+
+      # Gateway tag read errors increasing
+      - alert: GatewayTagErrorsIncreasing
+        expr: |
+          deriv(gateway_tag_read_errors_total[15m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "📉 Gateway tag read errors are increasing"
+          description: "Tag read errors trending upward."
+          action: "Check OPC-UA server connectivity and tag configurations"
+
+      # Gateway data collection rate dropping
+      - alert: GatewayDataRateDropping
+        expr: |
+          rate(gateway_data_points_collected_total[5m])
+          <
+          avg_over_time(rate(gateway_data_points_collected_total[5m])[1h:5m]) * 0.5
+        for: 10m
+        labels:
+          severity: warning
+          type: health
+        annotations:
+          summary: "📉 Gateway data collection rate dropped 50%"
+          description: "Data collection rate is significantly below normal."
+          action: "Check device connectivity and OPC-UA subscriptions"
+
+  # ==========================================================================
+  # INFLUXDB HEALTH TRENDS
+  # ==========================================================================
+  - name: influxdb_health_trends
+    interval: 30s
+    rules:
+      # InfluxDB write latency increasing
+      - alert: InfluxDBWriteLatencyIncreasing
+        expr: |
+          (
+            histogram_quantile(0.95, rate(http_api_request_duration_seconds_bucket{handler="write"}[5m]))
+            /
+            avg_over_time(histogram_quantile(0.95, rate(http_api_request_duration_seconds_bucket{handler="write"}[5m]))[1h:5m])
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "⏱️ InfluxDB write latency doubled"
+          description: "Write operations are taking twice as long as normal."
+          action: "Check disk I/O, compaction tasks, and query load"
+
+      # InfluxDB cardinality explosion
+      - alert: InfluxDBHighCardinality
+        expr: |
+          deriv(influxdb_cardinality_total[1h]) > 1000
+        for: 30m
+        labels:
+          severity: warning
+          type: predictive
+        annotations:
+          summary: "📊 InfluxDB cardinality growing rapidly"
+          description: "Series cardinality increasing by {{ $value }}/hour."
+          action: "Review tag usage - avoid high cardinality tags"

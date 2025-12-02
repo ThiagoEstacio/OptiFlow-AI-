@@ -1,210 +1,209 @@
 {
-  "dashboard": {
-    "title": "OptiFlow - Performance Metrics",
-    "tags": ["optiflow", "performance", "optimization"],
-    "timezone": "browser",
-    "schemaVersion": 16,
-    "version": 0,
-    "refresh": "10s",
-    "panels": [
-      {
-        "id": 1,
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-        "type": "graph",
-        "title": "API Response Time (P50, P95, P99)",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-            "legendFormat": "P50 - {{endpoint}}",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-            "legendFormat": "P95 - {{endpoint}}",
-            "refId": "B"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-            "legendFormat": "P99 - {{endpoint}}",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"format": "s", "label": "Response Time"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 2,
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-        "type": "graph",
-        "title": "Request Rate & Error Rate",
-        "targets": [
-          {
-            "expr": "sum(rate(http_requests_total[5m])) by (endpoint)",
-            "legendFormat": "Requests/s - {{endpoint}}",
-            "refId": "A"
-          },
-          {
-            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (endpoint)",
-            "legendFormat": "Errors/s - {{endpoint}}",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"format": "reqps", "label": "Requests/s"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 3,
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-        "type": "graph",
-        "title": "Cache Hit Rate",
-        "targets": [
-          {
-            "expr": "(sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))) * 100",
-            "legendFormat": "Hit Rate %",
-            "refId": "A"
-          },
-          {
-            "expr": "sum(rate(cache_hits_total[5m]))",
-            "legendFormat": "Hits/s",
-            "refId": "B"
-          },
-          {
-            "expr": "sum(rate(cache_misses_total[5m]))",
-            "legendFormat": "Misses/s",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"format": "percent", "label": "Hit Rate", "max": 100},
-          {"format": "ops"}
-        ]
-      },
-      {
-        "id": 4,
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-        "type": "graph",
-        "title": "Database Query Time (PostgreSQL vs InfluxDB)",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(postgres_query_duration_seconds_bucket[5m])) by (le, query_type))",
-            "legendFormat": "PostgreSQL P95 - {{query_type}}",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(influxdb_query_duration_seconds_bucket[5m])) by (le, query_type))",
-            "legendFormat": "InfluxDB P95 - {{query_type}}",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"format": "s", "label": "Query Time"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 5,
-        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 16},
-        "type": "stat",
-        "title": "Avg API Latency (Last 5m)",
-        "targets": [
-          {
-            "expr": "avg(rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m]))",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "s",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "green"},
-                {"value": 0.5, "color": "yellow"},
-                {"value": 1, "color": "red"}
-              ]
-            }
+  "title": "OptiFlow - Performance Metrics",
+  "uid": "optiflow-performance",
+  "tags": ["optiflow", "performance", "optimization"],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 0,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "type": "graph",
+      "title": "API Response Time (P50, P95, P99)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "P50 - {{endpoint}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "P95 - {{endpoint}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "P99 - {{endpoint}}",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {"format": "s", "label": "Response Time"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 2,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "type": "graph",
+      "title": "Request Rate & Error Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (endpoint)",
+          "legendFormat": "Requests/s - {{endpoint}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (endpoint)",
+          "legendFormat": "Errors/s - {{endpoint}}",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {"format": "reqps", "label": "Requests/s"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 3,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "type": "graph",
+      "title": "Cache Hit Rate",
+      "targets": [
+        {
+          "expr": "(sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))) * 100",
+          "legendFormat": "Hit Rate %",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(cache_hits_total[5m]))",
+          "legendFormat": "Hits/s",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(cache_misses_total[5m]))",
+          "legendFormat": "Misses/s",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {"format": "percent", "label": "Hit Rate", "max": 100},
+        {"format": "ops"}
+      ]
+    },
+    {
+      "id": 4,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "type": "graph",
+      "title": "Database Query Time (PostgreSQL vs InfluxDB)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(postgres_query_duration_seconds_bucket[5m])) by (le, query_type))",
+          "legendFormat": "PostgreSQL P95 - {{query_type}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(influxdb_query_duration_seconds_bucket[5m])) by (le, query_type))",
+          "legendFormat": "InfluxDB P95 - {{query_type}}",
+          "refId": "B"
+        }
+      ],
+      "yaxes": [
+        {"format": "s", "label": "Query Time"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 5,
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 16},
+      "type": "stat",
+      "title": "Avg API Latency (Last 5m)",
+      "targets": [
+        {
+          "expr": "avg(rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 0.5, "color": "yellow"},
+              {"value": 1, "color": "red"}
+            ]
           }
         }
-      },
-      {
-        "id": 6,
-        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 16},
-        "type": "stat",
-        "title": "Cache Hit Rate (Overall)",
-        "targets": [
-          {
-            "expr": "(sum(cache_hits_total) / (sum(cache_hits_total) + sum(cache_misses_total))) * 100",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "red"},
-                {"value": 50, "color": "yellow"},
-                {"value": 70, "color": "green"}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 7,
-        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 16},
-        "type": "stat",
-        "title": "Total Requests/s",
-        "targets": [
-          {
-            "expr": "sum(rate(http_requests_total[5m]))",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "reqps",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "blue"}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 8,
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
-        "type": "table",
-        "title": "Optimized Endpoints Performance",
-        "targets": [
-          {
-            "expr": "avg(rate(http_request_duration_seconds_sum{endpoint=~\".*analytics.*|.*operations.*|.*monitoring.*|.*assets.*|.*alarms.*\"}[5m]) / rate(http_request_duration_seconds_count{endpoint=~\".*analytics.*|.*operations.*|.*monitoring.*|.*assets.*|.*alarms.*\"}[5m])) by (endpoint)",
-            "format": "table",
-            "instant": true,
-            "refId": "A"
-          }
-        ],
-        "transformations": [
-          {
-            "id": "organize",
-            "options": {
-              "excludeByName": {"Time": true},
-              "indexByName": {},
-              "renameByName": {
-                "endpoint": "Endpoint",
-                "Value": "Avg Latency (s)"
-              }
-            }
-          }
-        ]
       }
-    ]
-  }
+    },
+    {
+      "id": 6,
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 16},
+      "type": "stat",
+      "title": "Cache Hit Rate (Overall)",
+      "targets": [
+        {
+          "expr": "(sum(cache_hits_total) / (sum(cache_hits_total) + sum(cache_misses_total))) * 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 50, "color": "yellow"},
+              {"value": 70, "color": "green"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 16},
+      "type": "stat",
+      "title": "Total Requests/s",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "blue"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
+      "type": "table",
+      "title": "Optimized Endpoints Performance",
+      "targets": [
+        {
+          "expr": "avg(rate(http_request_duration_seconds_sum{endpoint=~\".*analytics.*|.*operations.*|.*monitoring.*|.*assets.*|.*alarms.*\"}[5m]) / rate(http_request_duration_seconds_count{endpoint=~\".*analytics.*|.*operations.*|.*monitoring.*|.*assets.*|.*alarms.*\"}[5m])) by (endpoint)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "indexByName": {},
+            "renameByName": {
+              "endpoint": "Endpoint",
+              "Value": "Avg Latency (s)"
+            }
+          }
+        }
+      ]
+    }
+  ]
 }

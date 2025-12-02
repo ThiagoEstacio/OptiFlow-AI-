@@ -248,9 +248,12 @@ groups:
           summary: "Container {{ $labels.name }} is restarting"
           description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last 5 minutes"
 
-      # Container high CPU
+      # Container high CPU - only monitor OptiFlow containers
       - alert: ContainerHighCPU
-        expr: (sum by (name) (rate(container_cpu_usage_seconds_total[5m])) * 100) > 80
+        expr: |
+          (
+            sum by (name) (rate(container_cpu_usage_seconds_total{name=~"optiflow.*"}[5m])) * 100
+          ) > 80
         for: 5m
         labels:
           severity: warning
@@ -259,9 +262,13 @@ groups:
           summary: "Container {{ $labels.name }} high CPU usage"
           description: "Container {{ $labels.name }} CPU usage is above 80% (current: {{ $value | humanize }}%)"
 
-      # Container high memory
+      # Container high memory - only monitor OptiFlow containers
       - alert: ContainerHighMemory
-        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 90
+        expr: |
+          (
+            container_memory_usage_bytes{name=~"optiflow.*"}
+            / container_spec_memory_limit_bytes{name=~"optiflow.*"}
+          ) * 100 > 90
         for: 5m
         labels:
           severity: warning

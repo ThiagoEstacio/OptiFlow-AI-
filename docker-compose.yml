@@ -501,6 +501,12 @@ services:
         condition: service_started
       backend:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
   # Celery Beat (Scheduler)
@@ -598,6 +604,13 @@ services:
       - it-network
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
   # MLflow (Model Tracking & Registry)
   mlflow:
