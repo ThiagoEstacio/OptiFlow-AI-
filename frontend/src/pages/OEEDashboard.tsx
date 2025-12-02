@@ -114,7 +114,9 @@ import { LoadingState, ErrorState } from '../components/shared';
 import { OEEPredictions } from '../components/OEEPredictions';
 
 // Sprint 6: Cross-filtering integration
-import { FilterBar, DrillDownBreadcrumb, useFilterStore, useURLFilters } from '../components/filters';
+import { FilterBar, DrillDownBreadcrumb, useFilterStore, useURLFilters, CrossFilterPanel } from '../components/filters';
+import { ClickableKPI } from '../components/professional/ClickableKPI';
+import { QualityIndicator } from '../components/industrial/QualityIndicator';
 
 // Types
 interface OEEOverview {
@@ -2236,7 +2238,7 @@ export const OEEDashboard: React.FC = () => {
         </Stack>
       </Paper>
 
-      {/* Sprint 6: Global Filter Bar */}
+      {/* Sprint 6: Global Filter Bar with Cross-Filtering */}
       <Box sx={{ px: 3, pt: 2 }}>
         <FilterBar
           showEquipments={true}
@@ -2247,6 +2249,7 @@ export const OEEDashboard: React.FC = () => {
         <Box sx={{ mt: 1 }}>
           <DrillDownBreadcrumb />
         </Box>
+        <CrossFilterPanel position="top" collapsible={true} />
       </Box>
 
       {/* Main Content */}

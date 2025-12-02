@@ -87,6 +87,10 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { REFRESH_INTERVALS } from '../utils/constants';
 import { LoadingState, ErrorState } from '../components/shared';
 
+// Sprint 6: Cross-filtering integration
+import { FilterBar, DrillDownBreadcrumb, CrossFilterPanel } from '../components/filters';
+import { ClickableKPI } from '../components/professional/ClickableKPI';
+
 // Types
 interface EnergyData {
   status: string;
