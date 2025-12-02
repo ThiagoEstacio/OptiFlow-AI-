@@ -64,7 +64,11 @@ export default defineConfig({
       'date-fns',
       'buffer',
       'stream-browserify',
-      'assert'
+      'assert',
+      // Grid/DnD libraries - must be pre-bundled to avoid "Class extends undefined" error
+      'react-draggable',
+      'react-resizable',
+      'react-grid-layout',
     ],
     exclude: ['@mui/icons-material'],
     esbuildOptions: {
