@@ -9,7 +9,7 @@
  * 4. Analytics - Insights de ML e análises
  * 5. Settings - Configurações e admin
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
@@ -50,7 +50,8 @@ import { ExtendedTagsPage } from './pages/ExtendedTagsPage';
 import { ChatPage } from './pages/ChatPage';
 // DevicesPage, TagsPage, GatewayManagementPage removed - managed via Gateway UI at localhost:8080/ui/
 import DashboardsList from './pages/DashboardsList';
-import DashboardBuilder from './pages/DashboardBuilder';
+// Lazy load DashboardBuilder to avoid react-grid-layout initialization issues
+const DashboardBuilder = lazy(() => import('./pages/DashboardBuilder'));
 import SimulatorPage from './pages/SimulatorPage';
 import DashboardBuilderPage from './pages/DashboardBuilderPage';
 import ExecutiveDashboard from './pages/ExecutiveDashboard';
@@ -116,9 +117,9 @@ function App() {
                   <Route path="dashboard/executive" element={<ExecutiveDashboard />} />
                   <Route path="dashboards" element={<DashboardsList />} />
                   <Route path="dashboards/builder" element={<DashboardBuilderPage />} />
-                  <Route path="dashboards/new" element={<DashboardBuilder />} />
-                  <Route path="dashboards/:id" element={<DashboardBuilder />} />
-                  <Route path="dashboards/:id/edit" element={<DashboardBuilder />} />
+                  <Route path="dashboards/new" element={<Suspense fallback={<div>Loading...</div>}><DashboardBuilder /></Suspense>} />
+                  <Route path="dashboards/:id" element={<Suspense fallback={<div>Loading...</div>}><DashboardBuilder /></Suspense>} />
+                  <Route path="dashboards/:id/edit" element={<Suspense fallback={<div>Loading...</div>}><DashboardBuilder /></Suspense>} />
 
                   {/* ========================================
                       ⚡ MODULE 2: REAL-TIME (Tags & Trends)
