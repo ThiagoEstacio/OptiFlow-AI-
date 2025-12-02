@@ -7,26 +7,34 @@ export const Toaster = () => {
       reverseOrder={false}
       gutter={8}
       toastOptions={{
-        duration: 4000,
+        // Increased default duration from 4s to 8s for better visibility
+        duration: 8000,
         style: {
           background: '#363636',
           color: '#fff',
           padding: '16px',
           borderRadius: '8px',
           fontSize: '14px',
+          maxWidth: '400px',
         },
         success: {
-          duration: 3000,
+          duration: 5000,
           iconTheme: {
             primary: '#10B981',
             secondary: '#fff',
           },
         },
         error: {
-          duration: 5000,
+          // Critical errors stay longer (15 seconds)
+          duration: 15000,
           iconTheme: {
             primary: '#EF4444',
             secondary: '#fff',
+          },
+          style: {
+            background: '#DC2626',
+            color: '#fff',
+            fontWeight: 500,
           },
         },
         loading: {

@@ -189,3 +189,276 @@ export const formatTimestamp = (timestamp: string): string => {
     return timestamp;
   }
 };
+
+// ========================================
+// PCM - MTBF/MTTR Types and API
+// ========================================
+
+export interface MTBFMTTRResult {
+  equipment_id: string;
+  duration: string;
+  analysis_period_hours: number;
+  status_tag: string | null;
+  mtbf_hours: number | null;
+  mttr_hours: number | null;
+  availability_percent: number | null;
+  failure_count: number;
+  total_operating_hours: number;
+  total_downtime_hours: number;
+  failures: Array<{
+    start_time: string;
+    end_time: string;
+    running_hours_before_failure: number;
+    repair_hours?: number;
+  }>;
+  reliability_classification: string | null;
+  insights: string[];
+  recommendations: string[];
+  estimation_method?: string;
+  error?: string;
+}
+
+export const getMTBFMTTR = async (
+  equipmentId: string,
+  options?: {
+    statusTag?: string;
+    duration?: '7d' | '30d' | '90d' | '180d' | '365d';
+    failureThreshold?: number;
+  }
+): Promise<MTBFMTTRResult> => {
+  const response = await apiClient.post('/api/v1/agent/dashboard/chat', {
+    message: `Calcule MTBF e MTTR para ${equipmentId}`,
+    tool_call: {
+      name: 'calculate_mtbf_mttr',
+      arguments: {
+        equipment_id: equipmentId,
+        status_tag: options?.statusTag,
+        duration: options?.duration || '30d',
+        failure_threshold: options?.failureThreshold
+      }
+    }
+  });
+  // API returns tool_result with raw data
+  return response.data.tool_result || response.data;
+};
+
+// ========================================
+// PCM PREDITIVO - Failure Prediction Types and API
+// ========================================
+
+export interface FailurePrediction {
+  equipment_id: string;
+  prediction_horizon: string;
+  analysis_timestamp: string;
+  overall_risk_level: 'low' | 'medium' | 'high' | 'critical';
+  failure_probability: number;
+  confidence: number;
+  predicted_failure_window: {
+    min_days: number;
+    max_days: number;
+    most_likely_days: number;
+  } | null;
+  risk_factors: Array<{
+    tag_id: string;
+    risk_score: number;
+    primary_concern: string;
+  }>;
+  tag_analysis: Array<{
+    tag_id: string;
+    risk_score: number;
+    indicators: Array<{
+      type: string;
+      severity: string;
+      description: string;
+    }>;
+  }>;
+  recommendations: string[];
+  action_priority: 'routine' | 'planned' | 'urgent' | 'immediate';
+  error?: string;
+}
+
+export const predictFailure = async (
+  equipmentId: string,
+  options?: {
+    tagIds?: string[];
+    predictionHorizon?: '24h' | '7d' | '14d' | '30d';
+    confidenceThreshold?: number;
+  }
+): Promise<FailurePrediction> => {
+  const response = await apiClient.post('/api/v1/agent/dashboard/chat', {
+    message: `Predição de falha para ${equipmentId}`,
+    tool_call: {
+      name: 'predict_failure',
+      arguments: {
+        equipment_id: equipmentId,
+        tag_ids: options?.tagIds,
+        prediction_horizon: options?.predictionHorizon || '7d',
+        confidence_threshold: options?.confidenceThreshold || 0.7
+      }
+    }
+  });
+  return response.data.tool_result || response.data;
+};
+
+// ========================================
+// QUALIDADE - SPC/CEP Types and API
+// ========================================
+
+export interface SPCLimits {
+  tag_id: string;
+  duration: string;
+  sample_size: number;
+  subgroup_size: number;
+  chart_type: string;
+  control_limits: {
+    x_bar_chart?: {
+      ucl: number;
+      cl: number;
+      lcl: number;
+    };
+    r_chart?: {
+      ucl: number;
+      cl: number;
+      lcl: number;
+    };
+    individuals_chart?: {
+      ucl: number;
+      cl: number;
+      lcl: number;
+    };
+    mr_chart?: {
+      ucl: number;
+      cl: number;
+      lcl: number;
+    };
+  };
+  process_statistics: {
+    mean: number;
+    stddev: number;
+    min: number;
+    max: number;
+    range: number;
+    x_bar?: number;
+    r_bar?: number;
+    mr_bar?: number;
+    sigma_estimate?: number;
+    subgroup_count?: number;
+  };
+  capability_indices?: {
+    cp: number;
+    cpk: number;
+    cpu: number;
+    cpl: number;
+    pp: number;
+    ppk: number;
+    sigma_level: number;
+    ppm_estimate: number;
+    specification_limits: {
+      usl: number;
+      lsl: number;
+      target: number | null;
+    };
+  };
+  stability_assessment: {
+    status: string;
+    out_of_control_count: number;
+    out_of_control_percentage: number;
+  };
+  out_of_control_points: Array<{
+    subgroup?: number;
+    point?: number;
+    x_bar?: number;
+    range?: number;
+    value?: number;
+    violations?: string[];
+    violation?: string;
+  }>;
+  insights: string[];
+  recommendations: string[];
+  error?: string;
+}
+
+export const calculateSPCLimits = async (
+  tagId: string,
+  options?: {
+    specificationLimits?: {
+      usl?: number;
+      lsl?: number;
+      target?: number;
+    };
+    duration?: '1h' | '6h' | '12h' | '24h' | '7d' | '30d';
+    subgroupSize?: number;
+    controlChartType?: 'x_bar_r' | 'x_bar_s' | 'individuals' | 'p_chart' | 'c_chart';
+  }
+): Promise<SPCLimits> => {
+  const response = await apiClient.post('/api/v1/agent/dashboard/chat', {
+    message: `Calcule limites SPC/CEP para ${tagId}`,
+    tool_call: {
+      name: 'calculate_spc_limits',
+      arguments: {
+        tag_id: tagId,
+        specification_limits: options?.specificationLimits,
+        duration: options?.duration || '24h',
+        subgroup_size: options?.subgroupSize || 5,
+        control_chart_type: options?.controlChartType || 'x_bar_r'
+      }
+    }
+  });
+  return response.data.tool_result || response.data;
+};
+
+// ========================================
+// Helper Functions for New Tools
+// ========================================
+
+export const getRiskLevelColor = (level: FailurePrediction['overall_risk_level']): string => {
+  const colors = {
+    critical: 'text-red-600 bg-red-50 border-red-300',
+    high: 'text-orange-600 bg-orange-50 border-orange-300',
+    medium: 'text-yellow-600 bg-yellow-50 border-yellow-300',
+    low: 'text-green-600 bg-green-50 border-green-300',
+  };
+  return colors[level] || colors.low;
+};
+
+export const getRiskLevelIcon = (level: FailurePrediction['overall_risk_level']): string => {
+  const icons = {
+    critical: '🚨',
+    high: '⚠️',
+    medium: '⚡',
+    low: '✅',
+  };
+  return icons[level] || '❓';
+};
+
+export const getReliabilityColor = (classification: string | null): string => {
+  if (!classification) return 'text-gray-600 bg-gray-50';
+  const colors: Record<string, string> = {
+    'Excelente': 'text-green-600 bg-green-50 border-green-300',
+    'Bom': 'text-blue-600 bg-blue-50 border-blue-300',
+    'Regular': 'text-yellow-600 bg-yellow-50 border-yellow-300',
+    'Crítico': 'text-red-600 bg-red-50 border-red-300',
+  };
+  return colors[classification] || 'text-gray-600 bg-gray-50';
+};
+
+export const getStabilityColor = (status: string): string => {
+  const colors: Record<string, string> = {
+    'Estável': 'text-green-600 bg-green-50 border-green-300',
+    'Marginalmente Estável': 'text-yellow-600 bg-yellow-50 border-yellow-300',
+    'Instável': 'text-red-600 bg-red-50 border-red-300',
+  };
+  return colors[status] || 'text-gray-600 bg-gray-50';
+};
+
+export const formatHours = (hours: number | null): string => {
+  if (hours === null) return 'N/A';
+  if (hours < 1) return `${Math.round(hours * 60)}min`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)} dias`;
+};
+
+export const formatPercent = (value: number | null): string => {
+  if (value === null) return 'N/A';
+  return `${value.toFixed(1)}%`;
+};

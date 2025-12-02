@@ -28,9 +28,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Expose port
 EXPOSE 80
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost/health || exit 1
+# Health check - verify nginx is serving the SPA (use 127.0.0.1 - localhost not resolved in Alpine)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget --quiet --tries=1 -O /dev/null http://127.0.0.1:80/ || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

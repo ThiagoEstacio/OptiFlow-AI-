@@ -260,10 +260,40 @@ export const gatewayEdgeApi = {
 
   /**
    * Get all current realtime values
+   * Uses /api/tags/realtime/all which returns live values from subscriptions
    */
   getAllRealtimeValues: async (): Promise<Record<string, RealtimeValue>> => {
-    const response = await axios.get(`${API_BASE}/realtime/all`);
-    return response.data;
+    try {
+      const response = await axios.get<{
+        count: number;
+        adapters: number;
+        tags: Record<string, {
+          value: number | boolean | string;
+          quality: string;
+          timestamp: string;
+          address: string;
+          adapter_id: string;
+          protocol: string;
+        }>;
+      }>(`${API_BASE}/tags/realtime/all`);
+
+      const result: Record<string, RealtimeValue> = {};
+
+      Object.entries(response.data.tags).forEach(([tagName, tagData]) => {
+        result[tagName] = {
+          tag_id: tagName,
+          value: tagData.value,
+          quality: tagData.quality?.toLowerCase() || 'good',
+          timestamp: tagData.timestamp,
+          source: tagData.protocol
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Failed to get realtime values:', error);
+      return {};
+    }
   },
 
   // ========================================

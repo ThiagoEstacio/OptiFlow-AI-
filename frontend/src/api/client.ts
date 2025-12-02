@@ -23,7 +23,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const API_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff in milliseconds
-const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]; // HTTP status codes that should trigger retry
+const RETRYABLE_STATUS_CODES = [408, 500, 502, 503, 504]; // HTTP status codes that should trigger retry (429 removed - rate limiting should not be retried automatically)
 
 // Extended config to track retry count
 interface RetryableAxiosRequestConfig extends InternalAxiosRequestConfig {

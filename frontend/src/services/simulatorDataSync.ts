@@ -78,24 +78,17 @@ class SimulatorDataSync {
         }
       }
 
-      // Send batch to backend (using axios directly since writeBatch doesn't exist)
+      // Send batch to backend using apiClient with authentication
       if (dataPoints.length > 0) {
-        const response = await fetch('/api/v1/timeseries/batch', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ points: dataPoints }),
-        }).catch((err) => {
-          console.error('❌ Network error syncing data:', err);
-          return null;
-        });
-
-        if (response && response.ok) {
+        try {
+          await apiClient.post('/api/v1/timeseries/batch', { points: dataPoints });
           console.log(`✅ Synced ${dataPoints.length} data points to backend`);
-        } else if (response) {
-          const errorText = await response.text().catch(() => 'Unknown error');
-          console.warn(`⚠️ Failed to sync data: ${response.status} - ${errorText}`);
+        } catch (err: any) {
+          if (err.response) {
+            console.warn(`⚠️ Failed to sync data: ${err.response.status} - ${err.response.data?.detail || 'Unknown error'}`);
+          } else {
+            console.error('❌ Network error syncing data:', err.message);
+          }
         }
       }
     } catch (error) {

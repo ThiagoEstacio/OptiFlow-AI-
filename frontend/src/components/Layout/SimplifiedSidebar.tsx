@@ -1,8 +1,15 @@
 /**
- * 🎯 Sidebar Navigation - Simplificado e Focado
- * ==============================================
- * 
- * 5 módulos principais + subitens organizados
+ * 🎯 Sidebar Navigation - Estrutura Profissional v3.0
+ * ====================================================
+ *
+ * Arquitetura limpa e intuitiva:
+ * 1. Dashboard - Visão operacional e KPIs
+ * 2. Executivo - Relatórios, ML e insights gerenciais
+ * 3. Monitoramento - Supervisão tempo real
+ * 4. Alarmes - Central unificada
+ *
+ * + Configurações
+ * + AI Assistant (FloatingChat disponível em todas telas)
  */
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -37,13 +44,12 @@ export const SimplifiedSidebar: React.FC = () => {
     };
 
     fetchAlarmsCount();
-    // Refresh every 30 seconds
     const interval = setInterval(fetchAlarmsCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
   // ========================================
-  // 📋 ESTRUTURA DE NAVEGAÇÃO SIMPLIFICADA
+  // 📋 ESTRUTURA PROFISSIONAL v3.0
   // ========================================
   const navItems: NavItem[] = [
     {
@@ -51,42 +57,37 @@ export const SimplifiedSidebar: React.FC = () => {
       label: 'Dashboard',
       icon: '📊',
       children: [
-        { path: '/dashboard', label: 'Principal', icon: '📈' },
+        { path: '/dashboard', label: 'Operacional', icon: '📈' },
         { path: '/dashboards', label: 'Meus Dashboards', icon: '📋' },
-        { path: '/dashboards/builder', label: 'Builder', icon: '🛠️' },
-        { path: '/dashboard/executive', label: 'Executivo', icon: '💼' },
+        { path: '/dashboards/builder', label: 'Construtor', icon: '🛠️' },
       ],
     },
     {
-      path: '/realtime',
-      label: 'Real-Time',
+      path: '/executive',
+      label: 'Executivo',
+      icon: '👔',
+      children: [
+        { path: '/executive', label: 'Visão Geral', icon: '🎯' },
+        { path: '/executive/analytics', label: 'Análises ML', icon: '🧠' },
+        { path: '/executive/oee', label: 'OEE', icon: '🏭' },
+        { path: '/executive/energy', label: 'Energia', icon: '⚡' },
+        { path: '/executive/reports', label: 'Relatórios', icon: '📄' },
+      ],
+    },
+    {
+      path: '/monitoring',
+      label: 'Monitoramento',
       icon: '⚡',
       children: [
-        { path: '/realtime', label: 'Overview', icon: '📈' },
-        { path: '/realtime/tags', label: 'Tags', icon: '🏷️' },
-        { path: '/realtime/trends', label: 'Tendências', icon: '📉' },
+        { path: '/monitoring', label: 'Supervisão', icon: '🏭' },
+        { path: '/monitoring/trends', label: 'Tendências', icon: '📉' },
       ],
     },
     {
       path: '/alarms',
       label: 'Alarmes',
       icon: '🚨',
-      badge: activeAlarmsCount > 0 ? activeAlarmsCount : undefined, // Dynamic badge
-      children: [
-        { path: '/alarms', label: 'Overview', icon: '📋' },
-        { path: '/alarms/active', label: 'Ativos', icon: '🔴' },
-        { path: '/alarms/history', label: 'Histórico', icon: '📜' },
-      ],
-    },
-    {
-      path: '/analytics',
-      label: 'Analytics',
-      icon: '🤖',
-      children: [
-        { path: '/analytics', label: 'Insights', icon: '💡' },
-        { path: '/analytics/ml-insights', label: 'ML Models', icon: '🧠' },
-        { path: '/analytics/chat', label: 'AI Assistant', icon: '💬' },
-      ],
+      badge: activeAlarmsCount > 0 ? activeAlarmsCount : undefined,
     },
   ];
 
@@ -103,16 +104,15 @@ export const SimplifiedSidebar: React.FC = () => {
     if (item.children) {
       return item.children.some((child) => location.pathname.startsWith(child.path));
     }
-    return false;
+    return location.pathname.startsWith(item.path);
   };
 
   const isGroupExpanded = (groupPath: string): boolean => {
-    // Only expand groups when explicitly toggled or when a child route is active
     if (expandedGroups.includes(groupPath)) return true;
-    
+
     const item = navItems.find(i => i.path === groupPath);
     if (item?.children) {
-      return item.children.some(child => location.pathname === child.path);
+      return item.children.some(child => location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
     }
     return false;
   };
@@ -146,7 +146,7 @@ export const SimplifiedSidebar: React.FC = () => {
       {/* ========================================
           NAVIGATION MENU
           ======================================== */}
-      <nav className="mt-4 px-2 overflow-y-auto h-[calc(100vh-80px)]">
+      <nav className="mt-4 px-2 overflow-y-auto h-[calc(100vh-180px)]">
         {navItems.map((item) => {
           const hasChildren = item.children && item.children.length > 0;
           const isActive = isGroupActive(item);
@@ -186,9 +186,9 @@ export const SimplifiedSidebar: React.FC = () => {
               ) : (
                 <NavLink
                   to={item.path}
-                  className={({ isActive }) =>
+                  className={({ isActive: linkActive }) =>
                     `flex items-center px-4 py-3 rounded-lg transition-all ${
-                      isActive
+                      linkActive || isActive
                         ? 'bg-blue-600 text-white shadow-lg'
                         : 'hover:bg-gray-700/50 text-gray-300'
                     }`
@@ -196,7 +196,16 @@ export const SimplifiedSidebar: React.FC = () => {
                   title={!sidebarOpen ? item.label : undefined}
                 >
                   <span className="text-2xl">{item.icon}</span>
-                  {sidebarOpen && <span className="ml-3 font-medium">{item.label}</span>}
+                  {sidebarOpen && (
+                    <>
+                      <span className="ml-3 font-medium">{item.label}</span>
+                      {item.badge && (
+                        <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </NavLink>
               )}
 
@@ -207,9 +216,9 @@ export const SimplifiedSidebar: React.FC = () => {
                     <NavLink
                       key={child.path}
                       to={child.path}
-                      className={({ isActive }) =>
+                      className={({ isActive: childActive }) =>
                         `flex items-center px-3 py-2 text-sm rounded-lg transition-all ${
-                          isActive
+                          childActive
                             ? 'bg-blue-500/20 text-blue-300 border-l-2 border-blue-400'
                             : 'hover:bg-gray-700/30 text-gray-400 hover:text-gray-200'
                         }`
@@ -244,11 +253,26 @@ export const SimplifiedSidebar: React.FC = () => {
               </>
             )}
           </a>
-          {sidebarOpen && (
-            <p className="px-4 text-xs text-gray-500 mt-1">
-              Configuração de Adapters e Tags
-            </p>
-          )}
+        </div>
+
+        {/* ========================================
+            ⚙️ CONFIGURAÇÕES
+            ======================================== */}
+        <div className="mt-2">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `flex items-center px-4 py-3 rounded-lg transition-all ${
+                isActive
+                  ? 'bg-gray-700 text-white'
+                  : 'hover:bg-gray-700/50 text-gray-400 hover:text-gray-200'
+              }`
+            }
+            title={!sidebarOpen ? 'Configurações' : undefined}
+          >
+            <span className="text-2xl">⚙️</span>
+            {sidebarOpen && <span className="ml-3 font-medium">Configurações</span>}
+          </NavLink>
         </div>
       </nav>
 
@@ -267,7 +291,7 @@ export const SimplifiedSidebar: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span>Version:</span>
-              <span className="text-gray-300">v2.0.0</span>
+              <span className="text-gray-300">v3.0.0</span>
             </div>
           </div>
         </div>

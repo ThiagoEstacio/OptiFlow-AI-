@@ -79,12 +79,65 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    chunkSizeWarningLimit: 1000, // Increase warning limit to 1MB
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'redux-vendor': ['@reduxjs/toolkit', 'react-redux'],
-          'chart-vendor': ['recharts', 'plotly.js', 'react-plotly.js', 'd3'],
+        manualChunks: (id) => {
+          // React core - always needed
+          if (id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router')) {
+            return 'react-vendor';
+          }
+
+          // Redux - often needed for state
+          if (id.includes('node_modules/@reduxjs/') ||
+              id.includes('node_modules/react-redux/')) {
+            return 'redux-vendor';
+          }
+
+          // MUI - UI framework (large but commonly used)
+          if (id.includes('node_modules/@mui/') ||
+              id.includes('node_modules/@emotion/')) {
+            return 'mui-vendor';
+          }
+
+          // Plotly - HEAVY (~4MB) - lazy load only when needed
+          // This chunk will only load when Visualization components are used
+          if (id.includes('node_modules/plotly') ||
+              id.includes('node_modules/react-plotly')) {
+            return 'plotly-vendor';
+          }
+
+          // D3 - used by Recharts and some visualizations
+          if (id.includes('node_modules/d3')) {
+            return 'd3-vendor';
+          }
+
+          // Recharts - lightweight charting (main charts)
+          if (id.includes('node_modules/recharts')) {
+            return 'recharts-vendor';
+          }
+
+          // Other utilities
+          if (id.includes('node_modules/axios') ||
+              id.includes('node_modules/date-fns') ||
+              id.includes('node_modules/zod')) {
+            return 'utils-vendor';
+          }
+
+          // Framer Motion - animations
+          if (id.includes('node_modules/framer-motion')) {
+            return 'animation-vendor';
+          }
+
+          // Grid/DnD libraries
+          if (id.includes('node_modules/react-grid-layout') ||
+              id.includes('node_modules/react-dnd') ||
+              id.includes('node_modules/react-draggable') ||
+              id.includes('node_modules/react-resizable')) {
+            return 'grid-vendor';
+          }
         },
       },
     },

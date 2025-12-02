@@ -29,7 +29,7 @@ export const InsightCard: React.FC<InsightCardProps> = ({
 
   if (compact) {
     return (
-      <div className={`p-3 rounded-lg border ${severityClass} mb-2`}>
+      <div className={`p-3 rounded-lg border ${severityClass} mb-2 transition-all duration-300 animate-fadeIn`}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -56,7 +56,7 @@ export const InsightCard: React.FC<InsightCardProps> = ({
   }
 
   return (
-    <div className={`p-4 rounded-lg border-2 ${severityClass} shadow-sm hover:shadow-md transition-shadow`}>
+    <div className={`p-4 rounded-lg border-2 ${severityClass} shadow-sm hover:shadow-md transition-all duration-300 animate-fadeIn`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">

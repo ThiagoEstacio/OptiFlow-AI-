@@ -31,7 +31,10 @@ export const InsightsFeed: React.FC<InsightsFeedProps> = ({
 
   const fetchInsights = async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load, not on refresh
+      if (insights.length === 0) {
+        setLoading(true);
+      }
       setError(null);
 
       const response = await getInsights({
@@ -40,7 +43,16 @@ export const InsightsFeed: React.FC<InsightsFeedProps> = ({
         limit
       });
 
-      setInsights(response.insights);
+      // Smart update: only update if insights actually changed
+      // This prevents unnecessary re-renders and "flashing"
+      const newInsightsJson = JSON.stringify(response.insights.map(i => i.id).sort());
+      const currentInsightsJson = JSON.stringify(insights.map(i => i.id).sort());
+
+      if (newInsightsJson !== currentInsightsJson) {
+        // Merge new insights while preserving order
+        // New insights appear at top with animation
+        setInsights(response.insights);
+      }
 
       // Also fetch summary
       const summaryData = await getInsightsSummary();

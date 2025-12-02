@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, List, ListItem, ListItemText, Chip, Alert } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, ListItemText, Chip, Alert, Fade } from '@mui/material';
 import { Warning, Error } from '@mui/icons-material';
 
 interface Props {
@@ -25,18 +25,25 @@ const CriticalAlerts: React.FC<Props> = ({ alerts }) => {
         </Typography>
         <List>
           {alerts.slice(0, 10).map((alert, index) => (
-            <ListItem key={index}>
-              {alert.severity === 'critical' ? <Error color="error" sx={{ mr: 2 }} /> : <Warning color="warning" sx={{ mr: 2 }} />}
-              <ListItemText
-                primary={alert.message}
-                secondary={`${alert.asset_name} - ${alert.duration_hours || 0}h ago`}
-              />
-              <Chip
-                label={alert.severity}
-                color={alert.severity === 'critical' ? 'error' : 'warning'}
-                size="small"
-              />
-            </ListItem>
+            <Fade in={true} timeout={300 + index * 50} key={alert.id || index}>
+              <ListItem
+                sx={{
+                  transition: 'all 0.3s ease-in-out',
+                  '&:hover': { bgcolor: 'action.hover' }
+                }}
+              >
+                {alert.severity === 'critical' ? <Error color="error" sx={{ mr: 2 }} /> : <Warning color="warning" sx={{ mr: 2 }} />}
+                <ListItemText
+                  primary={alert.message}
+                  secondary={`${alert.asset_name} - ${alert.duration_hours || 0}h ago`}
+                />
+                <Chip
+                  label={alert.severity}
+                  color={alert.severity === 'critical' ? 'error' : 'warning'}
+                  size="small"
+                />
+              </ListItem>
+            </Fade>
           ))}
         </List>
       </CardContent>
