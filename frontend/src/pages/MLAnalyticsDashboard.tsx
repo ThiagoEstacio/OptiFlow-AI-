@@ -19,8 +19,11 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  DollarSign
+  DollarSign,
+  Wrench,
+  BarChart3
 } from 'lucide-react';
+import { AutoInsightsPanel } from '../components/AutoInsightsPanel';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -365,6 +368,29 @@ export const MLAnalyticsDashboard: React.FC = () => {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Insights Automáticos - PCM, Preditivo, Qualidade */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <Wrench className="w-6 h-6 text-indigo-600" />
+              <h2 className="text-xl font-bold text-gray-900">Insights Avançados PCM/Qualidade</h2>
+            </div>
+            <AutoInsightsPanel
+              equipments={[
+                { id: 'ELEV01', name: 'Elevador 01', type: 'elevator' },
+                { id: 'CORR01', name: 'Correia 01', type: 'conveyor' },
+                { id: 'SLD01', name: 'Shiploader 01', type: 'shiploader' },
+                { id: 'MOTOR01', name: 'Motor Principal', type: 'motor' }
+              ]}
+              qualityTags={[
+                { id: 'SILO01_NIVEL', name: 'Nível Silo 01', unit: '%', usl: 95, lsl: 10 },
+                { id: 'SILO01_UMIDADE', name: 'Umidade Silo 01', unit: '%', usl: 14, lsl: 10 },
+                { id: 'por_carregamento', name: 'Percentual Carregamento', unit: '%', usl: 100, lsl: 0 }
+              ]}
+              autoRefresh={true}
+              refreshInterval={120}
+            />
           </div>
 
           {/* Lista de Anomalias Recentes */}

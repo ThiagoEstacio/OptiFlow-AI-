@@ -158,9 +158,26 @@ export const ReportsDashboard: React.FC = () => {
 
   const handleDownload = async (filename: string) => {
     try {
-      window.open(`http://localhost:8000/api/v1/reports/download/${filename}`, '_blank');
+      // Fazer download com autenticação via fetch
+      const response = await apiClient.get(`/api/v1/reports/download/${filename}`, {
+        responseType: 'blob'
+      });
+
+      // Criar URL do blob e fazer download
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setSuccess(`Download de ${filename} concluído!`);
     } catch (err) {
       console.error('Error downloading report:', err);
+      setError('Erro ao fazer download do relatório');
     }
   };
 
