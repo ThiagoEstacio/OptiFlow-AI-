@@ -38,10 +38,10 @@ import {
 // Types
 // ========================================
 
-interface IBCSTimeSeriesPoint {
+export interface IBCSTimeSeriesPoint {
   timestamp: string | Date;
   label?: string;
-  actual: number;
+  actual?: number;
   plan?: number;
   previousYear?: number;
   forecast?: number;
@@ -104,7 +104,7 @@ const formatDate = (
 
 const IBCSLineTooltip: React.FC<{
   active?: boolean;
-  payload?: Array<{ value: number; name: string; dataKey: string; color: string }>;
+  payload?: Array<{ value: number; name: string; dataKey: string; color: string; payload?: IBCSTimeSeriesPoint }>;
   label?: string;
   unit?: string;
 }> = ({ active, payload, label, unit = '' }) => {

@@ -26,6 +26,7 @@ import {
   IBCSKPICard,
   IBCSKPIGrid,
   IBCSColors,
+  type IBCSTimeSeriesPoint,
 } from '../components/ibcs';
 
 // ========================================
@@ -41,7 +42,7 @@ const barChartData = [
   { label: 'Jun', actual: 87, plan: 90, previousYear: 83 },
 ];
 
-const lineChartData = [
+const lineChartData: IBCSTimeSeriesPoint[] = [
   { timestamp: '2024-01-01', actual: 85, plan: 80, previousYear: 78 },
   { timestamp: '2024-02-01', actual: 82, plan: 82, previousYear: 75 },
   { timestamp: '2024-03-01', actual: 88, plan: 85, previousYear: 80 },

@@ -35,5 +35,6 @@ export type { IBCSDataPoint, IBCSChartProps } from './theme';
 // Chart components
 export { IBCSBarChart } from './IBCSBarChart';
 export { IBCSLineChart } from './IBCSLineChart';
+export type { IBCSTimeSeriesPoint } from './IBCSLineChart';
 export { IBCSWaterfallChart } from './IBCSWaterfallChart';
 export { IBCSKPICard, IBCSKPIGrid } from './IBCSKPICard';

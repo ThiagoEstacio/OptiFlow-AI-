@@ -14,11 +14,6 @@ import React from 'react';
 import { Box, Typography, Stack, alpha, Tooltip } from '@mui/material';
 import { TrendingUp, TrendingDown, TrendingFlat } from '@mui/icons-material';
 import {
-  Sparklines,
-  SparklinesLine,
-  SparklinesReferenceLine,
-} from 'react-sparklines';
-import {
   IBCSColors,
   IBCSTypography,
   formatIBCSNumber,
