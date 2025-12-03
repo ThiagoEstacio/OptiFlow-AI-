@@ -81,6 +81,7 @@ export const SimplifiedSidebar: React.FC = () => {
       children: [
         { path: '/monitoring', label: 'Supervisão', icon: '🏭' },
         { path: '/monitoring/trends', label: 'Tendências', icon: '📉' },
+        { path: '/monitoring/history', label: 'Histórico', icon: '📊' },
       ],
     },
     {
