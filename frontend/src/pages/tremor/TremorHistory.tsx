@@ -16,17 +16,9 @@ import {
   Text,
   Badge,
   Button,
-  Select,
-  SelectItem,
   Grid,
   Metric,
   Flex,
-  Table,
-  TableHead,
-  TableRow,
-  TableHeaderCell,
-  TableBody,
-  TableCell,
   TextInput,
 } from '@tremor/react';
 import {
@@ -411,24 +403,24 @@ export default function TremorHistory() {
 
         {/* Selected Tags as Chips */}
         {selectedTags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4 relative z-10">
             {selectedTags.map((tag, idx) => (
               <span
                 key={tag.id}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-white shadow-md"
                 style={{
-                  backgroundColor: `${CHART_COLORS[idx % CHART_COLORS.length]}20`,
-                  borderLeft: `4px solid ${CHART_COLORS[idx % CHART_COLORS.length]}`,
+                  backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
                 }}
               >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-white/30" />
                 {tag.name}
-                {tag.unit && <span className="text-gray-400">({tag.unit})</span>}
+                {tag.unit && <span className="text-white/80 ml-1">({tag.unit})</span>}
                 <button
                   onClick={() => removeTag(tag.id)}
-                  className="ml-1 hover:bg-gray-200 rounded-full p-0.5"
+                  className="ml-1 hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                  type="button"
                 >
-                  <X className="w-3.5 h-3.5 text-gray-500" />
+                  <X className="w-4 h-4 text-white" />
                 </button>
               </span>
             ))}
@@ -436,8 +428,8 @@ export default function TremorHistory() {
         )}
 
         {/* Search Input */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <div className="relative mb-4 z-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
           <TextInput
             placeholder="Buscar tags por nome ou categoria..."
             value={searchTerm}
@@ -447,33 +439,38 @@ export default function TremorHistory() {
         </div>
 
         {/* Tags Grid by Category */}
-        <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white">
+        <div className="max-h-72 overflow-y-auto border border-gray-300 rounded-xl p-4 bg-white shadow-inner relative z-0">
           {Object.entries(tagsByCategory).map(([category, tags]) => (
-            <div key={category} className="mb-4 last:mb-0">
-              <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <div key={category} className="mb-5 last:mb-0">
+              <Text className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                 {category}
               </Text>
               <div className="flex flex-wrap gap-2">
                 {tags.map(tag => {
                   const isSelected = selectedTags.some(t => t.id === tag.id);
                   const selectedIndex = selectedTags.findIndex(t => t.id === tag.id);
+                  const isDisabled = !isSelected && selectedTags.length >= 8;
                   return (
                     <button
+                      type="button"
                       key={tag.id}
                       onClick={() => toggleTag(tag)}
-                      disabled={!isSelected && selectedTags.length >= 8}
+                      disabled={isDisabled}
                       className={`
-                        px-3 py-1.5 rounded-lg text-sm transition-all
+                        px-3 py-2 rounded-lg text-sm font-medium transition-all border-2 cursor-pointer
                         ${isSelected
-                          ? 'text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                          ? 'text-white shadow-lg border-transparent'
+                          : isDisabled
+                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                            : 'bg-white text-gray-800 border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm'
                         }
                       `}
                       style={isSelected ? { backgroundColor: CHART_COLORS[selectedIndex % CHART_COLORS.length] } : {}}
                     >
-                      {isSelected && <CheckCircle className="w-3.5 h-3.5 inline mr-1" />}
-                      {tag.name}
-                      {tag.unit && <span className="opacity-70 ml-1">({tag.unit})</span>}
+                      {isSelected && <CheckCircle className="w-4 h-4 inline mr-1.5" />}
+                      <span className="font-semibold">{tag.name}</span>
+                      {tag.unit && <span className={isSelected ? 'text-white/80 ml-1' : 'text-gray-500 ml-1'}>({tag.unit})</span>}
                     </button>
                   );
                 })}
@@ -492,20 +489,21 @@ export default function TremorHistory() {
         <Grid numItems={1} numItemsMd={3} className="gap-6">
           {/* Time Range Presets */}
           <div className="md:col-span-2">
-            <Text className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-500" />
+            <Text className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
               Período
             </Text>
             <div className="flex flex-wrap gap-2">
               {TIME_RANGES.map(range => (
                 <button
+                  type="button"
                   key={range.value}
                   onClick={() => setTimeRange(range.value)}
                   className={`
-                    px-4 py-2 rounded-lg text-sm font-medium transition-all
+                    px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2 cursor-pointer
                     ${timeRange === range.value
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white shadow-lg border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm'
                     }
                   `}
                 >
@@ -517,35 +515,43 @@ export default function TremorHistory() {
 
           {/* Chart Type */}
           <div>
-            <Text className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-gray-500" />
+            <Text className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
               Tipo de Gráfico
             </Text>
             <div className="flex gap-2">
               <button
-                onClick={() => setChartType('line')}
+                type="button"
+                onClick={() => {
+                  console.log('Setting chart type to line');
+                  setChartType('line');
+                }}
                 className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                  flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2 cursor-pointer
                   ${chartType === 'line'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-600 text-white shadow-lg border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm'
                   }
                 `}
               >
-                <LineChart className="w-4 h-4" />
+                <LineChart className="w-5 h-5" />
                 Linha
               </button>
               <button
-                onClick={() => setChartType('area')}
+                type="button"
+                onClick={() => {
+                  console.log('Setting chart type to area');
+                  setChartType('area');
+                }}
                 className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                  flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-2 cursor-pointer
                   ${chartType === 'area'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-600 text-white shadow-lg border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm'
                   }
                 `}
               >
-                <BarChart3 className="w-4 h-4" />
+                <BarChart3 className="w-5 h-5" />
                 Área
               </button>
             </div>
@@ -687,54 +693,6 @@ export default function TremorHistory() {
         </Card>
       )}
 
-      {/* Data Table */}
-      {historyData.length > 0 && (
-        <Card>
-          <Title>Dados Tabulares</Title>
-          <Text className="text-gray-500 mb-4">
-            Últimos {Math.min(historyData.length, 50)} registros
-          </Text>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableHeaderCell>Timestamp</TableHeaderCell>
-                  {selectedTags.map((tag, idx) => (
-                    <TableHeaderCell key={tag.id}>
-                      <Flex alignItems="center" className="gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
-                        />
-                        {tag.name}
-                      </Flex>
-                    </TableHeaderCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {historyData.slice(-50).reverse().map((point, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>
-                      <Text className="text-sm">{point.time}</Text>
-                    </TableCell>
-                    {selectedTags.map(tag => (
-                      <TableCell key={tag.id}>
-                        <Text className="font-mono">
-                          {typeof point[tag.name] === 'number'
-                            ? (point[tag.name] as number).toFixed(2)
-                            : '-'
-                          }
-                        </Text>
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

@@ -1,0 +1,317 @@
+/**
+ * OptiFlow Charts - Professional UX Color Palette
+ * ================================================
+ *
+ * Paleta suave e harmoniosa para melhor experiência do usuário
+ * Tons de slate para legibilidade sem cansar a vista
+ */
+
+/* ========================================
+   GLOBAL SVG TEXT - Força cor em todos SVGs
+   ======================================== */
+
+/* Todos os textos dentro de SVGs de gráficos */
+svg text {
+  fill: #64748b !important;
+}
+
+svg tspan {
+  fill: #64748b !important;
+}
+
+/* ========================================
+   RECHARTS - Eixos e Grid
+   ======================================== */
+
+.recharts-cartesian-axis-tick-value {
+  fill: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: #e2e8f0 !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #f1f5f9 !important;
+}
+
+.recharts-reference-line line {
+  stroke: #cbd5e1 !important;
+}
+
+/* ========================================
+   RECHARTS - Legendas
+   ======================================== */
+
+.recharts-legend-item-text {
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.recharts-legend-wrapper {
+  color: #475569 !important;
+}
+
+/* ========================================
+   RECHARTS - Tooltip
+   ======================================== */
+
+.recharts-tooltip-wrapper {
+  z-index: 100 !important;
+}
+
+.recharts-default-tooltip {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid #e2e8f0 !important;
+  padding: 10px 14px !important;
+}
+
+.recharts-tooltip-label {
+  color: #1e293b !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  margin-bottom: 6px !important;
+}
+
+.recharts-tooltip-item {
+  color: #475569 !important;
+  font-size: 12px !important;
+  padding: 2px 0 !important;
+}
+
+.recharts-tooltip-item-name {
+  color: #64748b !important;
+}
+
+.recharts-tooltip-item-value {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+/* ========================================
+   RECHARTS - Pie/Donut Labels
+   ======================================== */
+
+.recharts-pie-label-text {
+  fill: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.recharts-pie-label-line {
+  stroke: #cbd5e1 !important;
+}
+
+/* Texto central do Donut */
+.recharts-pie-sector text {
+  fill: #334155 !important;
+}
+
+/* ========================================
+   RECHARTS - Bar Labels
+   ======================================== */
+
+.recharts-bar-label {
+  fill: #475569 !important;
+  font-size: 11px !important;
+}
+
+.recharts-bar-rectangle {
+  rx: 4;
+  ry: 4;
+}
+
+/* ========================================
+   RECHARTS - Active/Hover States
+   ======================================== */
+
+.recharts-active-shape text {
+  fill: #1e293b !important;
+  font-weight: 600 !important;
+}
+
+/* ========================================
+   RECHARTS - SVG Text Global
+   ======================================== */
+
+.recharts-wrapper text {
+  fill: #64748b !important;
+}
+
+.recharts-wrapper tspan {
+  fill: #64748b !important;
+}
+
+.recharts-surface text {
+  fill: #64748b !important;
+}
+
+.recharts-layer text {
+  fill: #64748b !important;
+}
+
+.recharts-yAxis .recharts-label,
+.recharts-xAxis .recharts-label {
+  fill: #64748b !important;
+  font-size: 11px !important;
+}
+
+/* ========================================
+   TREMOR - Todos os gráficos
+   ======================================== */
+
+/* DonutChart */
+[class*="tremor-DonutChart"] text,
+[class*="tremor-DonutChart"] tspan {
+  fill: #64748b !important;
+}
+
+[class*="tremor-DonutChart-label"] {
+  fill: #1e293b !important;
+  font-weight: 600 !important;
+}
+
+/* BarChart */
+[class*="tremor-BarChart"] text,
+[class*="tremor-BarChart"] tspan {
+  fill: #64748b !important;
+}
+
+/* AreaChart */
+[class*="tremor-AreaChart"] text,
+[class*="tremor-AreaChart"] tspan {
+  fill: #64748b !important;
+}
+
+/* LineChart */
+[class*="tremor-LineChart"] text,
+[class*="tremor-LineChart"] tspan {
+  fill: #64748b !important;
+}
+
+/* BarList */
+[class*="tremor-BarList"] text,
+[class*="tremor-BarList"] tspan {
+  fill: #64748b !important;
+}
+
+/* ========================================
+   TREMOR - Legend
+   ======================================== */
+
+[class*="tremor-Legend"] {
+  color: #475569 !important;
+}
+
+[class*="tremor-Legend"] span {
+  color: #475569 !important;
+}
+
+[class*="tremor-Legend-legendItem"] {
+  color: #475569 !important;
+}
+
+/* ========================================
+   TREMOR - Chart Labels
+   ======================================== */
+
+[class*="tremor-ChartLabel"] {
+  color: #64748b !important;
+}
+
+/* ========================================
+   TREMOR - Tooltip customizado
+   ======================================== */
+
+[class*="tremor-ChartTooltip"],
+[class*="ChartTooltip"] {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+[class*="tremor-ChartTooltip"] span,
+[class*="ChartTooltip"] span {
+  color: #475569 !important;
+}
+
+/* ========================================
+   FIX: Tremor internal text elements
+   ======================================== */
+
+/* Categoria labels */
+[class*="tremor"] [class*="text-gray-700"],
+[class*="tremor"] [class*="text-gray-800"],
+[class*="tremor"] [class*="text-gray-900"] {
+  color: #475569 !important;
+}
+
+/* Dark text override */
+[class*="tremor"] [class*="dark:text-"] {
+  color: #475569 !important;
+}
+
+/* SVG dentro de containers Tremor */
+[class*="tremor"] svg text {
+  fill: #64748b !important;
+}
+
+[class*="tremor"] svg tspan {
+  fill: #64748b !important;
+}
+
+/* ========================================
+   Específico para DonutChart center text
+   ======================================== */
+
+.recharts-pie text {
+  fill: #64748b !important;
+}
+
+/* Valor central grande */
+[class*="DonutChart"] [class*="text-tremor-metric"],
+[class*="DonutChart"] [class*="font-semibold"] {
+  color: #1e293b !important;
+}
+
+/* ========================================
+   BarChart axis labels
+   ======================================== */
+
+[class*="BarChart"] .recharts-cartesian-axis text {
+  fill: #64748b !important;
+}
+
+[class*="BarChart"] .recharts-cartesian-axis tspan {
+  fill: #64748b !important;
+}
+
+/* ========================================
+   Garantir que nenhum texto fique preto
+   ======================================== */
+
+/* Override para qualquer texto preto residual */
+.recharts-text {
+  fill: #64748b !important;
+}
+
+[fill="#000"],
+[fill="#000000"],
+[fill="black"] {
+  fill: #64748b !important;
+}
+
+[color="#000"],
+[color="#000000"],
+[color="black"] {
+  color: #475569 !important;
+}
