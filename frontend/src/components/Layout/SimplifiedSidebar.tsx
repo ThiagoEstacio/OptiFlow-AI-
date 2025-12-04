@@ -71,6 +71,7 @@ export const SimplifiedSidebar: React.FC = () => {
         { path: '/executive/analytics', label: 'Análises ML', icon: '🧠' },
         { path: '/executive/oee', label: 'OEE', icon: '🏭' },
         { path: '/executive/energy', label: 'Energia', icon: '⚡' },
+        { path: '/executive/quality', label: 'Qualidade (SPC)', icon: '📏' },
         { path: '/executive/reports', label: 'Relatórios', icon: '📄' },
       ],
     },

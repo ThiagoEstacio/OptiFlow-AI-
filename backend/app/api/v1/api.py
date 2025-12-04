@@ -49,6 +49,7 @@ from app.api.v1.endpoints import (
     prometheus,
     rate_limits,
     demo,
+    quality_analytics,
 )
 from app.api.routes import consumer_metrics
 
@@ -99,5 +100,6 @@ api_router.include_router(websocket_monitor.router, prefix="/websocket-monitor",
 api_router.include_router(prometheus.router, prefix="/prometheus", tags=["Prometheus Metrics Export"])
 api_router.include_router(rate_limits.router, prefix="/rate-limits", tags=["Rate Limiting & Throttling"])
 api_router.include_router(demo.router, prefix="/demo", tags=["Demo & Development Helpers"])
+api_router.include_router(quality_analytics.router, prefix="/quality", tags=["Quality Analytics - SPC, Pareto, Ishikawa, PDCA"])
 api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics
 api_router.include_router(consumer_metrics.router, tags=["Pipeline Metrics"])  # Pipeline health endpoints at /api/v1/metrics/

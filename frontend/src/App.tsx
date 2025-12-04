@@ -47,6 +47,7 @@ const TremorEnergy = lazy(() => import('./pages/tremor/TremorEnergy'));
 const TremorReports = lazy(() => import('./pages/tremor/TremorReports'));
 const TremorMonitoring = lazy(() => import('./pages/tremor/TremorMonitoring'));
 const TremorHistory = lazy(() => import('./pages/tremor/TremorHistory'));
+const TremorQuality = lazy(() => import('./pages/tremor/TremorQuality'));
 
 // Placeholder for pages that need to be migrated
 function ComingSoonPage({ title }: { title: string }) {
@@ -130,6 +131,8 @@ function AppContent() {
             <Route path="executive/oee" element={<Suspense fallback={<PageLoading />}><TremorOEE /></Suspense>} />
             <Route path="executive/energy" element={<Suspense fallback={<PageLoading />}><TremorEnergy /></Suspense>} />
             <Route path="executive/reports" element={<Suspense fallback={<PageLoading />}><TremorReports /></Suspense>} />
+            <Route path="executive/quality" element={<Suspense fallback={<PageLoading />}><TremorQuality /></Suspense>} />
+            <Route path="quality" element={<Suspense fallback={<PageLoading />}><TremorQuality /></Suspense>} />
 
             {/* Monitoring routes - Tremor Professional */}
             <Route path="monitoring" element={<Suspense fallback={<PageLoading />}><TremorMonitoring /></Suspense>} />

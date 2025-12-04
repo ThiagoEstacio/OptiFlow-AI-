@@ -120,3 +120,4 @@ opentelemetry-instrumentation-fastapi==0.42b0
 opentelemetry-instrumentation-sqlalchemy==0.42b0
 opentelemetry-instrumentation-redis==0.42b0
 opentelemetry-exporter-jaeger==1.21.0
+scipy>=1.11.0
