@@ -22,8 +22,6 @@ import {
   TableHeaderCell,
   TableBody,
   TableCell,
-  Select,
-  SelectItem,
   TabGroup,
   TabList,
   Tab,
@@ -73,6 +71,7 @@ import {
   Layers,
 } from 'lucide-react';
 import apiClient from '../../api/client';
+import { selectStyles } from '../../components/common/StyledSelect';
 
 // Type definitions
 interface ProcessVariable {
@@ -616,14 +615,19 @@ export default function TremorMonitoring() {
                     <Text className="text-gray-500">Configure o período e variáveis para análise</Text>
                   </div>
                   <Flex className="gap-2">
-                    <Select value={timeRange} onValueChange={setTimeRange} className="w-32">
-                      <SelectItem value="1h">1 hora</SelectItem>
-                      <SelectItem value="6h">6 horas</SelectItem>
-                      <SelectItem value="24h">24 horas</SelectItem>
-                      <SelectItem value="7d">7 dias</SelectItem>
-                      <SelectItem value="30d">30 dias</SelectItem>
-                      <SelectItem value="custom">Personalizado</SelectItem>
-                    </Select>
+                    <select
+                      value={timeRange}
+                      onChange={(e) => setTimeRange(e.target.value)}
+                      className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
+                      style={{ ...selectStyles, minWidth: '150px' }}
+                    >
+                      <option value="1h">1 hora</option>
+                      <option value="6h">6 horas</option>
+                      <option value="24h">24 horas</option>
+                      <option value="7d">7 dias</option>
+                      <option value="30d">30 dias</option>
+                      <option value="custom">Personalizado</option>
+                    </select>
                     {timeRange === 'custom' && (
                       <DateRangePicker
                         value={dateRange}

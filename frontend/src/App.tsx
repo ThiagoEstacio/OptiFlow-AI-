@@ -48,6 +48,7 @@ const TremorReports = lazy(() => import('./pages/tremor/TremorReports'));
 const TremorMonitoring = lazy(() => import('./pages/tremor/TremorMonitoring'));
 const TremorHistory = lazy(() => import('./pages/tremor/TremorHistory'));
 const TremorQuality = lazy(() => import('./pages/tremor/TremorQuality'));
+const TremorMaintenance = lazy(() => import('./pages/tremor/TremorMaintenance'));
 
 // Placeholder for pages that need to be migrated
 function ComingSoonPage({ title }: { title: string }) {
@@ -141,10 +142,16 @@ function AppContent() {
             <Route path="monitoring/history" element={<Suspense fallback={<PageLoading />}><TremorHistory /></Suspense>} />
             <Route path="history" element={<Suspense fallback={<PageLoading />}><TremorHistory /></Suspense>} />
 
+            {/* Maintenance - PCM Dashboard with tab routing */}
+            <Route path="maintenance" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+            <Route path="maintenance/pcm" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+            <Route path="maintenance/kpis" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+            <Route path="maintenance/backlog" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+            <Route path="maintenance/analysis" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+
             {/* Legacy redirects */}
             <Route path="operations" element={<Navigate to="/dashboard" replace />} />
             <Route path="operations/*" element={<Navigate to="/dashboard" replace />} />
-            <Route path="maintenance" element={<Navigate to="/analytics" replace />} />
             <Route path="engineering" element={<Navigate to="/settings" replace />} />
             <Route path="config" element={<Navigate to="/settings" replace />} />
             <Route path="config/*" element={<Navigate to="/settings" replace />} />

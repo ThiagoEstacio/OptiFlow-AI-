@@ -22,8 +22,6 @@ import {
   Badge,
   BadgeDelta,
   Button,
-  Select,
-  SelectItem,
   TabGroup,
   TabList,
   Tab,
@@ -75,6 +73,7 @@ import {
   ProfessionalBarChart,
   ProfessionalLineChart,
 } from '../../components/charts/ProfessionalCharts';
+import { selectStyles, selectStylesSmall } from '../../components/common/StyledSelect';
 
 // Types
 interface SPCData {
@@ -279,13 +278,22 @@ export const TremorQuality: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange} className="w-28">
-              <SelectItem value="1h">1 hora</SelectItem>
-              <SelectItem value="6h">6 horas</SelectItem>
-              <SelectItem value="24h">24 horas</SelectItem>
-              <SelectItem value="7d">7 dias</SelectItem>
-              <SelectItem value="30d">30 dias</SelectItem>
-            </Select>
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="px-3 py-2 text-sm font-medium border border-white/30 rounded-lg bg-white/10 text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-400 cursor-pointer appearance-none backdrop-blur"
+              style={{
+                ...selectStylesSmall,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                minWidth: '130px'
+              }}
+            >
+              <option value="1h" className="text-gray-900">1 hora</option>
+              <option value="6h" className="text-gray-900">6 horas</option>
+              <option value="24h" className="text-gray-900">24 horas</option>
+              <option value="7d" className="text-gray-900">7 dias</option>
+              <option value="30d" className="text-gray-900">30 dias</option>
+            </select>
             <Button size="xs" variant="secondary" icon={RefreshCw} onClick={fetchData}>
               Atualizar
             </Button>
@@ -417,12 +425,17 @@ export const TremorQuality: React.FC = () => {
                     <Title>Carta de Controle X̄ (Médias)</Title>
                     <Text>Tag: {selectedTag} • {spcData?.summary?.total_subgroups || 0} subgrupos</Text>
                   </div>
-                  <Select value={selectedTag} onValueChange={setSelectedTag} className="w-48">
-                    <SelectItem value="SILO01_UMIDADE">Silo 01 - Umidade</SelectItem>
-                    <SelectItem value="SILO02_UMIDADE">Silo 02 - Umidade</SelectItem>
-                    <SelectItem value="TEMP_MOTOR_01">Temperatura Motor 01</SelectItem>
-                    <SelectItem value="PRESSAO_HIDRAULICA">Pressão Hidráulica</SelectItem>
-                  </Select>
+                  <select
+                    value={selectedTag}
+                    onChange={(e) => setSelectedTag(e.target.value)}
+                    className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
+                    style={{ ...selectStyles, minWidth: '200px' }}
+                  >
+                    <option value="SILO01_UMIDADE">Silo 01 - Umidade</option>
+                    <option value="SILO02_UMIDADE">Silo 02 - Umidade</option>
+                    <option value="TEMP_MOTOR_01">Temperatura Motor 01</option>
+                    <option value="PRESSAO_HIDRAULICA">Pressão Hidráulica</option>
+                  </select>
                 </Flex>
 
                 <div className="mt-4" style={{ height: '300px' }}>

@@ -22,8 +22,6 @@ import {
   BadgeDelta,
   Callout,
   Button,
-  Select,
-  SelectItem,
 } from '@tremor/react';
 import {
   ProfessionalAreaChart,
@@ -61,6 +59,8 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import apiClient from '../../api/client';
+import { NoInsightsAvailable } from '../../components/common/NoDataAvailable';
+import { selectStylesSmall } from '../../components/common/StyledSelect';
 
 // Types
 interface KPI {
@@ -239,6 +239,7 @@ export const TremorExecutive: React.FC = () => {
       setStats(statsRes.data);
 
       // Transform ML reliability insights to root cause analysis format
+      // CORR-001: Remove Math.random() - only use real data from API
       const reliabilityData = reliabilityRes.data || [];
       if (Array.isArray(reliabilityData) && reliabilityData.length > 0) {
         const transformedInsights: RootCauseInsight[] = reliabilityData
@@ -247,16 +248,19 @@ export const TremorExecutive: React.FC = () => {
           .map((item: any) => ({
             equipment: item.equipment || item.asset_name || 'Equipamento',
             rootCause: item.root_cause || item.description || item.message || 'Análise em andamento',
-            confidence: item.confidence || item.reliability_score || Math.round(Math.random() * 20 + 75),
-            method: item.method || item.analysis_type || 'Análise ML Multi-modelo',
-            prediction: item.prediction || item.forecast || 'Monitoramento ativo',
-            recommendation: item.recommendation || item.action || 'Verificar condições operacionais',
-            savings: item.estimated_savings || item.cost_impact || Math.round(Math.random() * 30000 + 10000),
+            // CORR-001: Use only real confidence values, default to 0 if not available
+            confidence: item.confidence || item.reliability_score || 0,
+            method: item.method || item.analysis_type || 'Análise ML',
+            prediction: item.prediction || item.forecast || 'Aguardando análise',
+            recommendation: item.recommendation || item.action || 'Aguardando recomendação',
+            // CORR-001: Use only real savings values, default to 0 if not available
+            savings: item.estimated_savings || item.cost_impact || 0,
           }));
 
-        if (transformedInsights.length > 0) {
-          setRootCauseAnalysis(transformedInsights);
-        }
+        setRootCauseAnalysis(transformedInsights);
+      } else {
+        // Clear insights when no data available
+        setRootCauseAnalysis([]);
       }
 
       setLastUpdated(new Date());
@@ -326,30 +330,8 @@ export const TremorExecutive: React.FC = () => {
     };
   });
 
-  // Fallback root cause data when API returns empty
-  const fallbackRootCauseData: RootCauseInsight[] = [
-    {
-      equipment: 'ELEV01',
-      rootCause: 'Análise de vibração detectou desvio no motor principal',
-      confidence: 94,
-      method: 'Análise de Vibração + ML (Isolation Forest)',
-      prediction: 'Verificar em próxima manutenção',
-      recommendation: 'Inspeção preventiva de rolamentos',
-      savings: 45000,
-    },
-    {
-      equipment: 'SILO01',
-      rootCause: 'Padrão anômalo em sensor de nível',
-      confidence: 87,
-      method: 'Análise de Desvio Estatístico (SPC)',
-      prediction: 'Possível descalibração',
-      recommendation: 'Recalibração do sensor ultrassônico',
-      savings: 12000,
-    },
-  ];
-
-  // Use API data or fallback
-  const displayRootCause = rootCauseAnalysis.length > 0 ? rootCauseAnalysis : fallbackRootCauseData;
+  // CORR-001: Removed fallback data - only show real data from API
+  // When no insights are available, the UI will show NoInsightsAvailable component
 
   // OptiFlow Capabilities
   const optiflowCapabilities = [
@@ -378,12 +360,21 @@ export const TremorExecutive: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange} className="w-32">
-              <SelectItem value="1h">1 hora</SelectItem>
-              <SelectItem value="24h">24 horas</SelectItem>
-              <SelectItem value="7d">7 dias</SelectItem>
-              <SelectItem value="30d">30 dias</SelectItem>
-            </Select>
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="px-3 py-2 text-sm font-medium border border-white/30 rounded-lg bg-white/10 text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer appearance-none backdrop-blur"
+              style={{
+                ...selectStylesSmall,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                minWidth: '130px'
+              }}
+            >
+              <option value="1h" className="text-gray-900">1 hora</option>
+              <option value="24h" className="text-gray-900">24 horas</option>
+              <option value="7d" className="text-gray-900">7 dias</option>
+              <option value="30d" className="text-gray-900">30 dias</option>
+            </select>
             <Button size="xs" variant="secondary" icon={RefreshCw} onClick={fetchData}>
               Atualizar
             </Button>
@@ -631,57 +622,64 @@ export const TremorExecutive: React.FC = () => {
             </div>
           </Flex>
 
-          <div className="space-y-4">
-            {displayRootCause.map((analysis, idx) => (
-              <div key={idx} className="p-4 bg-gradient-to-r from-slate-50 to-violet-50 rounded-lg border border-violet-100">
-                <Flex justifyContent="between" alignItems="start" className="mb-3">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-5 h-5 text-violet-600" />
-                    <span className="font-bold text-gray-900">{analysis.equipment}</span>
-                  </div>
-                  <Badge color="violet" size="sm">
-                    {analysis.confidence}% confiança
-                  </Badge>
-                </Flex>
-
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-start gap-2">
-                    <Search className="w-4 h-4 text-gray-500 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-gray-500">Causa Raiz Identificada</p>
-                      <p className="text-sm font-medium text-gray-900">{analysis.rootCause}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CircleDot className="w-4 h-4 text-gray-500 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-gray-500">Método de Detecção</p>
-                      <p className="text-sm text-gray-700">{analysis.method}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-gray-500">Predição</p>
-                      <p className="text-sm font-medium text-red-600">{analysis.prediction}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                  <Flex justifyContent="between" alignItems="center">
+          {/* CORR-001: Show NoInsightsAvailable when no data, never show fake data */}
+          {rootCauseAnalysis.length > 0 ? (
+            <div className="space-y-4">
+              {rootCauseAnalysis.map((analysis, idx) => (
+                <div key={idx} className="p-4 bg-gradient-to-r from-slate-50 to-violet-50 rounded-lg border border-violet-100">
+                  <Flex justifyContent="between" alignItems="start" className="mb-3">
                     <div className="flex items-center gap-2">
-                      <Wrench className="w-4 h-4 text-emerald-600" />
-                      <p className="text-sm text-emerald-800">{analysis.recommendation}</p>
+                      <Cpu className="w-5 h-5 text-violet-600" />
+                      <span className="font-bold text-gray-900">{analysis.equipment}</span>
                     </div>
-                    <Badge color="emerald" size="sm">
-                      Economia: {formatCurrency(analysis.savings)}
+                    <Badge color="violet" size="sm">
+                      {analysis.confidence}% confiança
                     </Badge>
                   </Flex>
+
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-start gap-2">
+                      <Search className="w-4 h-4 text-gray-500 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Causa Raiz Identificada</p>
+                        <p className="text-sm font-medium text-gray-900">{analysis.rootCause}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CircleDot className="w-4 h-4 text-gray-500 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Método de Detecção</p>
+                        <p className="text-sm text-gray-700">{analysis.method}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Predição</p>
+                        <p className="text-sm font-medium text-red-600">{analysis.prediction}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {analysis.savings > 0 && (
+                    <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <Flex justifyContent="between" alignItems="center">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="w-4 h-4 text-emerald-600" />
+                          <p className="text-sm text-emerald-800">{analysis.recommendation}</p>
+                        </div>
+                        <Badge color="emerald" size="sm">
+                          Economia: {formatCurrency(analysis.savings)}
+                        </Badge>
+                      </Flex>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <NoInsightsAvailable period={timeRange} />
+          )}
         </Card>
       </Grid>
 

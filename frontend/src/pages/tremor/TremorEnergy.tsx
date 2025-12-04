@@ -21,8 +21,6 @@ import {
   TabPanels,
   TabPanel,
   Callout,
-  Select,
-  SelectItem,
   Button,
   List,
   ListItem,
@@ -51,78 +49,14 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import apiClient from '../../api/client';
+import { NoDataAvailable, NoMLPrediction } from '../../components/common/NoDataAvailable';
+import { selectStyles } from '../../components/common/StyledSelect';
 
-// Fallback mock data generator (used when API fails)
-const generateFallbackData = () => {
-  return {
-    current: {
-      consumption_kwh: 2450 + Math.random() * 200,
-      demand_kw: 580 + Math.random() * 40,
-      power_factor: 0.92 + Math.random() * 0.05,
-      status: 'normal',
-    },
-    period: {
-      total_kwh: 58200 + Math.random() * 5000,
-      average_kwh_hour: 2425,
-      peak_demand_kw: 650,
-      change_percent: -3.2 + Math.random() * 2,
-    },
-    forecast: {
-      monthly_kwh: 1750000,
-      confidence: 89,
-      trend: 'stable',
-      peak_demand_forecast_kw: 720,
-    },
-    bill_forecast: {
-      energy_cost: 125000,
-      demand_cost: 35000,
-      taxes: 28000,
-      total_estimate: 188000,
-      breakdown: {
-        peak_consumption_kwh: 420000,
-        off_peak_consumption_kwh: 1330000,
-        peak_tariff: 0.85,
-        off_peak_tariff: 0.42,
-        demand_tariff: 48.50,
-      },
-    },
-    efficiency: {
-      kwh_per_ton: 85.4,
-      cost_per_ton: 12.80,
-      target_kwh_per_ton: 80,
-      status: 'warning',
-    },
-    peak_demand: {
-      current_kw: 580,
-      contracted_kw: 700,
-      utilization_percent: 82.9,
-      risk_of_penalty: false,
-    },
-    history: Array.from({ length: 24 }, (_, i) => ({
-      hour: `${i.toString().padStart(2, '0')}:00`,
-      consumption: 2000 + Math.random() * 1000 + (i >= 17 && i <= 21 ? 500 : 0),
-      isPeak: i >= 17 && i <= 21,
-    })),
-    ml_predictions: Array.from({ length: 24 }, (_, i) => ({
-      hour: `${i.toString().padStart(2, '0')}:00`,
-      predicted: 2200 + Math.random() * 800 + (i >= 17 && i <= 21 ? 400 : 0),
-      confidence: 85 + Math.random() * 10,
-    })),
-    insights: [
-      { type: 'warning', title: 'Pico de consumo detectado', description: '18h às 21h apresentam 40% mais consumo', recommendation: 'Considerar deslocamento de cargas' },
-      { type: 'success', title: 'Fator de potência OK', description: 'FP atual: 0.94 - Dentro da faixa ideal', recommendation: '' },
-      { type: 'info', title: 'Previsão ML', description: 'Consumo mensal estimado em 1.75 GWh', recommendation: 'Confiança: 89%' },
-    ],
-    savings_opportunities: [
-      { action: 'Deslocar cargas para fora de ponta', savings: 12500, priority: 'high' },
-      { action: 'Otimizar demanda contratada', savings: 8000, priority: 'medium' },
-      { action: 'Correção de fator de potência', savings: 5600, priority: 'medium' },
-      { action: 'Automação de iluminação', savings: 3200, priority: 'low' },
-    ],
-  };
-};
+// CORR-001: Removed generateFallbackData - no more fake data
+// Data will be fetched from API only. When unavailable, UI shows appropriate empty states.
 
 // Function to fetch real data from APIs
+// CORR-001: Removed all Math.random() - only use real API data
 const fetchRealEnergyData = async (timeRange: string) => {
   // Fetch energy metrics from API
   const energyResponse = await apiClient.get('/api/v1/executive-summary/energy', {
@@ -152,84 +86,92 @@ const fetchRealEnergyData = async (timeRange: string) => {
     t.unit?.includes('kWh')
   );
 
+  // CORR-001: Use real values only, 0 when not available
   const currentConsumption = energyTags.find((t: any) =>
     t.unit?.includes('kWh')
-  )?.value || energyData.consumption_kwh || 2450;
+  )?.value || energyData.consumption_kwh || 0;
 
   const currentDemand = energyTags.find((t: any) =>
     t.name?.toLowerCase().includes('demanda') || t.unit === 'kW'
-  )?.value || energyData.demand_kw || 580;
+  )?.value || energyData.demand_kw || 0;
 
-  // Build data from API responses
+  const contractedKw = energyData.contracted_kw || 0;
+
+  // Build data from API responses - ONLY real data
   return {
     current: {
       consumption_kwh: currentConsumption,
       demand_kw: currentDemand,
-      power_factor: energyData.power_factor || 0.94,
-      status: energyData.status || 'normal',
+      power_factor: energyData.power_factor || 0,
+      status: energyData.status || 'unknown',
     },
     period: {
-      total_kwh: energyData.total_consumption_kwh || 58200,
-      average_kwh_hour: energyData.average_consumption_kwh || 2425,
-      peak_demand_kw: energyData.peak_demand_kw || 650,
-      change_percent: energyData.change_percent || -2.5,
+      total_kwh: energyData.total_consumption_kwh || 0,
+      average_kwh_hour: energyData.average_consumption_kwh || 0,
+      peak_demand_kw: energyData.peak_demand_kw || 0,
+      change_percent: energyData.change_percent || 0,
     },
     forecast: {
-      monthly_kwh: energyData.forecast_monthly_kwh || 1750000,
-      confidence: mlData.energy_prediction?.[0]?.confidence || 89,
-      trend: energyData.trend || 'stable',
-      peak_demand_forecast_kw: energyData.forecast_peak_kw || 720,
+      monthly_kwh: energyData.forecast_monthly_kwh || 0,
+      confidence: mlData.energy_prediction?.[0]?.confidence || 0,
+      trend: energyData.trend || 'unknown',
+      peak_demand_forecast_kw: energyData.forecast_peak_kw || 0,
+      // CORR-001: Flag to indicate if ML model is available
+      hasModel: !!(mlData.energy_prediction && mlData.energy_prediction.length > 0),
     },
     bill_forecast: {
-      energy_cost: energyData.energy_cost || 125000,
-      demand_cost: energyData.demand_cost || 35000,
-      taxes: energyData.taxes || 28000,
-      total_estimate: energyData.total_estimate || 188000,
+      energy_cost: energyData.energy_cost || 0,
+      demand_cost: energyData.demand_cost || 0,
+      taxes: energyData.taxes || 0,
+      total_estimate: energyData.total_estimate || 0,
       breakdown: {
-        peak_consumption_kwh: energyData.peak_consumption_kwh || 420000,
-        off_peak_consumption_kwh: energyData.off_peak_consumption_kwh || 1330000,
-        peak_tariff: energyData.peak_tariff || 0.85,
-        off_peak_tariff: energyData.off_peak_tariff || 0.42,
-        demand_tariff: energyData.demand_tariff || 48.50,
+        peak_consumption_kwh: energyData.peak_consumption_kwh || 0,
+        off_peak_consumption_kwh: energyData.off_peak_consumption_kwh || 0,
+        peak_tariff: energyData.peak_tariff || 0,
+        off_peak_tariff: energyData.off_peak_tariff || 0,
+        demand_tariff: energyData.demand_tariff || 0,
       },
     },
     efficiency: {
-      kwh_per_ton: energyData.kwh_per_ton || 85.4,
-      cost_per_ton: energyData.cost_per_ton || 12.80,
-      target_kwh_per_ton: 80,
-      status: energyData.efficiency_status || 'warning',
+      kwh_per_ton: energyData.kwh_per_ton || 0,
+      cost_per_ton: energyData.cost_per_ton || 0,
+      target_kwh_per_ton: energyData.target_kwh_per_ton || 80,
+      status: energyData.efficiency_status || 'unknown',
     },
     peak_demand: {
       current_kw: currentDemand,
-      contracted_kw: energyData.contracted_kw || 700,
-      utilization_percent: ((currentDemand) / (energyData.contracted_kw || 700)) * 100,
-      risk_of_penalty: currentDemand > (energyData.contracted_kw || 700) * 0.9,
+      contracted_kw: contractedKw,
+      utilization_percent: contractedKw > 0 ? (currentDemand / contractedKw) * 100 : 0,
+      risk_of_penalty: contractedKw > 0 ? currentDemand > contractedKw * 0.9 : false,
     },
-    history: energyData.history || Array.from({ length: 24 }, (_, i) => ({
-      hour: `${i.toString().padStart(2, '0')}:00`,
-      consumption: currentConsumption + (Math.random() - 0.5) * 500 + (i >= 17 && i <= 21 ? 500 : 0),
-      isPeak: i >= 17 && i <= 21,
-    })),
+    // CORR-001: Use only real history data from API
+    history: energyData.history || [],
+    // CORR-001: Use only real ML predictions from API - NO Math.random()
     ml_predictions: mlData.energy_prediction?.map((p: any, i: number) => ({
-      hour: `${i.toString().padStart(2, '0')}:00`,
-      predicted: p.predicted_value || 2200 + Math.random() * 800,
-      confidence: p.confidence || 85,
-    })) || Array.from({ length: 24 }, (_, i) => ({
-      hour: `${i.toString().padStart(2, '0')}:00`,
-      predicted: currentConsumption + (Math.random() - 0.5) * 800 + (i >= 17 && i <= 21 ? 400 : 0),
-      confidence: 85 + Math.random() * 10,
-    })),
+      hour: p.hour || `${i.toString().padStart(2, '0')}:00`,
+      predicted: p.predicted_value || 0,
+      confidence: p.confidence || 0,
+    })) || [],
+    // CORR-001: Use only real insights from API
     insights: mlData.efficiency?.slice(0, 3).map((e: any, idx: number) => ({
-      type: idx === 0 ? 'warning' : idx === 1 ? 'success' : 'info',
-      title: e.title || `Insight ${idx + 1}`,
-      description: e.description || 'Análise de eficiência energética',
+      type: e.type || (idx === 0 ? 'info' : 'info'),
+      title: e.title || 'Análise',
+      description: e.description || '',
       recommendation: e.recommendation || '',
-    })) || generateFallbackData().insights,
-    savings_opportunities: mlData.efficiency?.slice(0, 4).map((e: any, idx: number) => ({
-      action: e.action || e.title || `Otimização ${idx + 1}`,
-      savings: e.savings || Math.round(Math.random() * 10000),
-      priority: idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low',
-    })) || generateFallbackData().savings_opportunities,
+    })) || [],
+    // CORR-001: Use only real savings from API - NO Math.random()
+    savings_opportunities: mlData.efficiency?.filter((e: any) => e.savings > 0).slice(0, 4).map((e: any, idx: number) => ({
+      action: e.action || e.title || '',
+      savings: e.savings || 0,
+      priority: e.priority || (idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low'),
+    })) || [],
+    // CORR-001: Track data availability
+    _meta: {
+      hasEnergyData: !!energyResponse.data,
+      hasMLData: !!mlResponse.data,
+      hasTagsData: tags.length > 0,
+      lastUpdate: new Date().toISOString(),
+    },
   };
 };
 
@@ -256,19 +198,37 @@ export const TremorEnergy: React.FC = () => {
   const [timeRange, setTimeRange] = useState('24h');
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
         // Try to fetch real data from APIs
         const realData = await fetchRealEnergyData(timeRange);
         setData(realData);
         setLastUpdated(new Date());
-      } catch (error) {
-        console.error('Error fetching energy data:', error);
-        // Use fallback data if API fails
-        setData(generateFallbackData());
-        setLastUpdated(new Date());
+      } catch (err) {
+        console.error('Error fetching energy data:', err);
+        // CORR-001: Do NOT use fallback data - show error state instead
+        setError('Não foi possível carregar dados de energia. Tente novamente.');
+        // Keep existing data if available, otherwise set empty structure
+        if (!data) {
+          setData({
+            current: { consumption_kwh: 0, demand_kw: 0, power_factor: 0, status: 'error' },
+            period: { total_kwh: 0, average_kwh_hour: 0, peak_demand_kw: 0, change_percent: 0 },
+            forecast: { monthly_kwh: 0, confidence: 0, trend: 'unknown', peak_demand_forecast_kw: 0, hasModel: false },
+            bill_forecast: { energy_cost: 0, demand_cost: 0, taxes: 0, total_estimate: 0, breakdown: {} },
+            efficiency: { kwh_per_ton: 0, cost_per_ton: 0, target_kwh_per_ton: 80, status: 'unknown' },
+            peak_demand: { current_kw: 0, contracted_kw: 0, utilization_percent: 0, risk_of_penalty: false },
+            history: [],
+            ml_predictions: [],
+            insights: [],
+            savings_opportunities: [],
+            _meta: { hasEnergyData: false, hasMLData: false, hasTagsData: false },
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -281,11 +241,13 @@ export const TremorEnergy: React.FC = () => {
 
   const handleRefresh = async () => {
     setLoading(true);
+    setError(null);
     try {
       const realData = await fetchRealEnergyData(timeRange);
       setData(realData);
-    } catch {
-      setData(generateFallbackData());
+    } catch (err) {
+      // CORR-001: Do NOT use fallback - show error
+      setError('Erro ao atualizar dados.');
     } finally {
       setLoading(false);
     }
@@ -320,13 +282,18 @@ export const TremorEnergy: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectItem value="1h">1 hora</SelectItem>
-            <SelectItem value="6h">6 horas</SelectItem>
-            <SelectItem value="24h">24 horas</SelectItem>
-            <SelectItem value="7d">7 dias</SelectItem>
-            <SelectItem value="30d">30 dias</SelectItem>
-          </Select>
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 cursor-pointer appearance-none"
+            style={{ ...selectStyles, minWidth: '150px' }}
+          >
+            <option value="1h">1 hora</option>
+            <option value="6h">6 horas</option>
+            <option value="24h">24 horas</option>
+            <option value="7d">7 dias</option>
+            <option value="30d">30 dias</option>
+          </select>
           <Button size="xs" variant="secondary" icon={RefreshCw} onClick={handleRefresh}>
             Atualizar
           </Button>
@@ -547,121 +514,156 @@ export const TremorEnergy: React.FC = () => {
           {/* ML Predictions Tab */}
           <TabPanel>
             <div className="mt-6 space-y-6">
-              {/* Real vs Predicted Chart */}
-              <Card>
-                <Flex justifyContent="between" alignItems="center">
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-5 h-5 text-violet-500" />
-                    <Title>Real vs Previsto - Análise Comparativa</Title>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <Text className="text-sm">Real</Text>
+              {/* CORR-001: Check if ML model is available */}
+              {data?.forecast?.hasModel && data?.ml_predictions?.length > 0 ? (
+                <>
+                  {/* Real vs Predicted Chart */}
+                  <Card>
+                    <Flex justifyContent="between" alignItems="center">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-violet-500" />
+                        <Title>Real vs Previsto - Análise Comparativa</Title>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-blue-500" />
+                          <Text className="text-sm">Real</Text>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-violet-500" />
+                          <Text className="text-sm">Previsto</Text>
+                        </div>
+                        <Badge color="violet">Confiança: {data?.forecast?.confidence || 0}%</Badge>
+                      </div>
+                    </Flex>
+                    <div className="mt-4">
+                      {/* CORR-001: Only show chart if we have both history AND predictions */}
+                      {data?.history?.length > 0 ? (
+                        <ProfessionalLineChart
+                          data={(data?.history || []).map((h: any, i: number) => ({
+                            ...h,
+                            real: h.consumption,
+                            // CORR-001: Use prediction if available, otherwise null (no fake data)
+                            predicted: data?.ml_predictions?.[i]?.predicted || null,
+                          }))}
+                          xAxisKey="hour"
+                          lines={[
+                            { dataKey: 'real', name: 'Consumo Real', color: '#3b82f6' },
+                            { dataKey: 'predicted', name: 'Previsão ML', color: '#8b5cf6' },
+                          ]}
+                          height={320}
+                          showGrid={true}
+                          showLegend={true}
+                        />
+                      ) : (
+                        <NoDataAvailable
+                          variant="empty"
+                          title="Sem Dados Históricos"
+                          description="Não há dados históricos de consumo para o período selecionado."
+                          showCard={false}
+                          size="sm"
+                        />
+                      )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded-full bg-violet-500" />
-                      <Text className="text-sm">Previsto</Text>
-                    </div>
-                    <Badge color="violet">Confiança: {data?.forecast?.confidence}%</Badge>
-                  </div>
-                </Flex>
-                <div className="mt-4">
-                  <ProfessionalLineChart
-                    data={(data?.history || []).map((h: any, i: number) => ({
-                      ...h,
-                      real: h.consumption,
-                      predicted: data?.ml_predictions?.[i]?.predicted || h.consumption * (0.95 + Math.random() * 0.1),
-                    }))}
-                    xAxisKey="hour"
-                    lines={[
-                      { dataKey: 'real', name: 'Consumo Real', color: '#3b82f6' },
-                      { dataKey: 'predicted', name: 'Previsão ML', color: '#8b5cf6' },
-                    ]}
-                    height={320}
-                    showGrid={true}
-                    showLegend={true}
-                  />
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-4">
-                  <div className="p-3 bg-blue-50 rounded-lg text-center">
-                    <Text className="text-sm text-gray-600">Erro Médio (MAPE)</Text>
-                    <Text className="text-xl font-bold text-blue-600">
-                      {((data?.history || []).reduce((sum: number, h: any, i: number) => {
-                        const pred = data?.ml_predictions?.[i]?.predicted || h.consumption;
-                        return sum + Math.abs((h.consumption - pred) / h.consumption);
-                      }, 0) / (data?.history?.length || 1) * 100).toFixed(1)}%
-                    </Text>
-                  </div>
-                  <div className="p-3 bg-emerald-50 rounded-lg text-center">
-                    <Text className="text-sm text-gray-600">Precisão</Text>
-                    <Text className="text-xl font-bold text-emerald-600">
-                      {(100 - (data?.history || []).reduce((sum: number, h: any, i: number) => {
-                        const pred = data?.ml_predictions?.[i]?.predicted || h.consumption;
-                        return sum + Math.abs((h.consumption - pred) / h.consumption);
-                      }, 0) / (data?.history?.length || 1) * 100).toFixed(1)}%
-                    </Text>
-                  </div>
-                  <div className="p-3 bg-violet-50 rounded-lg text-center">
-                    <Text className="text-sm text-gray-600">Modelo</Text>
-                    <Text className="text-xl font-bold text-violet-600">LSTM</Text>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Prediction Only Chart */}
-              <Card>
-                <Flex justifyContent="between" alignItems="center">
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-5 h-5 text-violet-500" />
-                    <Title>Previsão LSTM - Próximas 24h</Title>
-                  </div>
-                  <Badge color="violet">Confiança: {data?.forecast?.confidence}%</Badge>
-                </Flex>
-                <div className="mt-4">
-                  <ProfessionalLineChart
-                    data={data?.ml_predictions || []}
-                    xAxisKey="hour"
-                    lines={[
-                      { dataKey: 'predicted', name: 'Predição', color: '#8b5cf6' },
-                    ]}
-                    height={288}
-                    showGrid={true}
-                    showLegend={false}
-                  />
-                </div>
-              </Card>
-
-              <Grid numItemsSm={2} numItemsLg={3} className="gap-6">
-                <Card>
-                  <Text>Consumo Mensal Previsto</Text>
-                  <Metric className="text-violet-600">{formatNumber(data?.forecast?.monthly_kwh / 1000000, 2)} GWh</Metric>
-                  <Text className="mt-2 text-sm">Metodologia: LSTM Neural Network</Text>
-                </Card>
-
-                <Card>
-                  <Text>Pico de Demanda Previsto</Text>
-                  <Metric className="text-amber-600">{formatNumber(data?.forecast?.peak_demand_forecast_kw, 0)} kW</Metric>
-                  <Text className="mt-2 text-sm">Próximas 24 horas</Text>
-                </Card>
-
-                <Card>
-                  <Text>Tendência</Text>
-                  <Flex alignItems="center" className="mt-2">
-                    {data?.forecast?.trend === 'up' ? (
-                      <TrendingUp className="w-8 h-8 text-red-500" />
-                    ) : data?.forecast?.trend === 'down' ? (
-                      <TrendingDown className="w-8 h-8 text-emerald-500" />
-                    ) : (
-                      <Gauge className="w-8 h-8 text-blue-500" />
+                    {/* CORR-001: Only calculate MAPE if we have real predictions */}
+                    {data?.history?.length > 0 && data?.ml_predictions?.length > 0 && (
+                      <div className="mt-4 grid grid-cols-3 gap-4">
+                        <div className="p-3 bg-blue-50 rounded-lg text-center">
+                          <Text className="text-sm text-gray-600">Erro Médio (MAPE)</Text>
+                          <Text className="text-xl font-bold text-blue-600">
+                            {(() => {
+                              const validPairs = (data?.history || []).filter((_: any, i: number) =>
+                                data?.ml_predictions?.[i]?.predicted && data?.ml_predictions?.[i]?.predicted > 0
+                              );
+                              if (validPairs.length === 0) return 'N/A';
+                              const mape = validPairs.reduce((sum: number, h: any, i: number) => {
+                                const pred = data?.ml_predictions?.[i]?.predicted || 0;
+                                if (h.consumption > 0 && pred > 0) {
+                                  return sum + Math.abs((h.consumption - pred) / h.consumption);
+                                }
+                                return sum;
+                              }, 0) / validPairs.length * 100;
+                              return `${mape.toFixed(1)}%`;
+                            })()}
+                          </Text>
+                        </div>
+                        <div className="p-3 bg-emerald-50 rounded-lg text-center">
+                          <Text className="text-sm text-gray-600">Precisão</Text>
+                          <Text className="text-xl font-bold text-emerald-600">
+                            {data?.forecast?.confidence ? `${data.forecast.confidence}%` : 'N/A'}
+                          </Text>
+                        </div>
+                        <div className="p-3 bg-violet-50 rounded-lg text-center">
+                          <Text className="text-sm text-gray-600">Modelo</Text>
+                          <Text className="text-xl font-bold text-violet-600">LSTM</Text>
+                        </div>
+                      </div>
                     )}
-                    <Metric className="ml-2">
-                      {data?.forecast?.trend === 'up' ? 'Alta' :
-                       data?.forecast?.trend === 'down' ? 'Baixa' : 'Estável'}
-                    </Metric>
-                  </Flex>
-                </Card>
-              </Grid>
+                  </Card>
+
+                  {/* Prediction Only Chart */}
+                  <Card>
+                    <Flex justifyContent="between" alignItems="center">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-violet-500" />
+                        <Title>Previsão LSTM - Próximas 24h</Title>
+                      </div>
+                      <Badge color="violet">Confiança: {data?.forecast?.confidence || 0}%</Badge>
+                    </Flex>
+                    <div className="mt-4">
+                      <ProfessionalLineChart
+                        data={data?.ml_predictions || []}
+                        xAxisKey="hour"
+                        lines={[
+                          { dataKey: 'predicted', name: 'Predição', color: '#8b5cf6' },
+                        ]}
+                        height={288}
+                        showGrid={true}
+                        showLegend={false}
+                      />
+                    </div>
+                  </Card>
+
+                  <Grid numItemsSm={2} numItemsLg={3} className="gap-6">
+                    <Card>
+                      <Text>Consumo Mensal Previsto</Text>
+                      <Metric className="text-violet-600">
+                        {data?.forecast?.monthly_kwh > 0 ? `${formatNumber(data.forecast.monthly_kwh / 1000000, 2)} GWh` : 'N/A'}
+                      </Metric>
+                      <Text className="mt-2 text-sm">Metodologia: LSTM Neural Network</Text>
+                    </Card>
+
+                    <Card>
+                      <Text>Pico de Demanda Previsto</Text>
+                      <Metric className="text-amber-600">
+                        {data?.forecast?.peak_demand_forecast_kw > 0 ? `${formatNumber(data.forecast.peak_demand_forecast_kw, 0)} kW` : 'N/A'}
+                      </Metric>
+                      <Text className="mt-2 text-sm">Próximas 24 horas</Text>
+                    </Card>
+
+                    <Card>
+                      <Text>Tendência</Text>
+                      <Flex alignItems="center" className="mt-2">
+                        {data?.forecast?.trend === 'up' ? (
+                          <TrendingUp className="w-8 h-8 text-red-500" />
+                        ) : data?.forecast?.trend === 'down' ? (
+                          <TrendingDown className="w-8 h-8 text-emerald-500" />
+                        ) : (
+                          <Gauge className="w-8 h-8 text-blue-500" />
+                        )}
+                        <Metric className="ml-2">
+                          {data?.forecast?.trend === 'up' ? 'Alta' :
+                           data?.forecast?.trend === 'down' ? 'Baixa' :
+                           data?.forecast?.trend === 'unknown' ? 'Indisponível' : 'Estável'}
+                        </Metric>
+                      </Flex>
+                    </Card>
+                  </Grid>
+                </>
+              ) : (
+                /* CORR-001: Show NoMLPrediction when model is not trained */
+                <NoMLPrediction equipmentName="Energia" />
+              )}
             </div>
           </TabPanel>
 

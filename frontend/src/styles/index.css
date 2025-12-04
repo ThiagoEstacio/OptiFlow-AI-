@@ -2,14 +2,491 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========================================
+   OptiFlow AI - Professional Theme v2.0
+   Paleta harmoniosa, cards ajustados, UX melhorada
+   ======================================== */
+
 @layer base {
+  :root {
+    /* Primary Brand Colors - Azul corporativo */
+    --color-brand-primary: #2563eb;
+    --color-brand-secondary: #7c3aed;
+    --color-brand-accent: #06b6d4;
+
+    /* Semantic Colors - Consistentes */
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --color-info: #3b82f6;
+
+    /* Background Colors - Tons suaves */
+    --color-bg-primary: #f8fafc;
+    --color-bg-secondary: #f1f5f9;
+    --color-bg-card: #ffffff;
+    --color-bg-dark: #0f172a;
+
+    /* Text Colors - Legibilidade */
+    --color-text-primary: #1e293b;
+    --color-text-secondary: #64748b;
+    --color-text-muted: #94a3b8;
+
+    /* Border Colors */
+    --color-border: #e2e8f0;
+    --color-border-focus: #3b82f6;
+  }
+
+  html {
+    @apply antialiased;
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply font-sans;
+    @apply font-sans bg-slate-50;
+    color: #334155;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  /* ========================================
+     TREMOR OVERRIDES - Fix cards cortados
+     ======================================== */
+
+  /* Card base - Sem overflow cortado */
+  [class*="tremor-Card"] {
+    @apply bg-white rounded-xl border border-slate-200/80;
+    @apply shadow-sm hover:shadow-md transition-shadow duration-200;
+    overflow: visible !important;
+  }
+
+  /* Tremor metric - Cor consistente */
+  [class*="tremor-Metric"] {
+    @apply text-slate-800 font-bold;
+  }
+
+  /* Tremor title - Cor consistente */
+  [class*="tremor-Title"] {
+    @apply text-slate-800 font-semibold;
+  }
+
+  /* Tremor text - Cor secundária */
+  [class*="tremor-Text"] {
+    @apply text-slate-600;
+  }
+
+  /* Table rows hover */
+  [class*="tremor-TableRow"]:hover {
+    @apply bg-slate-50/70;
+  }
+
+  /* ProgressBar mais visível */
+  [class*="tremor-ProgressBar"] {
+    @apply h-2.5 rounded-full;
+  }
+
+  /* Tab list border consistente */
+  [class*="tremor-TabList"] {
+    @apply border-b border-slate-200;
+  }
+
+  /* Badge font weight */
+  [class*="tremor-Badge"] {
+    @apply font-medium;
+  }
+
+  /* ========================================
+     TREMOR SELECT - Fix z-index dropdown
+     ======================================== */
+
+  /* Select dropdown portal - Ensure high z-index */
+  [data-radix-popper-content-wrapper] {
+    z-index: 9999 !important;
+  }
+
+  /* Select listbox */
+  [class*="tremor-SelectItem"],
+  [class*="tremor-Select"] [role="listbox"] {
+    z-index: 9999 !important;
+  }
+
+  /* Select trigger - better styling */
+  [class*="tremor-Select"] button {
+    @apply bg-white border-slate-300 hover:border-slate-400 focus:border-blue-500;
+    @apply focus:ring-2 focus:ring-blue-500/20;
+  }
+
+  /* ========================================
+     RECHARTS/TREMOR CHARTS - Fix cores escuras
+     ======================================== */
+
+  /* Eixos dos gráficos - texto slate-500 ao invés de preto */
+  .recharts-cartesian-axis-tick-value {
+    fill: #64748b !important; /* slate-500 */
+    font-size: 12px !important;
+  }
+
+  .recharts-cartesian-axis-line,
+  .recharts-cartesian-axis-tick-line {
+    stroke: #e2e8f0 !important; /* slate-200 */
+  }
+
+  /* Grid lines mais suaves */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #f1f5f9 !important; /* slate-100 */
+  }
+
+  /* Legendas */
+  .recharts-legend-item-text {
+    color: #475569 !important; /* slate-600 */
+    font-size: 13px !important;
+  }
+
+  /* Tooltip */
+  .recharts-tooltip-wrapper {
+    z-index: 100;
+  }
+
+  .recharts-default-tooltip {
+    @apply bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 !important;
+  }
+
+  .recharts-tooltip-label {
+    color: #334155 !important; /* slate-700 */
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .recharts-tooltip-item {
+    color: #475569 !important; /* slate-600 */
+  }
+
+  .recharts-tooltip-item-name {
+    color: #64748b !important; /* slate-500 */
+  }
+
+  .recharts-tooltip-item-value {
+    color: #334155 !important; /* slate-700 */
+    font-weight: 600 !important;
+  }
+
+  /* Pie/Donut chart labels */
+  .recharts-pie-label-text {
+    fill: #475569 !important; /* slate-600 */
+    font-size: 12px !important;
+  }
+
+  /* Bar chart labels */
+  .recharts-bar-label {
+    fill: #475569 !important; /* slate-600 */
+  }
+
+  /* Tremor específico - labels internos */
+  [class*="tremor-AreaChart"] text,
+  [class*="tremor-LineChart"] text,
+  [class*="tremor-BarChart"] text,
+  [class*="tremor-DonutChart"] text {
+    fill: #64748b !important; /* slate-500 */
+  }
+
+  /* Tremor legend styling */
+  [class*="tremor-Legend"] span {
+    @apply text-slate-600 !important;
+  }
+
+  /* Tremor label */
+  [class*="tremor-ChartLabel"] {
+    @apply text-slate-500 !important;
+  }
+
+  /* Table header */
+  [class*="tremor-TableHeaderCell"] {
+    @apply text-slate-700 font-semibold bg-slate-50/50;
+  }
+
+  /* Table cell */
+  [class*="tremor-TableCell"] {
+    @apply text-slate-600;
+  }
+
+  /* Select dropdown */
+  [class*="tremor-Select"] {
+    @apply text-slate-700;
+  }
+
+  /* Callout text */
+  [class*="tremor-Callout"] {
+    @apply text-slate-700;
+  }
+
+  /* ========================================
+     LAYOUT - Containers responsivos
+     ======================================== */
+
+  /* Main content area */
+  .main-content {
+    @apply min-h-screen bg-slate-50;
+    overflow-x: hidden;
+  }
+
+  /* Page container */
+  .page-container {
+    @apply p-4 md:p-6 space-y-6;
+    max-width: 100%;
+  }
+
+  /* Grid responsivo */
+  .dashboard-grid {
+    @apply grid gap-4 md:gap-6;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  /* ========================================
+     CARD STYLES - Profissionais
+     ======================================== */
+
+  .card-professional {
+    @apply bg-white rounded-xl border border-slate-200/80 p-4 md:p-6;
+    @apply shadow-sm hover:shadow-md transition-all duration-200;
+  }
+
+  .card-kpi {
+    @apply bg-white rounded-xl border border-slate-200/80 p-4;
+    @apply shadow-sm hover:shadow-lg transition-all duration-200;
+    @apply relative overflow-visible;
+  }
+
+  .card-kpi::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-1 rounded-t-xl;
+  }
+
+  .card-kpi-blue::before { @apply bg-blue-500; }
+  .card-kpi-green::before { @apply bg-emerald-500; }
+  .card-kpi-amber::before { @apply bg-amber-500; }
+  .card-kpi-purple::before { @apply bg-violet-500; }
+  .card-kpi-red::before { @apply bg-rose-500; }
+  .card-kpi-cyan::before { @apply bg-cyan-500; }
+
+  /* ========================================
+     STATUS INDICATORS
+     ======================================== */
+
+  .status-dot {
+    @apply w-2.5 h-2.5 rounded-full inline-block;
+  }
+
+  .status-online { @apply bg-emerald-500; }
+  .status-warning { @apply bg-amber-500; }
+  .status-error { @apply bg-rose-500; }
+  .status-offline { @apply bg-slate-400; }
+
+  .status-pulse {
+    animation: livePulse 2s ease-in-out infinite;
+  }
+
+  /* ========================================
+     FLOATING AI CHAT BUTTON
+     ======================================== */
+
+  .floating-chat-button {
+    @apply fixed bottom-6 right-6 z-50;
+    @apply w-14 h-14 rounded-full;
+    @apply bg-gradient-to-br from-blue-600 via-blue-700 to-violet-700;
+    @apply text-white shadow-lg;
+    @apply flex items-center justify-center;
+    @apply hover:shadow-xl hover:scale-110;
+    @apply active:scale-95;
+    @apply transition-all duration-300 ease-out;
+    @apply cursor-pointer border-2 border-white/20;
+  }
+
+  .floating-chat-button:hover {
+    box-shadow: 0 8px 30px rgba(37, 99, 235, 0.5);
+  }
+
+  .floating-chat-button.open {
+    @apply bg-gradient-to-br from-slate-600 to-slate-700;
+  }
+
+  .floating-chat-panel {
+    @apply fixed bottom-24 right-6 z-50;
+    @apply w-[380px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-8rem)];
+    @apply bg-white rounded-2xl shadow-2xl;
+    @apply border border-slate-200/80;
+    @apply flex flex-col overflow-hidden;
+    animation: slideUpFade 0.3s ease-out;
+  }
+
+  .floating-chat-header {
+    @apply px-4 py-3 bg-gradient-to-r from-blue-600 to-violet-600;
+    @apply text-white flex items-center justify-between;
+    @apply border-b border-blue-700/20;
+  }
+
+  .floating-chat-messages {
+    @apply flex-1 overflow-y-auto p-4 space-y-3;
+    @apply bg-slate-50/50;
+  }
+
+  .floating-chat-input {
+    @apply p-3 border-t border-slate-200 bg-white;
+  }
+
+  .chat-message {
+    @apply max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed;
+  }
+
+  .chat-message-user {
+    @apply ml-auto bg-blue-600 text-white rounded-br-md;
+  }
+
+  .chat-message-bot {
+    @apply mr-auto bg-white border border-slate-200 text-slate-700 rounded-bl-md shadow-sm;
+  }
+
+  /* ========================================
+     SCROLLBAR STYLING
+     ======================================== */
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-slate-100 rounded;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded hover:bg-slate-400;
+  }
+
+  /* ========================================
+     GLASSMORPHISM
+     ======================================== */
+
+  .glass {
+    @apply backdrop-blur-md bg-white/80;
+  }
+
+  .glass-dark {
+    @apply backdrop-blur-md bg-slate-900/80;
+  }
+
+  /* ========================================
+     GRADIENTS
+     ======================================== */
+
+  .gradient-primary {
+    @apply bg-gradient-to-r from-blue-600 to-violet-600;
+  }
+
+  .gradient-success {
+    @apply bg-gradient-to-r from-emerald-500 to-teal-500;
+  }
+
+  .gradient-warning {
+    @apply bg-gradient-to-r from-amber-500 to-orange-500;
+  }
+
+  .gradient-danger {
+    @apply bg-gradient-to-r from-rose-500 to-pink-500;
+  }
+
+  /* ========================================
+     SHADOWS
+     ======================================== */
+
+  .widget-shadow {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.07),
+      0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  .widget-shadow-hover {
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  /* ========================================
+     BUTTONS
+     ======================================== */
+
+  .btn-primary {
+    @apply px-4 py-2.5 rounded-lg font-medium;
+    @apply bg-blue-600 text-white;
+    @apply hover:bg-blue-700 active:bg-blue-800;
+    @apply transition-colors duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500/50;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 rounded-lg font-medium;
+    @apply bg-slate-100 text-slate-700;
+    @apply hover:bg-slate-200 active:bg-slate-300;
+    @apply transition-colors duration-200;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2.5 rounded-lg font-medium;
+    @apply text-slate-600 hover:bg-slate-100;
+    @apply transition-colors duration-200;
+  }
+
+  /* ========================================
+     INPUTS
+     ======================================== */
+
+  .input-professional {
+    @apply w-full px-4 py-2.5 rounded-lg;
+    @apply border border-slate-300 bg-white;
+    @apply text-slate-700 placeholder-slate-400;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500;
+    @apply transition-all duration-200;
   }
 }
 
 @layer utilities {
-  /* Modern Widget Animations */
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r;
+  }
+
+  .text-gradient-primary {
+    @apply text-gradient from-blue-600 to-violet-600;
+  }
+
+  /* Line clamp */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* No scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Animation utilities */
   .animate-in {
     animation: fadeIn 0.2s ease-out;
   }
@@ -28,36 +505,7 @@
     animation: slideInFromTop 0.2s ease-out forwards;
   }
 
-  /* Widget Glassmorphism Effects */
-  .glass {
-    @apply backdrop-blur-sm bg-white/80;
-  }
-
-  .glass-dark {
-    @apply backdrop-blur-sm bg-gray-800/80;
-  }
-
-  /* Widget Shadow Effects */
-  .widget-shadow {
-    box-shadow:
-      0 4px 6px -1px rgba(0, 0, 0, 0.1),
-      0 2px 4px -1px rgba(0, 0, 0, 0.06),
-      0 0 0 1px rgba(0, 0, 0, 0.05);
-  }
-
-  .widget-shadow-hover {
-    box-shadow:
-      0 10px 15px -3px rgba(0, 0, 0, 0.1),
-      0 4px 6px -2px rgba(0, 0, 0, 0.05),
-      0 0 0 1px rgba(0, 0, 0, 0.05);
-  }
-
-  /* Modern Gradient Text */
-  .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r;
-  }
-
-  /* Smooth Resize Handle */
+  /* Resize handle */
   .react-resizable-handle {
     @apply opacity-0 transition-opacity duration-200;
   }
@@ -71,24 +519,24 @@
     @apply absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-blue-400/50 rounded-br;
   }
 
-  /* Widget Selection Ring */
+  /* Widget selection */
   .widget-selected {
     @apply ring-2 ring-blue-400/50 ring-offset-2;
   }
 
-  /* Pulse Animation for Live Indicator */
+  /* Live pulse */
   .live-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: livePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 }
 
+/* ========================================
+   KEYFRAME ANIMATIONS
+   ======================================== */
+
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideInFromTop {
@@ -102,11 +550,42 @@
   }
 }
 
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes livePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
   }
 }

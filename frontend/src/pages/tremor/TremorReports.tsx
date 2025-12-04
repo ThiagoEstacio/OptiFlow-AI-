@@ -22,8 +22,6 @@ import {
   TableHeaderCell,
   TableBody,
   TableCell,
-  Select,
-  SelectItem,
   TextInput,
   TabGroup,
   TabList,
@@ -36,6 +34,7 @@ import {
   ProgressBar,
 } from '@tremor/react';
 import { ProfessionalDonutChart } from '../../components/charts/ProfessionalCharts';
+import { selectStyles } from '../../components/common/StyledSelect';
 import {
   FileText,
   Download,
@@ -356,19 +355,20 @@ export default function TremorReports() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Select
+                <select
                   value={categoryFilter}
-                  onValueChange={setCategoryFilter}
-                  className="w-48"
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
+                  style={{ ...selectStyles, minWidth: '180px' }}
                 >
-                  <SelectItem value="all">Todas Categorias</SelectItem>
-                  <SelectItem value="production">Produção</SelectItem>
-                  <SelectItem value="oee">OEE</SelectItem>
-                  <SelectItem value="energy">Energia</SelectItem>
-                  <SelectItem value="alarms">Alarmes</SelectItem>
-                  <SelectItem value="analytics">Analytics</SelectItem>
-                  <SelectItem value="maintenance">Manutenção</SelectItem>
-                </Select>
+                  <option value="all">Todas Categorias</option>
+                  <option value="production">Produção</option>
+                  <option value="oee">OEE</option>
+                  <option value="energy">Energia</option>
+                  <option value="alarms">Alarmes</option>
+                  <option value="analytics">Analytics</option>
+                  <option value="maintenance">Manutenção</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

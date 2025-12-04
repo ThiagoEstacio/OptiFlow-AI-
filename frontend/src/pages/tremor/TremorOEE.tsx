@@ -27,8 +27,6 @@ import {
   TableBody,
   TableCell,
   Callout,
-  Select,
-  SelectItem,
   Button,
 } from '@tremor/react';
 import {
@@ -55,6 +53,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import apiClient from '../../api/client';
+import { selectStyles } from '../../components/common/StyledSelect';
 
 // Fallback mock data generator (used when API fails)
 const generateFallbackData = () => {
@@ -317,12 +316,17 @@ export const TremorOEE: React.FC = () => {
           <Text>Eficiência Geral dos Equipamentos • Atualizado: {format(lastUpdated, 'HH:mm:ss')}</Text>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectItem value="1h">1 hora</SelectItem>
-            <SelectItem value="8h">8 horas</SelectItem>
-            <SelectItem value="24h">24 horas</SelectItem>
-            <SelectItem value="7d">7 dias</SelectItem>
-          </Select>
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
+            style={{ ...selectStyles, minWidth: '140px' }}
+          >
+            <option value="1h">1 hora</option>
+            <option value="8h">8 horas</option>
+            <option value="24h">24 horas</option>
+            <option value="7d">7 dias</option>
+          </select>
           <Button size="xs" variant="secondary" icon={RefreshCw} onClick={handleRefresh}>
             Atualizar
           </Button>
