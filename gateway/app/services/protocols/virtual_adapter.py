@@ -9,8 +9,14 @@ This enables realistic simulation of multiple industrial protocols
 (OPC-UA, MODBUS, PROFINET, ETHERNET/IP) using a single data source
 from Node-RED.
 
-Architecture:
-  Node-RED Simulator -> HTTP Ingest API -> Buffer -> Virtual Adapters -> Kafka
+Architecture (similar to PI System):
+  Node-RED Simulator -> HTTP Ingest API -> Buffer -> Virtual Adapters -> Kafka -> InfluxDB
+
+Tag Management Flow (Point Builder Pattern):
+1. DISCOVERY: Virtual adapters auto-discover tags from Node-RED buffer
+2. MANAGEMENT: Users select which tags to historize via Point Builder (tags_config.json)
+3. HISTORIZATION: Only managed tags are sent to Kafka and persisted to InfluxDB
+4. BACKEND SYNC: Gateway syncs managed tags to Backend for metadata/configuration
 
 Each virtual adapter:
 1. Filters tags by protocol type from the buffer
@@ -19,6 +25,9 @@ Each virtual adapter:
 
 IMPORTANT: Virtual adapters have the SAME behavior as real adapters.
 The only difference is the data source (Node-RED buffer vs real PLC).
+
+NOTE: Tags must be explicitly added to tags_config.json (Point Builder)
+to be historized. Discovery only makes tags available for selection.
 """
 
 import asyncio
@@ -235,6 +244,9 @@ class VirtualAdapter(BaseProtocolAdapter):
 
         Reads current buffer and identifies available tags.
         SAME PATTERN AS REAL ADAPTER DISCOVERY (OPC-UA browse, KEPServerEX scan).
+
+        NOTE: Discovery only makes tags available for selection.
+        Tags must be added to tags_config.json (Point Builder) to be historized.
         """
         try:
             from app.api.routes.data_ingest import get_data_buffer
@@ -293,6 +305,10 @@ class VirtualAdapter(BaseProtocolAdapter):
                 self.config.tags = discovered_tags
                 self._tags_filtered = len(discovered_tags)
                 logger.info(f"✅ Discovery complete - Found {len(discovered_tags)} tags for {self.protocol_filter}")
+                logger.info(
+                    f"📋 Tags are now available for management. "
+                    f"Use Point Builder (tags_config.json) to enable historization."
+                )
             else:
                 logger.warning(f"⚠️  No tags discovered for protocol {self.protocol_filter}")
 
