@@ -37,8 +37,8 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
 }))
 
 // Mock scrollTo
-Element.prototype.scrollTo = vi.fn()
-window.scrollTo = vi.fn()
+Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo
+window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
 
 // Mock localStorage
 const localStorageMock = {

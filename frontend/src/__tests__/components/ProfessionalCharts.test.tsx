@@ -37,6 +37,12 @@ const timeSeriesData = [
 ]
 
 const categoryData = [
+  { name: 'Category A', value: 30 },
+  { name: 'Category B', value: 50 },
+  { name: 'Category C', value: 20 },
+]
+
+const barChartData = [
   { category: 'A', value: 30 },
   { category: 'B', value: 50 },
   { category: 'C', value: 20 },
@@ -48,7 +54,7 @@ describe('ProfessionalAreaChart', () => {
       <ProfessionalAreaChart
         data={timeSeriesData}
         xAxisKey="timestamp"
-        areas={[{ dataKey: 'value', name: 'Value', color: '#3b82f6' }]}
+        dataKey="value"
         height={300}
       />
     )
@@ -62,7 +68,7 @@ describe('ProfessionalAreaChart', () => {
       <ProfessionalAreaChart
         data={[]}
         xAxisKey="timestamp"
-        areas={[{ dataKey: 'value', name: 'Value', color: '#3b82f6' }]}
+        dataKey="value"
         height={300}
       />
     )
@@ -111,7 +117,7 @@ describe('ProfessionalBarChart', () => {
   it('renders without crashing', () => {
     const { container } = render(
       <ProfessionalBarChart
-        data={categoryData}
+        data={barChartData}
         xAxisKey="category"
         categories={['value']}
         colors={['#3b82f6']}
@@ -142,8 +148,6 @@ describe('ProfessionalDonutChart', () => {
     const { container } = render(
       <ProfessionalDonutChart
         data={categoryData}
-        category="category"
-        value="value"
         height={300}
       />
     )
@@ -155,8 +159,6 @@ describe('ProfessionalDonutChart', () => {
     const { container } = render(
       <ProfessionalDonutChart
         data={categoryData}
-        category="category"
-        value="value"
         height={300}
         colors={['#ef4444', '#3b82f6', '#10b981']}
       />

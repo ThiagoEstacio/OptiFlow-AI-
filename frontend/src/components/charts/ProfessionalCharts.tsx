@@ -993,6 +993,449 @@ export const ProfessionalSparkChart: React.FC<ProfessionalSparkChartProps> = ({
 };
 
 // ============================================
+// PROFESSIONAL RADIAL GAUGE
+// ============================================
+interface RadialGaugeProps {
+  value: number;
+  min?: number;
+  max?: number;
+  target?: number;
+  label?: string;
+  unit?: string;
+  size?: number;
+  thickness?: number;
+  showTicks?: boolean;
+  zones?: Array<{ from: number; to: number; color: string }>;
+  className?: string;
+}
+
+export const ProfessionalRadialGauge: React.FC<RadialGaugeProps> = ({
+  value,
+  min = 0,
+  max = 100,
+  target,
+  label,
+  unit = '%',
+  size = 180,
+  thickness = 20,
+  showTicks = true,
+  zones,
+  className = '',
+}) => {
+  const chartId = useId();
+
+  // Calculate percentage and angle
+  const percentage = Math.min(Math.max((value - min) / (max - min), 0), 1);
+  const startAngle = -135;
+  const endAngle = 135;
+  const totalAngle = endAngle - startAngle;
+  const currentAngle = startAngle + (percentage * totalAngle);
+
+  // SVG calculations
+  const center = size / 2;
+  const radius = (size - thickness) / 2 - 10;
+  const innerRadius = radius - thickness;
+
+  // Convert angle to radians and calculate path
+  const polarToCartesian = (angle: number, r: number) => {
+    const rad = (angle * Math.PI) / 180;
+    return {
+      x: center + r * Math.cos(rad),
+      y: center + r * Math.sin(rad),
+    };
+  };
+
+  // Arc path helper
+  const describeArc = (startAng: number, endAng: number, r: number) => {
+    const start = polarToCartesian(startAng, r);
+    const end = polarToCartesian(endAng, r);
+    const largeArcFlag = endAng - startAng <= 180 ? 0 : 1;
+    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
+  };
+
+  // Get color based on value and zones
+  const getValueColor = () => {
+    if (zones) {
+      for (const zone of zones) {
+        if (value >= zone.from && value <= zone.to) {
+          return zone.color;
+        }
+      }
+    }
+    // Default color scale
+    if (percentage >= 0.8) return ISA101_COLORS.normal;
+    if (percentage >= 0.5) return ISA101_COLORS.warning;
+    return ISA101_COLORS.critical;
+  };
+
+  // Default zones if not provided
+  const defaultZones = zones || [
+    { from: min, to: min + (max - min) * 0.3, color: ISA101_COLORS.critical },
+    { from: min + (max - min) * 0.3, to: min + (max - min) * 0.7, color: ISA101_COLORS.warning },
+    { from: min + (max - min) * 0.7, to: max, color: ISA101_COLORS.normal },
+  ];
+
+  // Tick marks
+  const tickCount = 5;
+  const tickAngles = Array.from({ length: tickCount + 1 }, (_, i) =>
+    startAngle + (i * totalAngle / tickCount)
+  );
+
+  return (
+    <div className={`inline-flex flex-col items-center ${className}`} role="img" aria-label={`Gauge: ${value}${unit}`}>
+      <svg width={size} height={size * 0.7} viewBox={`0 0 ${size} ${size * 0.85}`}>
+        {/* Background arc with zones */}
+        {defaultZones.map((zone, idx) => {
+          const zoneStart = startAngle + ((zone.from - min) / (max - min)) * totalAngle;
+          const zoneEnd = startAngle + ((zone.to - min) / (max - min)) * totalAngle;
+          return (
+            <path
+              key={idx}
+              d={describeArc(zoneStart, zoneEnd, radius)}
+              fill="none"
+              stroke={zone.color}
+              strokeWidth={thickness}
+              strokeLinecap="butt"
+              opacity={0.2}
+            />
+          );
+        })}
+
+        {/* Value arc */}
+        <path
+          d={describeArc(startAngle, currentAngle, radius)}
+          fill="none"
+          stroke={getValueColor()}
+          strokeWidth={thickness}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
+        />
+
+        {/* Tick marks */}
+        {showTicks && tickAngles.map((angle, idx) => {
+          const outer = polarToCartesian(angle, radius + 5);
+          const inner = polarToCartesian(angle, radius - thickness - 3);
+          const tickValue = min + (idx * (max - min) / tickCount);
+          const labelPos = polarToCartesian(angle, radius - thickness - 15);
+          return (
+            <g key={idx}>
+              <line
+                x1={outer.x}
+                y1={outer.y}
+                x2={inner.x}
+                y2={inner.y}
+                stroke="#94a3b8"
+                strokeWidth={1.5}
+              />
+              <text
+                x={labelPos.x}
+                y={labelPos.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                className="text-[9px] fill-slate-500"
+              >
+                {tickValue.toFixed(0)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Target indicator */}
+        {target !== undefined && (
+          <>
+            {(() => {
+              const targetAngle = startAngle + ((target - min) / (max - min)) * totalAngle;
+              const outer = polarToCartesian(targetAngle, radius + 8);
+              const inner = polarToCartesian(targetAngle, radius - thickness - 5);
+              return (
+                <line
+                  x1={outer.x}
+                  y1={outer.y}
+                  x2={inner.x}
+                  y2={inner.y}
+                  stroke="#1e293b"
+                  strokeWidth={2}
+                  strokeDasharray="3 2"
+                />
+              );
+            })()}
+          </>
+        )}
+
+        {/* Center value display */}
+        <text
+          x={center}
+          y={center + 10}
+          textAnchor="middle"
+          className="text-2xl font-bold"
+          fill={getValueColor()}
+        >
+          {value.toFixed(1)}
+        </text>
+        <text
+          x={center}
+          y={center + 28}
+          textAnchor="middle"
+          className="text-xs fill-slate-500"
+        >
+          {unit}
+        </text>
+      </svg>
+      {label && (
+        <span className="text-sm font-medium text-slate-700 mt-1">{label}</span>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// PROFESSIONAL TREEMAP CHART
+// ============================================
+interface TreemapNode {
+  name: string;
+  value: number;
+  color?: string;
+  children?: TreemapNode[];
+}
+
+interface TreemapProps {
+  data: TreemapNode[];
+  height?: number;
+  colors?: string[];
+  showLabels?: boolean;
+  onNodeClick?: (node: TreemapNode) => void;
+  className?: string;
+}
+
+export const ProfessionalTreemap: React.FC<TreemapProps> = ({
+  data,
+  height = 300,
+  colors = CHART_COLORS,
+  showLabels = true,
+  onNodeClick,
+  className = '',
+}) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = React.useState({ width: 400, height });
+
+  React.useEffect(() => {
+    if (containerRef.current) {
+      const { width } = containerRef.current.getBoundingClientRect();
+      setDimensions({ width, height });
+    }
+  }, [height]);
+
+  // Simple treemap layout algorithm (squarified)
+  const calculateLayout = (
+    nodes: TreemapNode[],
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): Array<{ node: TreemapNode; x: number; y: number; width: number; height: number; color: string }> => {
+    const totalValue = nodes.reduce((sum, n) => sum + n.value, 0);
+    const result: Array<{ node: TreemapNode; x: number; y: number; width: number; height: number; color: string }> = [];
+
+    let currentX = x;
+    let currentY = y;
+    const isHorizontal = width > height;
+
+    nodes.forEach((node, idx) => {
+      const ratio = node.value / totalValue;
+      const color = node.color || colors[idx % colors.length];
+
+      if (isHorizontal) {
+        const nodeWidth = width * ratio;
+        result.push({
+          node,
+          x: currentX,
+          y: currentY,
+          width: nodeWidth,
+          height: height,
+          color,
+        });
+        currentX += nodeWidth;
+      } else {
+        const nodeHeight = height * ratio;
+        result.push({
+          node,
+          x: currentX,
+          y: currentY,
+          width: width,
+          height: nodeHeight,
+          color,
+        });
+        currentY += nodeHeight;
+      }
+    });
+
+    return result;
+  };
+
+  const layout = calculateLayout(data, 0, 0, dimensions.width, dimensions.height);
+  const total = data.reduce((sum, n) => sum + n.value, 0);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative ${className}`}
+      style={{ height }}
+      role="img"
+      aria-label={`Treemap com ${data.length} categorias`}
+    >
+      <svg width="100%" height={height}>
+        {layout.map((item, idx) => (
+          <g
+            key={idx}
+            onClick={() => onNodeClick?.(item.node)}
+            style={{ cursor: onNodeClick ? 'pointer' : 'default' }}
+          >
+            <rect
+              x={item.x + 1}
+              y={item.y + 1}
+              width={Math.max(0, item.width - 2)}
+              height={Math.max(0, item.height - 2)}
+              fill={item.color}
+              rx={4}
+              className="hover:opacity-80 transition-opacity"
+            />
+            {showLabels && item.width > 60 && item.height > 40 && (
+              <>
+                <text
+                  x={item.x + item.width / 2}
+                  y={item.y + item.height / 2 - 8}
+                  textAnchor="middle"
+                  className="text-xs font-semibold fill-white drop-shadow-sm"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {item.node.name}
+                </text>
+                <text
+                  x={item.x + item.width / 2}
+                  y={item.y + item.height / 2 + 8}
+                  textAnchor="middle"
+                  className="text-[10px] fill-white/80"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {item.node.value.toLocaleString('pt-BR')} ({((item.node.value / total) * 100).toFixed(1)}%)
+                </text>
+              </>
+            )}
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+};
+
+// ============================================
+// WHY BUTTON - EXPLAINABILITY COMPONENT
+// ============================================
+interface WhyButtonProps {
+  metricName: string;
+  value: number | string;
+  explanation?: string;
+  factors?: Array<{ factor: string; impact: 'positive' | 'negative' | 'neutral'; weight: number }>;
+  onRequestExplanation?: () => void;
+  loading?: boolean;
+  className?: string;
+}
+
+export const WhyButton: React.FC<WhyButtonProps> = ({
+  metricName,
+  value,
+  explanation,
+  factors,
+  onRequestExplanation,
+  loading = false,
+  className = '',
+}) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  const handleClick = () => {
+    if (!explanation && !factors && onRequestExplanation) {
+      onRequestExplanation();
+    }
+    setIsOpen(!isOpen);
+  };
+
+  return (
+    <div className={`relative inline-block ${className}`}>
+      <button
+        onClick={handleClick}
+        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+        aria-label={`Por que ${metricName} é ${value}?`}
+        disabled={loading}
+      >
+        {loading ? (
+          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        )}
+        <span>Por quê?</span>
+      </button>
+
+      {isOpen && (explanation || factors) && (
+        <div className="absolute z-50 top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-slate-800">
+              Explicação: {metricName}
+            </h4>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          {explanation && (
+            <p className="text-sm text-slate-600 mb-3">{explanation}</p>
+          )}
+
+          {factors && factors.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-500 uppercase">Fatores Contribuintes:</p>
+              {factors.map((factor, idx) => (
+                <div key={idx} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${
+                      factor.impact === 'positive' ? 'bg-emerald-500' :
+                      factor.impact === 'negative' ? 'bg-red-500' : 'bg-slate-400'
+                    }`} />
+                    <span className="text-slate-700">{factor.factor}</span>
+                  </div>
+                  <span className={`font-medium ${
+                    factor.impact === 'positive' ? 'text-emerald-600' :
+                    factor.impact === 'negative' ? 'text-red-600' : 'text-slate-500'
+                  }`}>
+                    {factor.impact === 'positive' ? '+' : factor.impact === 'negative' ? '-' : ''}
+                    {(factor.weight * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Arrow */}
+          <div className="absolute -top-2 left-4 w-4 h-4 bg-white border-l border-t border-slate-200 transform rotate-45" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
 // EXPORTS
 // ============================================
 export default {
@@ -1004,6 +1447,9 @@ export default {
   ProfessionalMultiBarChart,
   ProfessionalPredictionChart,
   ProfessionalSparkChart,
+  ProfessionalRadialGauge,
+  ProfessionalTreemap,
+  WhyButton,
   // Utilities
   COLORBLIND_SAFE_PALETTE,
   ISA101_COLORS,
