@@ -26,13 +26,17 @@ class MLModelStorage:
     Gerencia armazenamento de modelos ML treinados
     """
 
-    def __init__(self, models_dir: str = '/app/models'):
+    def __init__(self, models_dir: str = None):
         """
         Inicializa storage de modelos
 
         Args:
             models_dir: Diretório para armazenar modelos
         """
+        # Use environment variable if not specified
+        if models_dir is None:
+            models_dir = os.environ.get('ML_MODELS_DIR', '/app/models')
+
         self.models_dir = Path(models_dir)
         self.models_dir.mkdir(exist_ok=True, parents=True)
 

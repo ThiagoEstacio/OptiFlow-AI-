@@ -1,13 +1,105 @@
 """
 Pytest configuration and fixtures for SmartPort tests
 """
+import os
+import sys
+import tempfile
+
+# Configure test environment BEFORE any app imports
+TEST_MODELS_DIR = tempfile.mkdtemp(prefix='optiflow_test_models_')
+os.environ['ML_MODELS_DIR'] = TEST_MODELS_DIR
+os.environ['TESTING'] = 'true'
+os.environ['DATABASE_URL'] = 'sqlite+aiosqlite:///:memory:'
+
+# Add app directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from httpx import AsyncClient
 from uuid import uuid4
+
+# Import SQLAlchemy types for UUID support
+from sqlalchemy import TypeDecorator, String, CHAR
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+import uuid
+
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type.
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(32).
+    """
+    impl = String
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(PG_UUID())
+        else:
+            return dialect.type_descriptor(CHAR(32))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return str(value)
+        else:
+            if isinstance(value, uuid.UUID):
+                return value.hex
+            else:
+                return uuid.UUID(value).hex
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        else:
+            if isinstance(value, uuid.UUID):
+                return value
+            return uuid.UUID(value)
+
+
+# Monkey-patch UUID type for SQLite compatibility
+import sqlalchemy
+from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy.types import TypeEngine
+
+# Register UUID type compiler for SQLite - this must happen BEFORE importing app
+class SQLiteUUID(TypeDecorator):
+    impl = CHAR(36)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return str(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return uuid.UUID(value)
+        return value
+
+# Patch SQLite to handle PostgreSQL UUID type using compiles decorator
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.compiler import compiles
+
+@compiles(UUID, 'sqlite')
+def compile_uuid_sqlite(element, compiler, **kw):
+    """Compile UUID type as CHAR(36) for SQLite."""
+    return "CHAR(36)"
+
+# Also handle JSONB for SQLite
+from sqlalchemy.dialects.postgresql import JSONB
+
+@compiles(JSONB, 'sqlite')
+def compile_jsonb_sqlite(element, compiler, **kw):
+    """Compile JSONB type as TEXT for SQLite."""
+    return "TEXT"
 
 from app.main import app
 from app.db.session import get_db
@@ -86,6 +178,7 @@ async def test_organization(test_db) -> Organization:
     org = Organization(
         id=uuid4(),
         name="Test Organization",
+        slug="test-organization",
         is_active=True
     )
     test_db.add(org)

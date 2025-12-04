@@ -48,6 +48,9 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    # Define placeholder for type hints when TensorFlow is not available
+    from typing import Any as Model
+    Sequential = None
 
 # Redis for caching
 try:
