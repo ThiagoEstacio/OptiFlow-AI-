@@ -175,16 +175,14 @@ async def get_discovered_tags_realtime(
     tags_with_values = []
 
     try:
-        # Trigger discovery if adapter supports it (to populate config.tags)
-        if hasattr(adapter, '_discover_tags'):
-            await adapter._discover_tags()
-
-        # Use the new direct read method if available (OPC-UA adapter)
+        # All adapters (real and virtual) now implement read_all_discovered_tags()
+        # This provides a unified interface for getting all tags with current values
         if hasattr(adapter, 'read_all_discovered_tags'):
-            logger.info(f"📖 Using direct read for adapter {adapter_id}")
+            logger.info(f"📖 Using read_all_discovered_tags() for {adapter_id}")
             tags_with_values = await adapter.read_all_discovered_tags()
+
         else:
-            # Fallback: use cached values from subscriptions
+            # Fallback: use cached values from last_values (OPC-UA subscription cache)
             logger.info(f"📋 Using cached values for adapter {adapter_id}")
             discovered_tags = adapter.config.tags if hasattr(adapter.config, 'tags') else []
             last_values = getattr(adapter, 'last_values', {})
@@ -409,11 +407,11 @@ async def list_tags(
     pm=Depends(get_protocol_manager)
 ):
     """
-    List all configured tags
+    List all configured/discovered tags from all adapters
 
     **Query Parameters**:
     - `adapter_id`: Filter by specific adapter
-    - `protocol`: Filter by protocol type (opcua, modbus, mqtt)
+    - `protocol`: Filter by protocol type (opcua, modbus, mqtt, virtual_*)
     - `search`: Search term for tag names (case-insensitive)
 
     **Returns**:
@@ -445,23 +443,66 @@ async def list_tags(
         if protocol and adapter.config.protocol_type != protocol:
             continue
 
-        for tag in adapter.config.tags:
-            tag_name = tag.get('name', '')
+        # For virtual adapters and adapters with read_all_discovered_tags,
+        # get tags dynamically from the buffer/device
+        if hasattr(adapter, 'read_all_discovered_tags') and adapter.connected:
+            try:
+                discovered = await adapter.read_all_discovered_tags()
+                for tag in discovered:
+                    tag_name = tag.get('name', '')
 
-            # Apply search filter
-            if search and search.lower() not in tag_name.lower():
-                continue
+                    # Apply search filter
+                    if search and search.lower() not in tag_name.lower():
+                        continue
 
-            all_tags.append({
-                "name": tag_name,
-                "address": tag.get('address'),
-                "adapter_id": adapter.adapter_id,
-                "protocol": adapter.config.protocol_type,
-                "unit": tag.get('unit'),
-                "data_type": tag.get('data_type') or tag.get('type') or 'variant',
-                "connected": adapter.connected,
-                "enabled": tag.get('enabled', True)
-            })
+                    all_tags.append({
+                        "name": tag_name,
+                        "address": tag.get('address'),
+                        "adapter_id": adapter.adapter_id,
+                        "protocol": adapter.config.protocol_type,
+                        "unit": tag.get('unit'),
+                        "data_type": tag.get('data_type', 'variant'),
+                        "connected": tag.get('connected', adapter.connected),
+                        "enabled": True,
+                        "current_value": tag.get('current_value'),
+                        "quality": tag.get('quality', 'Good')
+                    })
+            except Exception as e:
+                logger.error(f"Error getting discovered tags from {adapter.adapter_id}: {e}")
+                # Fall back to config.tags
+                for tag in adapter.config.tags:
+                    tag_name = tag.get('name', '')
+                    if search and search.lower() not in tag_name.lower():
+                        continue
+                    all_tags.append({
+                        "name": tag_name,
+                        "address": tag.get('address'),
+                        "adapter_id": adapter.adapter_id,
+                        "protocol": adapter.config.protocol_type,
+                        "unit": tag.get('unit'),
+                        "data_type": tag.get('data_type') or tag.get('type') or 'variant',
+                        "connected": adapter.connected,
+                        "enabled": tag.get('enabled', True)
+                    })
+        else:
+            # Use config.tags for adapters without dynamic discovery
+            for tag in adapter.config.tags:
+                tag_name = tag.get('name', '')
+
+                # Apply search filter
+                if search and search.lower() not in tag_name.lower():
+                    continue
+
+                all_tags.append({
+                    "name": tag_name,
+                    "address": tag.get('address'),
+                    "adapter_id": adapter.adapter_id,
+                    "protocol": adapter.config.protocol_type,
+                    "unit": tag.get('unit'),
+                    "data_type": tag.get('data_type') or tag.get('type') or 'variant',
+                    "connected": adapter.connected,
+                    "enabled": tag.get('enabled', True)
+                })
 
     return {
         "count": len(all_tags),

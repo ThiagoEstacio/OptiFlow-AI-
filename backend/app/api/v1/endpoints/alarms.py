@@ -246,12 +246,13 @@ async def delete_alarm_definition(
 # 🚨 ALARM EVENTS (Eventos e Histórico)
 # ========================================
 
-@router.get("/active", response_model=List[AlarmEventEnrichedResponse])
+@router.get("/active")
 @cached(ttl=15, key_prefix="alarms_active")
 async def list_active_alarms(
     severity: Optional[str] = None,
     tag_id: Optional[UUID] = None,
-    limit: int = 100,
+    limit: int = 500,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -261,9 +262,33 @@ async def list_active_alarms(
     - severity, alarm_name, alarm_type da definição
     - tag_id associado
     - Todos os campos do AlarmEvent
+    - total: contagem total de alarmes ativos
 
     Endpoint otimizado para dashboard e real-time views
     """
+    # Build base filter conditions
+    base_conditions = [AlarmEvent.state == AlarmState.ACTIVE]
+
+    if tag_id:
+        base_conditions.append(AlarmDefinition.tag_id == tag_id)
+
+    if severity:
+        try:
+            base_conditions.append(AlarmDefinition.severity == AlarmSeverity[severity.upper()])
+        except KeyError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid severity: {severity}. Must be one of: CRITICAL, HIGH, MEDIUM, LOW"
+            )
+
+    # Count total active alarms (without limit)
+    count_stmt = select(func.count(AlarmEvent.id)).join(
+        AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id
+    ).where(and_(*base_conditions))
+
+    total_result = await db.execute(count_stmt)
+    total_count = total_result.scalar() or 0
+
     # ✨ SELECT com JOIN para pegar dados da definição
     stmt = select(
         AlarmEvent,
@@ -276,24 +301,9 @@ async def list_active_alarms(
         AlarmDefinition.low_limit
     ).join(
         AlarmDefinition, AlarmEvent.definition_id == AlarmDefinition.id
-    ).where(
-        AlarmEvent.state == AlarmState.ACTIVE
-    )
+    ).where(and_(*base_conditions))
 
-    # Aplicar filtros
-    if tag_id:
-        stmt = stmt.where(AlarmDefinition.tag_id == tag_id)
-
-    if severity:
-        try:
-            stmt = stmt.where(AlarmDefinition.severity == AlarmSeverity[severity.upper()])
-        except KeyError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid severity: {severity}. Must be one of: CRITICAL, HIGH, MEDIUM, LOW"
-            )
-
-    stmt = stmt.order_by(AlarmEvent.trigger_timestamp.desc()).limit(limit)
+    stmt = stmt.order_by(AlarmEvent.trigger_timestamp.desc()).offset(offset).limit(limit)
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -328,7 +338,12 @@ async def list_active_alarms(
         )
         enriched_alarms.append(enriched_alarm)
 
-    return enriched_alarms
+    return {
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "items": enriched_alarms
+    }
 
 
 @router.get("/history", response_model=List[AlarmEventEnrichedResponse])

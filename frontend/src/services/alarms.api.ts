@@ -127,13 +127,44 @@ export const alarmsApi = {
     severity?: string;
     tag_id?: string;
     limit?: number;
-  }) => {
-    const response = await axios.get<any[]>(`${ALARMS_API}/active`, { params });
+    offset?: number;
+  }): Promise<AlarmEvent[]> => {
+    const response = await axios.get<{ total: number; limit: number; offset: number; items: any[] } | any[]>(
+      `${ALARMS_API}/active`,
+      { params }
+    );
+
+    // Handle both old array format and new paginated format
+    const items = Array.isArray(response.data) ? response.data : response.data.items;
+
     // ✨ Map enriched backend response to AlarmEvent interface
-    return response.data.map((alarm: any) => ({
+    return items.map((alarm: any) => ({
       ...alarm,
       message: alarm.alarm_name || alarm.description || 'No message', // Map alarm_name to message for compatibility
     }));
+  },
+
+  // Get active alarms with pagination info
+  getActiveAlarmsWithTotal: async (params?: {
+    severity?: string;
+    tag_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ total: number; items: AlarmEvent[] }> => {
+    const response = await axios.get<{ total: number; limit: number; offset: number; items: any[] }>(
+      `${ALARMS_API}/active`,
+      { params }
+    );
+
+    const items = response.data.items.map((alarm: any) => ({
+      ...alarm,
+      message: alarm.alarm_name || alarm.description || 'No message',
+    }));
+
+    return {
+      total: response.data.total,
+      items,
+    };
   },
 
   // Get alarm history with filters

@@ -152,6 +152,11 @@ async def list_adapters(
                 logger.error(f"❌ Health check error for '{adapter_id}': {e}")
                 actual_connected = False
 
+        # Get tags count - for virtual adapters, use filtered count from stats
+        tags_count = len(adapter.config.tags)
+        if hasattr(adapter, '_tags_filtered') and adapter._tags_filtered > 0:
+            tags_count = adapter._tags_filtered
+
         adapters_list.append(AdapterResponse(
             adapter_id=adapter_id,
             adapter_name=adapter_name,
@@ -161,7 +166,7 @@ async def list_adapters(
             port=adapter.config.port,
             connected=actual_connected,
             running=adapter.running,
-            tags_count=len(adapter.config.tags),
+            tags_count=tags_count,
             scan_rate_ms=adapter.config.scan_rate_ms,
             timeout=adapter.config.timeout,
             retry_interval=adapter.config.retry_interval,
@@ -193,6 +198,11 @@ async def get_adapter(
     # Get adapter_name from extra_config or use adapter_id
     adapter_name = adapter.config.extra_config.get('adapter_name', adapter_id)
 
+    # Get tags count - for virtual adapters, use filtered count from stats
+    tags_count = len(adapter.config.tags)
+    if hasattr(adapter, '_tags_filtered') and adapter._tags_filtered > 0:
+        tags_count = adapter._tags_filtered
+
     return AdapterResponse(
         adapter_id=adapter_id,
         adapter_name=adapter_name,
@@ -202,7 +212,7 @@ async def get_adapter(
         port=adapter.config.port,
         connected=adapter.connected,
         running=adapter.running,
-        tags_count=len(adapter.config.tags),
+        tags_count=tags_count,
         scan_rate_ms=adapter.config.scan_rate_ms,
         timeout=adapter.config.timeout,
         retry_interval=adapter.config.retry_interval,
@@ -710,6 +720,95 @@ async def health_check_adapter(
         logger.error(f"❌ Data read verification failed for '{adapter_id}': {e}")
 
     return result
+
+
+@router.get("/{adapter_id}/tags")
+async def get_adapter_tags(
+    adapter_id: str,
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Get real-time tags from adapter
+
+    **Path Parameters**:
+    - `adapter_id`: Adapter to get tags from
+
+    **Returns**: List of tags with current values
+
+    **Note**: For virtual adapters, returns tags filtered from the Node-RED ingestion buffer.
+    For regular adapters, returns the configured tags with their last known values.
+    """
+    adapter = pm.adapters.get(adapter_id)
+
+    if not adapter:
+        raise HTTPException(404, f"Adapter '{adapter_id}' not found")
+
+    try:
+        # For virtual adapters and any adapter with read_tags method
+        if hasattr(adapter, 'read_tags'):
+            tags = await adapter.read_tags()
+
+            # Convert TagData objects to dict
+            tags_list = []
+            for tag in tags:
+                if hasattr(tag, 'to_dict'):
+                    tags_list.append(tag.to_dict())
+                elif isinstance(tag, dict):
+                    tags_list.append(tag)
+                else:
+                    # Fallback for other types
+                    tags_list.append({
+                        'tag_name': getattr(tag, 'tag_name', str(tag)),
+                        'value': getattr(tag, 'value', None),
+                        'quality': getattr(tag, 'quality', 'unknown'),
+                        'timestamp': getattr(tag, 'timestamp', None),
+                        'source': adapter_id
+                    })
+
+            return {
+                "success": True,
+                "adapter_id": adapter_id,
+                "protocol": adapter.config.protocol_type,
+                "tags_count": len(tags_list),
+                "tags": tags_list
+            }
+
+        # For adapters that support read_all_discovered_tags
+        if hasattr(adapter, 'read_all_discovered_tags'):
+            tags = await adapter.read_all_discovered_tags()
+            return {
+                "success": True,
+                "adapter_id": adapter_id,
+                "protocol": adapter.config.protocol_type,
+                "tags_count": len(tags),
+                "tags": tags
+            }
+
+        # Fallback: return configured tags without values
+        configured_tags = [
+            {
+                'tag_name': tag.get('name', tag.get('tag_name', '')),
+                'address': tag.get('address', ''),
+                'type': tag.get('type', 'unknown'),
+                'value': None,
+                'quality': 'unknown',
+                'source': adapter_id
+            }
+            for tag in adapter.config.tags
+        ]
+
+        return {
+            "success": True,
+            "adapter_id": adapter_id,
+            "protocol": adapter.config.protocol_type,
+            "tags_count": len(configured_tags),
+            "tags": configured_tags,
+            "note": "Values not available - adapter does not support real-time reading"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to get tags for '{adapter_id}': {e}", exc_info=True)
+        raise HTTPException(500, f"Failed to get tags: {str(e)}")
 
 
 @router.post("/{adapter_id}/discover")
