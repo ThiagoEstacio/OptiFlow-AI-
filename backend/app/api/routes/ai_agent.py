@@ -471,12 +471,20 @@ async def pre_execute_tools_from_query(
         result = await toolkit.execute_tool("search_tags", {"query": search_query, "limit": 10})
 
         if result.success and result.data:
-            tags = result.data.get('tags', [])
+            # result.data can be a list directly or a dict with 'tags' key
+            if isinstance(result.data, list):
+                tags = result.data
+            else:
+                tags = result.data.get('tags', [])
             if tags:
                 data_results.append(f"**Tags encontradas** ({len(tags)} resultados):")
                 for tag in tags[:10]:
-                    tag_name = tag.get('name', tag.get('id'))
-                    unit = tag.get('unit', '')
+                    if isinstance(tag, dict):
+                        tag_name = tag.get('name', tag.get('id', 'unknown'))
+                        unit = tag.get('unit', '')
+                    else:
+                        tag_name = str(tag)
+                        unit = ''
                     data_results.append(f"  - {tag_name} ({unit})")
             else:
                 data_results.append("**Nenhuma tag encontrada**")
@@ -1128,7 +1136,7 @@ async def pre_execute_tools_from_query(
     ]
 
     if any(pattern in query_lower for pattern in asset_patterns):
-        logger.info(f"🏭 PRE-EXECUTE: Asset Tree query detected: '{query}'")
+        logger.error(f"🏭 PRE-EXECUTE: Asset Tree query detected: '{query}'")
 
         # Check if asking for statistics/count
         if any(word in query_lower for word in ['quanto', 'quantos', 'total', 'count', 'estatística']):
@@ -1167,26 +1175,43 @@ async def pre_execute_tools_from_query(
 
         # Check if searching for specific equipment
         elif any(word in query_lower for word in ['encontre', 'busque', 'procure', 'find', 'search', 'onde']):
+            logger.error(f"🔍 PRE-EXECUTE: Asset search pattern detected")
             # Extract search query
             search_keywords = []
             for word in query_lower.split():
-                if word not in ['encontre', 'busque', 'procure', 'find', 'search', 'onde', 'está', 'fica', 'o', 'a', 'os', 'as', 'equipamento', 'equipamentos']:
+                if word not in ['encontre', 'busque', 'procure', 'find', 'search', 'onde', 'está', 'fica', 'o', 'a', 'os', 'as', 'equipamento', 'equipamentos', 'de', 'do', 'da']:
                     if len(word) >= 3:
                         search_keywords.append(word)
 
-            search_query = ' '.join(search_keywords[:3]) if search_keywords else 'correia'
+            search_query = ' '.join(search_keywords[:3]) if search_keywords else 'silo'
+            logger.error(f"🔍 PRE-EXECUTE: Searching assets with query='{search_query}'")
 
             result = await toolkit.execute_tool("search_assets", {"query": search_query, "limit": 10})
+            logger.error(f"🔍 PRE-EXECUTE: Search result success={result.success}, data={result.data}")
 
             if result.success and result.data:
-                elements = result.data.get('elements', [])
-                summary = result.data.get('summary', '')
+                # Handle both list and dict responses
+                if isinstance(result.data, list):
+                    elements = result.data
+                else:
+                    elements = result.data.get('elements', [])
+
+                total = len(elements) if isinstance(result.data, list) else result.data.get('total', len(elements))
 
                 data_results.append(f"**🔍 Busca de Ativos: '{search_query}'**")
                 data_results.append("")
-                data_results.append(f"Encontrados: {result.data.get('total', len(elements))} resultados")
-                data_results.append("")
-                data_results.append(summary if summary else "Nenhum resultado encontrado.")
+                data_results.append(f"Encontrados: {total} resultados")
+
+                if elements:
+                    data_results.append("")
+                    for elem in elements[:5]:
+                        name = elem.get('name', 'Unknown') if isinstance(elem, dict) else str(elem)
+                        elem_type = elem.get('element_type', '') if isinstance(elem, dict) else ''
+                        path = elem.get('path', '') if isinstance(elem, dict) else ''
+                        data_results.append(f"- **{name}** ({elem_type}): {path}")
+                else:
+                    data_results.append("")
+                    data_results.append("Nenhum resultado encontrado.")
 
         # Default: show statistics
         else:
@@ -1247,8 +1272,8 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
                         "temperature": 0.05,  # Even more deterministic = faster
                         "top_p": 0.8,        # More focused sampling
                         "top_k": 20,         # Limit token choices = faster
-                        "num_predict": 300,  # Shorter responses (was 400)
-                        "num_ctx": 1536,     # Smaller context window (was 2048)
+                        "num_predict": 500,  # Allow longer responses for detailed analysis
+                        "num_ctx": 4096,     # Increased context for system prompt + data + response
                         "num_gpu": 99,       # Force full GPU usage
                         "num_thread": 4,     # Optimize CPU threads
                         "repeat_penalty": 1.1,  # Reduce repetition
@@ -2032,7 +2057,7 @@ async def chat_with_agent(
         available_tags=chat_request.available_tags,
         toolkit=toolkit
     )
-    logger.error(f"🔍 DEBUG: PRE-EXECUTE complete. Has data: {bool(pre_fetched_data)}")
+    logger.info(f"🔍 PRE-EXECUTE complete. Has data: {bool(pre_fetched_data)}, length: {len(pre_fetched_data) if pre_fetched_data else 0}")
 
     # If we have pre-fetched data, use DATA-DRIVEN prompt
     if pre_fetched_data:
