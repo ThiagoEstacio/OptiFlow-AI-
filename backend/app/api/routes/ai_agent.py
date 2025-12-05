@@ -428,22 +428,46 @@ async def pre_execute_tools_from_query(
                 data_results.append(f"**{tag_name or tag_id}**: Sem dados disponíveis")
 
     # Pattern 2: Statistics queries
-    stats_patterns = ['média', 'máximo', 'mínimo', 'estatística', 'últimas', 'últimos']
+    stats_patterns = ['média', 'media', 'máximo', 'maximo', 'mínimo', 'minimo',
+                      'estatística', 'estatistica', 'estatísticas', 'estatisticas',
+                      'últimas', 'ultimas', 'últimos', 'ultimos', 'calcule', 'calculate']
 
     if any(pattern in query_lower for pattern in stats_patterns):
+        # Extract time period
+        duration = "24h"
+        if "24 horas" in query_lower or "24h" in query_lower:
+            duration = "24h"
+        elif "12 horas" in query_lower or "12h" in query_lower:
+            duration = "12h"
+        elif "semana" in query_lower:
+            duration = "168h"
+
+        # Determine which tag to use
+        tag_id = None
+        tag_name = None
+
         if available_tags and len(available_tags) > 0:
             tag_id = available_tags[0].get('id')
             tag_name = available_tags[0].get('name', tag_id)
+        else:
+            # Try to find a tag based on query keywords
+            search_keyword = None
+            for keyword in ['temperatura', 'temperature', 'pressão', 'pressure', 'velocidade', 'speed',
+                           'corrente', 'current', 'potência', 'power', 'umidade', 'humidity', 'vibração', 'vibration']:
+                if keyword in query_lower:
+                    search_keyword = keyword
+                    break
 
-            # Extract time period
-            duration = "24h"
-            if "24 horas" in query_lower or "24h" in query_lower:
-                duration = "24h"
-            elif "12 horas" in query_lower or "12h" in query_lower:
-                duration = "12h"
-            elif "semana" in query_lower:
-                duration = "168h"
+            if search_keyword:
+                logger.info(f"🔍 PRE-EXECUTE: Searching tags with keyword '{search_keyword}'")
+                search_result = await toolkit.execute_tool("search_tags", {"query": search_keyword, "limit": 1})
+                if search_result.success and search_result.data:
+                    tags = search_result.data if isinstance(search_result.data, list) else search_result.data.get('tags', [])
+                    if tags and len(tags) > 0:
+                        tag_id = tags[0].get('id') or tags[0].get('name')
+                        tag_name = tags[0].get('name', tag_id)
 
+        if tag_id:
             logger.info(f"🎯 PRE-EXECUTING: calculate_statistics(tag_id={tag_id}, duration={duration})")
             result = await toolkit.execute_tool("calculate_statistics", {"tag_id": tag_id, "duration": duration})
 
@@ -455,6 +479,9 @@ async def pre_execute_tools_from_query(
                 data_results.append(f"  - Máximo: {stats.get('max', 'N/A')}")
                 data_results.append(f"  - Desvio padrão: {stats.get('std_dev', 'N/A')}")
                 data_results.append(f"  - Total de leituras: {stats.get('count', 'N/A')}")
+        else:
+            data_results.append("**⚠️ Nenhuma tag encontrada para calcular estatísticas.**")
+            data_results.append("💡 Especifique uma tag (ex: 'estatísticas de temperatura') ou selecione uma tag na interface.")
 
     # Pattern 3: List/search tags
     list_patterns = ['liste', 'listar', 'quais', 'mostre', 'disponíveis', 'todas as tags']
