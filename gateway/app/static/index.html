@@ -447,6 +447,10 @@
             color: #ef4444;
         }
 
+        .tag-value.uncertain {
+            color: #d97706;
+        }
+
         .tag-quality {
             display: inline-block;
             padding: 2px 8px;
@@ -464,6 +468,11 @@
         .tag-quality.bad {
             background: #fee2e2;
             color: #991b1b;
+        }
+
+        .tag-quality.uncertain {
+            background: #fef3c7;
+            color: #92400e;
         }
 
         .tag-timestamp {
@@ -564,6 +573,10 @@
             border-left: 4px solid #ef4444;
         }
 
+        .tag-card.uncertain {
+            border-left: 4px solid #d97706;
+        }
+
         .tag-card-header {
             display: flex;
             justify-content: space-between;
@@ -597,6 +610,11 @@
             color: #991b1b;
         }
 
+        .tag-card-quality.uncertain {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
         .tag-card-value {
             font-size: 32px;
             font-weight: 700;
@@ -611,6 +629,10 @@
 
         .tag-card-value.bad {
             color: #ef4444;
+        }
+
+        .tag-card-value.uncertain {
+            color: #d97706;
         }
 
         .tag-card-unit {
@@ -1175,20 +1197,29 @@
 
         async function loadRealtimeTags() {
             try {
-                // Fetch ALL discovered tags with real-time values
-                const response = await fetch(`${API_BASE}/api/tags/realtime/discovered/${currentAdapterId}`);
+                // Fetch MANAGED tags (from tags_config.json) with real-time values
+                // Use /managed/ instead of /discovered/ to show only configured process tags
+                const response = await fetch(`${API_BASE}/api/tags/realtime/managed/${currentAdapterId}`);
                 if (!response.ok) throw new Error('Falha ao carregar tags');
 
                 const data = await response.json();
                 allTags = data.tags || [];
 
-                // Update stats
-                const goodQuality = allTags.filter(t => t.connected).length;
-                const badQuality = allTags.filter(t => !t.connected).length;
+                // Update stats - Use 'quality' field, NOT 'connected'
+                // quality can be: 'Good', 'Bad', 'Uncertain', etc.
+                const goodQuality = allTags.filter(t => t.quality === 'Good').length;
+                const uncertainQuality = allTags.filter(t => t.quality === 'Uncertain').length;
+                const badQuality = allTags.filter(t => t.quality !== 'Good' && t.quality !== 'Uncertain').length;
 
                 document.getElementById('realtime-total').textContent = allTags.length;
                 document.getElementById('realtime-good').textContent = goodQuality;
-                document.getElementById('realtime-bad').textContent = badQuality;
+                document.getElementById('realtime-bad').textContent = uncertainQuality + badQuality;
+
+                // Update bad label to show breakdown if there are uncertain
+                const badLabel = document.getElementById('realtime-bad');
+                if (badLabel && uncertainQuality > 0) {
+                    badLabel.title = `Uncertain: ${uncertainQuality}, Bad: ${badQuality}`;
+                }
 
                 // Render tags
                 renderRealtimeTags(allTags);
@@ -1222,8 +1253,11 @@
             }
 
             container.innerHTML = tags.map(tag => {
-                const quality = tag.connected ? 'good' : 'bad';
-                const qualityLabel = tag.connected ? 'GOOD' : 'BAD';
+                // Use actual 'quality' field from API, not 'connected'
+                const qualityValue = (tag.quality || 'Unknown').toLowerCase();
+                const quality = qualityValue === 'good' ? 'good' :
+                               qualityValue === 'uncertain' ? 'uncertain' : 'bad';
+                const qualityLabel = tag.quality || 'UNKNOWN';
                 const value = formatValue(tag.current_value);
                 const timestamp = formatTimestamp(tag.last_update);
 
@@ -1258,8 +1292,11 @@
             }
 
             tbody.innerHTML = tags.map(tag => {
-                const quality = tag.connected ? 'good' : 'bad';
-                const qualityLabel = tag.connected ? 'GOOD' : 'BAD';
+                // Use actual 'quality' field from API, not 'connected'
+                const qualityValue = (tag.quality || 'Unknown').toLowerCase();
+                const quality = qualityValue === 'good' ? 'good' :
+                               qualityValue === 'uncertain' ? 'uncertain' : 'bad';
+                const qualityLabel = tag.quality || 'UNKNOWN';
                 const value = formatValue(tag.current_value);
                 const timestamp = formatTimestamp(tag.last_update);
 
@@ -1341,7 +1378,7 @@
                 tag.address || '',
                 formatValue(tag.current_value),
                 tag.unit || '',
-                tag.connected ? 'GOOD' : 'BAD',
+                tag.quality || 'UNKNOWN',  // Use actual quality field
                 tag.last_update || ''
             ]);
 

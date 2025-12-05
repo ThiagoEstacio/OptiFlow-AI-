@@ -2,13 +2,13 @@
   "adapters": [
     {
       "_comment": "============================================",
-      "_comment2": "SIEMENS S7-1500 via OPC-UA (PLC Principal)",
+      "_comment2": "OPC-UA - Siemens S7-1500 (TEAG Silos + Processo)",
       "_comment3": "============================================",
-      "adapter_id": "siemens-s7-line1",
-      "adapter_name": "Siemens S7-1500 - Linha de Produção 1",
+      "adapter_id": "opcua-siemens-teag",
+      "adapter_name": "OPC-UA Siemens S7-1500 - TEAG Terminal",
       "protocol_type": "opcua",
-      "enabled": false,
-      "host": "192.168.1.10",
+      "enabled": true,
+      "host": "nodered",
       "port": 4840,
       "scan_rate_ms": 500,
       "timeout": 10.0,
@@ -20,62 +20,6 @@
         "auto_discover": true,
         "namespace_filter": [2, 3]
       },
-      "tags": [
-        {"name": "S7_Temperatura_Silo1", "address": "ns=2;s=TEAG.Silo1.Temperatura", "type": "double", "unit": "°C"},
-        {"name": "S7_Temperatura_Silo2", "address": "ns=2;s=TEAG.Silo2.Temperatura", "type": "double", "unit": "°C"},
-        {"name": "S7_Temperatura_Silo3", "address": "ns=2;s=TEAG.Silo3.Temperatura", "type": "double", "unit": "°C"},
-        {"name": "S7_Umidade_Silo1", "address": "ns=2;s=TEAG.Silo1.Umidade", "type": "double", "unit": "%"},
-        {"name": "S7_Umidade_Silo2", "address": "ns=2;s=TEAG.Silo2.Umidade", "type": "double", "unit": "%"},
-        {"name": "S7_Nivel_Silo1", "address": "ns=2;s=TEAG.Silo1.Nivel", "type": "double", "unit": "%"},
-        {"name": "S7_Nivel_Silo2", "address": "ns=2;s=TEAG.Silo2.Nivel", "type": "double", "unit": "%"},
-        {"name": "S7_Pressao_Linha1", "address": "ns=2;s=TEAG.Linha1.Pressao", "type": "double", "unit": "bar"},
-        {"name": "S7_Vazao_Bomba1", "address": "ns=2;s=TEAG.Bomba1.Vazao", "type": "double", "unit": "m³/h"},
-        {"name": "S7_Vazao_Bomba2", "address": "ns=2;s=TEAG.Bomba2.Vazao", "type": "double", "unit": "m³/h"},
-        {"name": "S7_Motor1_Corrente", "address": "ns=2;s=TEAG.Motor1.Corrente", "type": "double", "unit": "A"},
-        {"name": "S7_Motor1_Velocidade", "address": "ns=2;s=TEAG.Motor1.RPM", "type": "int32", "unit": "RPM"},
-        {"name": "S7_Motor1_Status", "address": "ns=2;s=TEAG.Motor1.Running", "type": "boolean", "unit": ""},
-        {"name": "S7_Esteira1_Velocidade", "address": "ns=2;s=TEAG.Esteira1.Velocidade", "type": "double", "unit": "m/min"},
-        {"name": "S7_Balanca1_Peso", "address": "ns=2;s=TEAG.Balanca1.Peso", "type": "double", "unit": "kg"}
-      ],
-      "kafka_config": {
-        "topic": "raw_tags",
-        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096",
-        "producer_config": {
-          "acks": "1",
-          "compression_type": "lz4",
-          "linger_ms": 50,
-          "batch_size": 16384
-        }
-      }
-    },
-    {
-      "_comment": "============================================",
-      "_comment2": "SIEMENS S7-1200 via OPC-UA (Utilidades)",
-      "_comment3": "============================================",
-      "adapter_id": "siemens-s7-utilities",
-      "adapter_name": "Siemens S7-1200 - Utilidades",
-      "protocol_type": "opcua",
-      "enabled": false,
-      "host": "192.168.1.11",
-      "port": 4840,
-      "scan_rate_ms": 1000,
-      "timeout": 10.0,
-      "retry_interval": 10.0,
-      "extra_config": {
-        "security_mode": "None",
-        "security_policy": "None",
-        "subscription_interval": 200
-      },
-      "tags": [
-        {"name": "S7_Compressor1_Pressao", "address": "ns=2;s=Utilidades.Compressor1.Pressao", "type": "double", "unit": "bar"},
-        {"name": "S7_Compressor1_Temp", "address": "ns=2;s=Utilidades.Compressor1.Temperatura", "type": "double", "unit": "°C"},
-        {"name": "S7_Compressor1_Status", "address": "ns=2;s=Utilidades.Compressor1.Running", "type": "boolean", "unit": ""},
-        {"name": "S7_Torre_Resfriamento_Temp", "address": "ns=2;s=Utilidades.TorreResfriamento.TempSaida", "type": "double", "unit": "°C"},
-        {"name": "S7_Caldeira1_Pressao", "address": "ns=2;s=Utilidades.Caldeira1.PressaoVapor", "type": "double", "unit": "kgf/cm²"},
-        {"name": "S7_Caldeira1_Temp", "address": "ns=2;s=Utilidades.Caldeira1.Temperatura", "type": "double", "unit": "°C"},
-        {"name": "S7_Gerador_Potencia", "address": "ns=2;s=Utilidades.Gerador.PotenciaAtiva", "type": "double", "unit": "kW"},
-        {"name": "S7_Gerador_Tensao", "address": "ns=2;s=Utilidades.Gerador.Tensao", "type": "double", "unit": "V"}
-      ],
       "kafka_config": {
         "topic": "raw_tags",
         "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
@@ -83,13 +27,38 @@
     },
     {
       "_comment": "============================================",
-      "_comment2": "ROCKWELL COMPACTLOGIX via OPC-UA",
+      "_comment2": "OPC-UA - Schneider M340 (Eletrocentro)",
       "_comment3": "============================================",
-      "adapter_id": "rockwell-clx-packaging",
-      "adapter_name": "Rockwell CompactLogix - Empacotamento",
+      "adapter_id": "opcua-schneider-eletrocentro",
+      "adapter_name": "OPC-UA Schneider M340 - Eletrocentro",
       "protocol_type": "opcua",
-      "enabled": false,
-      "host": "192.168.1.20",
+      "enabled": true,
+      "host": "nodered",
+      "port": 4840,
+      "scan_rate_ms": 500,
+      "timeout": 10.0,
+      "retry_interval": 10.0,
+      "extra_config": {
+        "security_mode": "None",
+        "security_policy": "None",
+        "subscription_interval": 100,
+        "auto_discover": true,
+        "namespace_filter": [2, 3]
+      },
+      "kafka_config": {
+        "topic": "raw_tags",
+        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
+      }
+    },
+    {
+      "_comment": "============================================",
+      "_comment2": "OPC-UA - Rockwell CompactLogix (Empacotamento)",
+      "_comment3": "============================================",
+      "adapter_id": "opcua-rockwell-packaging",
+      "adapter_name": "OPC-UA Rockwell CompactLogix - Empacotamento",
+      "protocol_type": "opcua",
+      "enabled": true,
+      "host": "nodered",
       "port": 4840,
       "scan_rate_ms": 500,
       "timeout": 10.0,
@@ -100,18 +69,6 @@
         "subscription_interval": 100,
         "auto_discover": true
       },
-      "tags": [
-        {"name": "RW_Empacotadora1_Velocidade", "address": "ns=2;s=Empacotamento.Maquina1.Velocidade", "type": "double", "unit": "pct/min"},
-        {"name": "RW_Empacotadora1_Contagem", "address": "ns=2;s=Empacotamento.Maquina1.Contagem", "type": "int32", "unit": "pct"},
-        {"name": "RW_Empacotadora1_Status", "address": "ns=2;s=Empacotamento.Maquina1.Running", "type": "boolean", "unit": ""},
-        {"name": "RW_Empacotadora1_Rejeitos", "address": "ns=2;s=Empacotamento.Maquina1.Rejeitos", "type": "int32", "unit": "pct"},
-        {"name": "RW_Empacotadora2_Velocidade", "address": "ns=2;s=Empacotamento.Maquina2.Velocidade", "type": "double", "unit": "pct/min"},
-        {"name": "RW_Empacotadora2_Contagem", "address": "ns=2;s=Empacotamento.Maquina2.Contagem", "type": "int32", "unit": "pct"},
-        {"name": "RW_Paletizadora_Ciclos", "address": "ns=2;s=Empacotamento.Paletizadora.CiclosPorHora", "type": "int32", "unit": "ciclos/h"},
-        {"name": "RW_Esteira_Principal_Velocidade", "address": "ns=2;s=Empacotamento.EsteiraTransporte.Velocidade", "type": "double", "unit": "m/min"},
-        {"name": "RW_Detector_Metal_Alarme", "address": "ns=2;s=Empacotamento.DetectorMetal.Alarme", "type": "boolean", "unit": ""},
-        {"name": "RW_Checkweigher_Peso", "address": "ns=2;s=Empacotamento.Checkweigher.PesoAtual", "type": "double", "unit": "kg"}
-      ],
       "kafka_config": {
         "topic": "raw_tags",
         "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
@@ -119,13 +76,36 @@
     },
     {
       "_comment": "============================================",
-      "_comment2": "MODBUS TCP - Medidores de Energia",
+      "_comment2": "OPC-UA - Siemens S7-1200 (Utilidades)",
       "_comment3": "============================================",
-      "adapter_id": "modbus-energy-meters",
-      "adapter_name": "Medidores de Energia Elétrica",
+      "adapter_id": "opcua-siemens-utilities",
+      "adapter_name": "OPC-UA Siemens S7-1200 - Utilidades",
+      "protocol_type": "opcua",
+      "enabled": true,
+      "host": "nodered",
+      "port": 4840,
+      "scan_rate_ms": 1000,
+      "timeout": 10.0,
+      "retry_interval": 10.0,
+      "extra_config": {
+        "security_mode": "None",
+        "security_policy": "None",
+        "subscription_interval": 200
+      },
+      "kafka_config": {
+        "topic": "raw_tags",
+        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
+      }
+    },
+    {
+      "_comment": "============================================",
+      "_comment2": "MODBUS TCP - Schneider PM5xxx (Medidores de Energia)",
+      "_comment3": "============================================",
+      "adapter_id": "modbus-schneider-energy",
+      "adapter_name": "Modbus TCP Schneider PM5560 - Medidores de Energia",
       "protocol_type": "modbus",
-      "enabled": false,
-      "host": "192.168.1.30",
+      "enabled": true,
+      "host": "nodered",
       "port": 502,
       "scan_rate_ms": 1000,
       "timeout": 5.0,
@@ -135,20 +115,6 @@
         "byte_order": "big",
         "word_order": "big"
       },
-      "tags": [
-        {"name": "MB_Energia_Tensao_L1", "address": "40001", "type": "uint16", "unit": "V", "scale": 0.1},
-        {"name": "MB_Energia_Tensao_L2", "address": "40002", "type": "uint16", "unit": "V", "scale": 0.1},
-        {"name": "MB_Energia_Tensao_L3", "address": "40003", "type": "uint16", "unit": "V", "scale": 0.1},
-        {"name": "MB_Energia_Corrente_L1", "address": "40004", "type": "uint16", "unit": "A", "scale": 0.01},
-        {"name": "MB_Energia_Corrente_L2", "address": "40005", "type": "uint16", "unit": "A", "scale": 0.01},
-        {"name": "MB_Energia_Corrente_L3", "address": "40006", "type": "uint16", "unit": "A", "scale": 0.01},
-        {"name": "MB_Energia_Potencia_Ativa", "address": "40007", "type": "int32", "unit": "kW", "scale": 0.001},
-        {"name": "MB_Energia_Potencia_Reativa", "address": "40009", "type": "int32", "unit": "kVAr", "scale": 0.001},
-        {"name": "MB_Energia_Fator_Potencia", "address": "40011", "type": "uint16", "unit": "", "scale": 0.001},
-        {"name": "MB_Energia_Frequencia", "address": "40012", "type": "uint16", "unit": "Hz", "scale": 0.01},
-        {"name": "MB_Energia_Consumo_Total", "address": "40013", "type": "uint32", "unit": "kWh", "scale": 0.1},
-        {"name": "MB_Energia_Demanda_Ativa", "address": "40015", "type": "uint16", "unit": "kW", "scale": 0.1}
-      ],
       "kafka_config": {
         "topic": "raw_tags",
         "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
@@ -156,40 +122,23 @@
     },
     {
       "_comment": "============================================",
-      "_comment2": "MODBUS TCP - Bombas e Válvulas",
+      "_comment2": "ETHERNET/IP - Rockwell ControlLogix (Shiploader + Tripper)",
       "_comment3": "============================================",
-      "adapter_id": "modbus-pumps-valves",
-      "adapter_name": "Sistema de Bombeamento",
-      "protocol_type": "modbus",
-      "enabled": false,
-      "host": "192.168.1.31",
-      "port": 502,
+      "adapter_id": "ethernetip-rockwell-shiploader",
+      "adapter_name": "EtherNet/IP Rockwell ControlLogix - Shiploader",
+      "protocol_type": "ethernetip",
+      "enabled": true,
+      "_note": "SIMULATION MODE: Uses pycomm3 for production, HTTP fallback for Node-RED simulation",
+      "host": "nodered",
+      "port": 44818,
       "scan_rate_ms": 500,
       "timeout": 5.0,
       "retry_interval": 10.0,
       "extra_config": {
-        "unit_id": 1,
-        "byte_order": "big",
-        "word_order": "big"
+        "slot": 0,
+        "connection_path": "1/0/2/192.168.1.100",
+        "rpi": 100
       },
-      "tags": [
-        {"name": "MB_Bomba1_Vazao", "address": "40001", "type": "uint16", "unit": "L/min"},
-        {"name": "MB_Bomba1_Pressao", "address": "40002", "type": "uint16", "unit": "bar", "scale": 0.1},
-        {"name": "MB_Bomba1_Corrente", "address": "40003", "type": "uint16", "unit": "A", "scale": 0.1},
-        {"name": "MB_Bomba1_Velocidade", "address": "40004", "type": "uint16", "unit": "RPM"},
-        {"name": "MB_Bomba1_Temp", "address": "40005", "type": "uint16", "unit": "°C", "scale": 0.1},
-        {"name": "MB_Bomba2_Vazao", "address": "40006", "type": "uint16", "unit": "L/min"},
-        {"name": "MB_Bomba2_Pressao", "address": "40007", "type": "uint16", "unit": "bar", "scale": 0.1},
-        {"name": "MB_Bomba2_Corrente", "address": "40008", "type": "uint16", "unit": "A", "scale": 0.1},
-        {"name": "MB_Tanque1_Nivel", "address": "40011", "type": "uint16", "unit": "%"},
-        {"name": "MB_Tanque2_Nivel", "address": "40012", "type": "uint16", "unit": "%"},
-        {"name": "MB_Tanque3_Nivel", "address": "40013", "type": "uint16", "unit": "%"},
-        {"name": "MB_Valvula1_Posicao", "address": "40016", "type": "uint16", "unit": "%"},
-        {"name": "MB_Valvula2_Posicao", "address": "40017", "type": "uint16", "unit": "%"},
-        {"name": "MB_Valvula3_Posicao", "address": "40018", "type": "uint16", "unit": "%"},
-        {"name": "MB_Valvula4_Posicao", "address": "40019", "type": "uint16", "unit": "%"},
-        {"name": "MB_Consumo_Agua_Total", "address": "40020", "type": "uint32", "unit": "m³", "scale": 0.001}
-      ],
       "kafka_config": {
         "topic": "raw_tags",
         "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
@@ -200,9 +149,9 @@
       "_comment2": "MQTT - Sensores IoT (ESP32, Raspberry Pi)",
       "_comment3": "============================================",
       "adapter_id": "mqtt-iot-sensors",
-      "adapter_name": "Sensores IoT - Monitoramento Ambiental",
+      "adapter_name": "MQTT Sensores IoT - Monitoramento Ambiental",
       "protocol_type": "mqtt",
-      "enabled": false,
+      "enabled": true,
       "host": "rabbitmq",
       "port": 1883,
       "scan_rate_ms": 1000,
@@ -216,23 +165,6 @@
         "clean_session": true,
         "keepalive": 60
       },
-      "tags": [
-        {"name": "MQTT_Temp_Ambiente_Area1", "address": "sensors/area1/temperatura", "type": "float", "path": "value", "unit": "°C"},
-        {"name": "MQTT_Temp_Ambiente_Area2", "address": "sensors/area2/temperatura", "type": "float", "path": "value", "unit": "°C"},
-        {"name": "MQTT_Temp_Ambiente_Area3", "address": "sensors/area3/temperatura", "type": "float", "path": "value", "unit": "°C"},
-        {"name": "MQTT_Umidade_Area1", "address": "sensors/area1/umidade", "type": "float", "path": "value", "unit": "%"},
-        {"name": "MQTT_Umidade_Area2", "address": "sensors/area2/umidade", "type": "float", "path": "value", "unit": "%"},
-        {"name": "MQTT_Umidade_Area3", "address": "sensors/area3/umidade", "type": "float", "path": "value", "unit": "%"},
-        {"name": "MQTT_Vibracao_Motor1", "address": "sensors/motor1/vibracao", "type": "float", "path": "rms", "unit": "mm/s"},
-        {"name": "MQTT_Vibracao_Motor2", "address": "sensors/motor2/vibracao", "type": "float", "path": "rms", "unit": "mm/s"},
-        {"name": "MQTT_Vibracao_Motor3", "address": "sensors/motor3/vibracao", "type": "float", "path": "rms", "unit": "mm/s"},
-        {"name": "MQTT_Temp_Motor1", "address": "sensors/motor1/temperatura", "type": "float", "path": "value", "unit": "°C"},
-        {"name": "MQTT_Temp_Motor2", "address": "sensors/motor2/temperatura", "type": "float", "path": "value", "unit": "°C"},
-        {"name": "MQTT_Pressao_Diferencial_Filtro", "address": "sensors/filtro/pressao_diferencial", "type": "float", "path": "value", "unit": "mbar"},
-        {"name": "MQTT_Qualidade_Ar_CO2", "address": "sensors/ambiente/co2", "type": "float", "path": "ppm", "unit": "ppm"},
-        {"name": "MQTT_Qualidade_Ar_PM25", "address": "sensors/ambiente/pm25", "type": "float", "path": "value", "unit": "µg/m³"},
-        {"name": "MQTT_Nivel_Ruido", "address": "sensors/ambiente/ruido", "type": "float", "path": "db", "unit": "dB"}
-      ],
       "kafka_config": {
         "topic": "raw_tags",
         "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
@@ -240,12 +172,12 @@
     },
     {
       "_comment": "============================================",
-      "_comment2": "MQTT - Sensores de Processo (Wildcard)",
+      "_comment2": "MQTT - Sensores de Processo",
       "_comment3": "============================================",
       "adapter_id": "mqtt-process-sensors",
-      "adapter_name": "Sensores de Processo via MQTT",
+      "adapter_name": "MQTT Sensores de Processo",
       "protocol_type": "mqtt",
-      "enabled": false,
+      "enabled": true,
       "host": "rabbitmq",
       "port": 1883,
       "scan_rate_ms": 500,
@@ -258,141 +190,6 @@
         "qos": 1,
         "clean_session": true
       },
-      "tags": [
-        {"name": "MQTT_Flowmeter_Entrada", "address": "process/flowmeter/entrada", "type": "float", "path": "flow_rate", "unit": "m³/h"},
-        {"name": "MQTT_Flowmeter_Saida", "address": "process/flowmeter/saida", "type": "float", "path": "flow_rate", "unit": "m³/h"},
-        {"name": "MQTT_pH_Tanque_Tratamento", "address": "process/qualidade/ph", "type": "float", "path": "value", "unit": "pH"},
-        {"name": "MQTT_Condutividade", "address": "process/qualidade/condutividade", "type": "float", "path": "value", "unit": "µS/cm"},
-        {"name": "MQTT_Turbidez", "address": "process/qualidade/turbidez", "type": "float", "path": "ntu", "unit": "NTU"},
-        {"name": "MQTT_OD_Oxigenio", "address": "process/qualidade/od", "type": "float", "path": "mg_l", "unit": "mg/L"},
-        {"name": "MQTT_Temp_Processo", "address": "process/temperatura/reator", "type": "float", "path": "value", "unit": "°C"},
-        {"name": "MQTT_Pressao_Reator", "address": "process/pressao/reator", "type": "float", "path": "value", "unit": "bar"}
-      ],
-      "kafka_config": {
-        "topic": "raw_tags",
-        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
-      }
-    },
-    {
-      "_comment": "============================================",
-      "_comment2": "OPC-UA SIMULADOR (Desenvolvimento/Testes)",
-      "_comment3": "============================================",
-      "adapter_id": "opcua-simulator-dev",
-      "adapter_name": "Simulador OPC-UA (Desenvolvimento)",
-      "protocol_type": "opcua",
-      "enabled": true,
-      "host": "opcua-server",
-      "port": 4840,
-      "scan_rate_ms": 1000,
-      "timeout": 10.0,
-      "retry_interval": 10.0,
-      "extra_config": {
-        "security_mode": "None",
-        "security_policy": "None",
-        "subscription_interval": 100,
-        "auto_discover": true
-      },
-      "tags": [],
-      "kafka_config": {
-        "topic": "raw_tags",
-        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
-      }
-    },
-
-
-
-    {
-      "_comment": "============================================",
-      "_comment2": "VIRTUAL ADAPTERS - Node-RED Grain Terminal",
-      "_comment3": "============================================"
-    },
-    {
-      "_comment": "VIRTUAL OPC-UA - Gates (7 comportas)",
-      "adapter_id": "virtual-opcua-gates",
-      "adapter_name": "Virtual OPC-UA - Gates Control (Siemens S7)",
-      "protocol_type": "virtual_opcua",
-      "enabled": true,
-      "host": "node-red-buffer",
-      "port": 0,
-      "scan_rate_ms": 1000,
-      "timeout": 5.0,
-      "retry_interval": 5.0,
-      "extra_config": {
-        "subscription_interval": 100,
-        "namespace_index": 2,
-        "device_type": "Siemens S7-1500",
-        "description": "7 Gates for grain flow control - simulated via Node-RED"
-      },
-      "tags": [],
-      "kafka_config": {
-        "topic": "raw_tags",
-        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
-      }
-    },
-    {
-      "_comment": "VIRTUAL MODBUS - Conveyor Belts (3 correias)",
-      "adapter_id": "virtual-modbus-belts",
-      "adapter_name": "Virtual Modbus - Conveyor Belt Systems",
-      "protocol_type": "virtual_modbus",
-      "enabled": true,
-      "host": "node-red-buffer",
-      "port": 0,
-      "scan_rate_ms": 500,
-      "timeout": 5.0,
-      "retry_interval": 5.0,
-      "extra_config": {
-        "unit_id": 1,
-        "byte_order": "big",
-        "device_type": "VFD + Belt Controller",
-        "description": "CORR01, CORR02, CORR03 - simulated via Node-RED"
-      },
-      "tags": [],
-      "kafka_config": {
-        "topic": "raw_tags",
-        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
-      }
-    },
-    {
-      "_comment": "VIRTUAL PROFINET - Elevator (ELV01)",
-      "adapter_id": "virtual-profinet-elevator",
-      "adapter_name": "Virtual PROFINET - Bucket Elevator",
-      "protocol_type": "virtual_profinet",
-      "enabled": true,
-      "host": "node-red-buffer",
-      "port": 0,
-      "scan_rate_ms": 500,
-      "timeout": 5.0,
-      "retry_interval": 5.0,
-      "extra_config": {
-        "device_name": "elevator-01",
-        "cycle_time": 4,
-        "device_type": "Siemens ET200SP",
-        "description": "ELV01 Bucket Elevator - simulated via Node-RED"
-      },
-      "tags": [],
-      "kafka_config": {
-        "topic": "raw_tags",
-        "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
-      }
-    },
-    {
-      "_comment": "VIRTUAL ETHERNET/IP - Shiploader (SLD01)",
-      "adapter_id": "virtual-ethernetip-shiploader",
-      "adapter_name": "Virtual EtherNet/IP - Shiploader System",
-      "protocol_type": "virtual_ethernetip",
-      "enabled": true,
-      "host": "node-red-buffer",
-      "port": 0,
-      "scan_rate_ms": 500,
-      "timeout": 5.0,
-      "retry_interval": 5.0,
-      "extra_config": {
-        "slot": 0,
-        "rpi": 100,
-        "device_type": "Allen-Bradley ControlLogix",
-        "description": "SLD01 Shiploader - simulated via Node-RED"
-      },
-      "tags": [],
       "kafka_config": {
         "topic": "raw_tags",
         "bootstrap_servers": "kafka-1:9092,kafka-2:9093,kafka-3:9096"
@@ -400,33 +197,41 @@
     }
   ],
   "_metadata": {
-    "version": "3.0",
-    "description": "OptiFlow Gateway - Adapters para PLCs Reais e Simuladores Virtuais",
-    "updated_at": "2025-12-03",
-    "protocols_supported": [
-      "opcua", "modbus", "mqtt",
-      "virtual_opcua", "virtual_modbus", "virtual_profinet", "virtual_ethernetip"
-    ],
-    "notes": {
-      "siemens": "Siemens S7-1200/1500 expõem OPC-UA nativamente na porta 4840",
-      "rockwell": "Rockwell via FactoryTalk Gateway OPC-UA ou KEPServerEX",
-      "modbus": "Medidores de energia, inversores, CLPs genéricos",
-      "mqtt": "Sensores IoT (ESP32, Raspberry Pi), gateways LoRaWAN",
-      "virtual": "Adaptadores virtuais que leem do buffer Node-RED para simulação"
-    },
-    "virtual_adapters": {
-      "description": "Virtual adapters read from Node-RED ingestion buffer",
-      "source": "Node-RED Grain Terminal Simulator",
-      "protocols": {
-        "virtual_opcua": "Gates control (ARZ_GATES_*) - Siemens S7 simulation",
-        "virtual_modbus": "Conveyor belts (CORR*) - VFD/Motor controller simulation",
-        "virtual_profinet": "Bucket elevator (ELV*) - PROFINET IO simulation",
-        "virtual_ethernetip": "Shiploader (SLD*) - Allen-Bradley CIP simulation"
+    "version": "5.0",
+    "description": "OptiFlow Gateway - Adapters Multi-Protocolo para PLCs Industriais Reais",
+    "updated_at": "2025-12-04",
+    "architecture_note": "Ver docs/PREMISSAS_ARQUITETURA.md para regras de implementação",
+    "protocols_supported": {
+      "opcua": {
+        "description": "OPC Unified Architecture - Padrão IEC 62541",
+        "adapters": ["opcua-siemens-teag", "opcua-schneider-eletrocentro", "opcua-rockwell-packaging", "opcua-siemens-utilities"],
+        "simulation": "Node-RED node-red-contrib-opcua server na porta 4840"
+      },
+      "modbus": {
+        "description": "Modbus TCP/IP - Protocolo para medidores e inversores",
+        "adapters": ["modbus-schneider-energy"],
+        "simulation": "Node-RED node-red-contrib-modbus server na porta 502"
+      },
+      "ethernetip": {
+        "description": "EtherNet/IP CIP - Protocolo Rockwell/ODVA",
+        "adapters": ["ethernetip-rockwell-shiploader"],
+        "simulation": "Node-RED node-red-contrib-cip-ethernet-ip na porta 44818"
+      },
+      "mqtt": {
+        "description": "MQTT 3.1.1 - IoT e sensores wireless",
+        "adapters": ["mqtt-iot-sensors", "mqtt-process-sensors"],
+        "simulation": "RabbitMQ MQTT plugin na porta 1883"
       }
     },
-    "network_requirements": {
-      "ot_network": "192.168.1.0/24 - Rede de automação (PLCs, sensores)",
-      "it_network": "Rede corporativa - Kafka, InfluxDB, Backend"
+    "production_mapping": {
+      "opcua-siemens-teag": "PLC Siemens S7-1500 para controle do terminal de grãos TEAG",
+      "opcua-schneider-eletrocentro": "PLC Schneider M340 para automação do eletrocentro (transformadores, CCMs, banco de capacitores)",
+      "opcua-rockwell-packaging": "PLC Rockwell CompactLogix para linha de empacotamento",
+      "opcua-siemens-utilities": "PLC Siemens S7-1200 para utilidades (compressores, caldeiras, geradores)",
+      "modbus-schneider-energy": "Medidores Schneider PM5560/PM5350 para monitoramento de energia",
+      "ethernetip-rockwell-shiploader": "PLC Rockwell ControlLogix para shiploaders e trippers",
+      "mqtt-iot-sensors": "Sensores IoT ESP32/Raspberry Pi para monitoramento ambiental",
+      "mqtt-process-sensors": "Sensores de processo via gateway IoT"
     }
   }
 }

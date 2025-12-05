@@ -126,6 +126,10 @@ class ProtocolManager:
                 config_data = json.load(f)
 
             adapters_config = config_data.get('adapters', [])
+
+            # Load tags from tags_config.json and distribute to adapters
+            tags_by_adapter = self._load_tags_by_adapter(config_file.parent)
+
             loaded_count = 0
 
             for adapter_config in adapters_config:
@@ -134,6 +138,13 @@ class ProtocolManager:
                     if not adapter_config.get('enabled', True):
                         logger.info(f"⏭️  Skipping disabled adapter: {adapter_config.get('adapter_id')}")
                         continue
+
+                    adapter_id = adapter_config.get('adapter_id')
+
+                    # Merge tags from tags_config.json if adapter doesn't have embedded tags
+                    if not adapter_config.get('tags') and adapter_id in tags_by_adapter:
+                        adapter_config['tags'] = tags_by_adapter[adapter_id]
+                        logger.info(f"📋 Loaded {len(adapter_config['tags'])} tags for {adapter_id} from tags_config.json")
 
                     # Create adapter from configuration
                     adapter = await self._create_adapter_from_config(adapter_config)
@@ -152,6 +163,76 @@ class ProtocolManager:
         except Exception as e:
             logger.error(f"❌ Failed to load configuration file: {e}", exc_info=True)
             return 0
+
+    def _load_tags_by_adapter(self, config_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Load tags from tags_config.json and group by adapter_id
+
+        Args:
+            config_dir: Directory containing tags_config.json
+
+        Returns:
+            Dict mapping adapter_id to list of tag configurations
+        """
+        tags_file = config_dir / "tags_config.json"
+
+        if not tags_file.exists():
+            logger.warning(f"⚠️  Tags config file not found: {tags_file}")
+            return {}
+
+        try:
+            with open(tags_file, 'r') as f:
+                tags_data = json.load(f)
+
+            tags_list = tags_data.get('tags', tags_data) if isinstance(tags_data, dict) else tags_data
+
+            tags_by_adapter: Dict[str, List[Dict[str, Any]]] = {}
+
+            for tag in tags_list:
+                adapter_id = tag.get('adapter_id')
+                if not adapter_id:
+                    continue
+
+                if adapter_id not in tags_by_adapter:
+                    tags_by_adapter[adapter_id] = []
+
+                # Convert tag config to format expected by adapters
+                tag_config = {
+                    'name': tag.get('tag_name', tag.get('name')),
+                    'address': tag.get('address'),
+                    'type': tag.get('data_type', 'float32'),
+                    'tag_id': tag.get('tag_id'),
+                    'unit': tag.get('metadata', {}).get('engineering_units', ''),
+                }
+
+                # Add protocol-specific fields
+                protocol = tag.get('protocol_type', '')
+
+                if protocol == 'modbus':
+                    # Parse Modbus-specific fields from address
+                    address = tag.get('address', '')
+                    tag_config['function'] = 'holding'  # Default to holding registers
+                    if address.startswith('30'):
+                        tag_config['function'] = 'input'
+                    elif address.startswith('00') or address.startswith('0'):
+                        tag_config['function'] = 'coil'
+                    elif address.startswith('10'):
+                        tag_config['function'] = 'discrete'
+
+                elif protocol == 'mqtt':
+                    # MQTT uses address as topic
+                    tag_config['path'] = tag.get('metadata', {}).get('json_path', 'value')
+
+                tags_by_adapter[adapter_id].append(tag_config)
+
+            total_tags = sum(len(tags) for tags in tags_by_adapter.values())
+            logger.info(f"📦 Loaded {total_tags} tags from tags_config.json for {len(tags_by_adapter)} adapters")
+
+            return tags_by_adapter
+
+        except Exception as e:
+            logger.error(f"❌ Failed to load tags config: {e}", exc_info=True)
+            return {}
 
     async def _create_adapter_from_config(self, config_dict: Dict[str, Any]) -> Optional[BaseProtocolAdapter]:
         """Create adapter instance from configuration dictionary"""
@@ -186,6 +267,27 @@ class ProtocolManager:
             elif protocol_type == 'mqtt':
                 from .protocols.mqtt_adapter import MQTTAdapter
                 return MQTTAdapter(protocol_config)
+
+            elif protocol_type == 'ethernetip':
+                from .protocols.ethernetip_adapter import EtherNetIPAdapter
+                return EtherNetIPAdapter(protocol_config)
+
+            # Virtual adapters for Node-RED simulation
+            elif protocol_type == 'virtual_opcua':
+                from .protocols.virtual_adapter import OPCUAVirtualAdapter
+                return OPCUAVirtualAdapter(protocol_config)
+
+            elif protocol_type == 'virtual_modbus':
+                from .protocols.virtual_adapter import ModbusVirtualAdapter
+                return ModbusVirtualAdapter(protocol_config)
+
+            elif protocol_type == 'virtual_profinet':
+                from .protocols.virtual_adapter import ProfinetVirtualAdapter
+                return ProfinetVirtualAdapter(protocol_config)
+
+            elif protocol_type == 'virtual_ethernetip':
+                from .protocols.virtual_adapter import EthernetIPVirtualAdapter
+                return EthernetIPVirtualAdapter(protocol_config)
 
             else:
                 logger.error(f"❌ Unknown protocol type: {protocol_type}")

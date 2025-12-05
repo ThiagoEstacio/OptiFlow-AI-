@@ -121,6 +121,90 @@ async def get_all_realtime_values(
     }
 
 
+@router.get("/realtime/managed/{adapter_id}")
+async def get_managed_tags_realtime(
+    adapter_id: str,
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Get MANAGED (configured) tags from an adapter with real-time values
+
+    This endpoint returns only tags that are configured in tags_config.json
+    for this specific adapter, NOT all discovered tags from the server.
+
+    Use this for production dashboards to show only relevant process tags.
+
+    **Returns**:
+    ```json
+    {
+      "adapter_id": "opcua-siemens-teag",
+      "count": 15,
+      "connected": true,
+      "tags": [
+        {
+          "tag_id": "tag_teag_silo1_temp",
+          "name": "TEAG_Silo1_Temperatura",
+          "address": "ns=2;s=TEAG.Silo1.Temperatura",
+          "current_value": 45.2,
+          "quality": "Good",
+          "unit": "°C"
+        }
+      ],
+      "latency_ms": 5.2
+    }
+    ```
+    """
+    start_time = time.time()
+
+    # Find the adapter
+    adapter = pm.adapters.get(adapter_id)
+    if not adapter:
+        raise HTTPException(404, f"Adapter '{adapter_id}' not found")
+
+    if not adapter.connected:
+        return {
+            "adapter_id": adapter_id,
+            "count": 0,
+            "connected": False,
+            "tags": [],
+            "message": "Adapter not connected",
+            "latency_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    tags_with_values = []
+    last_values = getattr(adapter, 'last_values', {})
+
+    # Use ONLY configured tags from adapter.config.tags (from tags_config.json)
+    configured_tags = adapter.config.tags if hasattr(adapter.config, 'tags') else []
+
+    for tag in configured_tags:
+        tag_addr = tag.get('address', '')
+        cached = last_values.get(tag_addr, {})
+
+        tags_with_values.append({
+            "tag_id": tag.get('tag_id', ''),
+            "name": tag.get('name') or tag.get('tag_name', tag_addr),
+            "address": tag_addr,
+            "current_value": cached.get('value'),
+            "quality": cached.get('quality', 'Unknown'),
+            "data_type": tag.get('type', tag.get('data_type', 'unknown')),
+            "unit": tag.get('unit', ''),
+            "last_update": cached.get('timestamp'),
+            "connected": cached.get('value') is not None
+        })
+
+    latency_ms = (time.time() - start_time) * 1000
+
+    return {
+        "adapter_id": adapter_id,
+        "count": len(tags_with_values),
+        "connected": adapter.connected,
+        "source": "tags_config.json",
+        "tags": tags_with_values,
+        "latency_ms": round(latency_ms, 2)
+    }
+
+
 @router.get("/realtime/discovered/{adapter_id}")
 async def get_discovered_tags_realtime(
     adapter_id: str,
@@ -129,9 +213,13 @@ async def get_discovered_tags_realtime(
     """
     Get ALL discovered tags from an adapter with real-time values
 
+    WARNING: This returns ALL tags from the OPC-UA/Modbus server including
+    system tags. For production dashboards, use /realtime/managed/{adapter_id}
+    which returns only configured process tags.
+
     This endpoint discovers tags and reads their current values DIRECTLY
     from the PLC/OPC-UA server (not from subscription cache).
-    Used by the Gateway UI to show all available tags.
+    Used by the Gateway UI for tag discovery/browsing.
 
     **Returns**:
     ```json
@@ -854,8 +942,21 @@ async def create_tag(
     - Gateway UI
 
     **Note**: data_type is auto-detected from PLC when possible
+
+    **CORR-002**: This endpoint validates that the adapter_id exists before creating the tag.
     """
     config = _load_tags_config()
+
+    # CORR-002: Validate adapter exists before creating tag
+    # This prevents orphaned tags that reference non-existent adapters
+    available_adapters = list(pm.adapters.keys())
+
+    if request.adapter_id not in available_adapters:
+        raise HTTPException(
+            400,
+            f"Cannot create tag: adapter '{request.adapter_id}' does not exist. "
+            f"Available adapters: {available_adapters}"
+        )
 
     # Check if tag with same name already exists
     for existing_tag in config.get("tags", []):
@@ -1044,6 +1145,95 @@ async def delete_tag(tag_id: str):
         "tag_id": tag_id,
         "message": f"Tag deleted successfully"
     }
+
+
+# === TAG VALIDATION ENDPOINTS - CORR-002 ===
+
+@router.get("/validate/all")
+async def validate_all_tags(
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Validate all managed tags against available adapters
+
+    CORR-002: Detect orphaned tags (tags pointing to non-existent adapters)
+
+    **Returns**:
+    ```json
+    {
+      "success": true/false,
+      "total_tags": 10,
+      "valid_tags": 8,
+      "orphaned_tags": [
+        {"tag_id": "tag_123", "adapter_id": "non-existent-adapter"}
+      ],
+      "available_adapters": ["opcua-001", "modbus-002"]
+    }
+    ```
+    """
+    from app.services.tag_validator import get_tag_validator
+
+    config = _load_tags_config()
+    tags = config.get("tags", [])
+
+    # Get available adapters
+    available_adapters = list(pm.adapters.keys())
+
+    # Set up validator
+    validator = get_tag_validator()
+    validator.set_valid_adapters(available_adapters)
+
+    # Validate all tags
+    report = validator.validate_tags_config(tags)
+
+    return report
+
+
+@router.post("/validate/cleanup")
+async def cleanup_orphaned_tags(
+    dry_run: bool = Query(True, description="If true, only report what would be removed"),
+    pm=Depends(get_protocol_manager)
+):
+    """
+    Remove orphaned tags from configuration
+
+    CORR-002: Clean up tags that reference non-existent adapters
+
+    **Query Parameters**:
+    - `dry_run`: If true, only report what would be removed (default: true)
+
+    **Returns**:
+    ```json
+    {
+      "dry_run": true,
+      "would_remove": 3,
+      "would_keep": 7,
+      "orphaned_tags": [...]
+    }
+    ```
+    """
+    from app.services.tag_validator import get_tag_validator
+
+    config = _load_tags_config()
+    tags = config.get("tags", [])
+
+    # Get available adapters
+    available_adapters = list(pm.adapters.keys())
+
+    # Set up validator
+    validator = get_tag_validator()
+    validator.set_valid_adapters(available_adapters)
+
+    # Get cleanup report
+    result = validator.cleanup_orphaned_tags(tags, dry_run=dry_run)
+
+    if not dry_run and "valid_tags" in result:
+        # Actually remove orphaned tags
+        config["tags"] = result["valid_tags"]
+        _save_tags_config(config)
+        logger.info(f"✅ Removed {result['removed']} orphaned tags")
+
+    return result
 
 
 # IMPORTANT: This parameterized route MUST be at the END to avoid capturing
