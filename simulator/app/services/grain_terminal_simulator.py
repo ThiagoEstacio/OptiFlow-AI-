@@ -25,6 +25,8 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import asyncio
 
+from .eletrocentro_simulator import get_eletrocentro, EletrocentroSimulator
+
 logger = logging.getLogger(__name__)
 
 
@@ -208,7 +210,10 @@ class GrainTerminalSimulator:
         # Test counter for frontend real-time visualization (0-10, auto-reset)
         self.test_counter = 0
 
-        logger.info("✅ Grain Terminal Simulator initialized (Virtual PLC)")
+        # Eletrocentro (sistema elétrico completo)
+        self.eletrocentro: EletrocentroSimulator = get_eletrocentro()
+
+        logger.info("✅ Grain Terminal Simulator initialized (Virtual PLC + Eletrocentro)")
 
     def _schedule_random_failures(self):
         """Agenda falhas aleatórias para treinar ML"""
@@ -269,10 +274,13 @@ class GrainTerminalSimulator:
         # Define setpoints iniciais
         self.shiploader.setpoint_tph = 1500.0
 
+        # Liga motores do Eletrocentro
+        self.eletrocentro.start_all_motors()
+
         # Inicia loop automático se ainda não está rodando
         if self._simulation_task is None or self._simulation_task.done():
             self._simulation_task = asyncio.create_task(self._auto_simulation_loop())
-            logger.info("▶️  Simulator started with auto-update loop")
+            logger.info("▶️  Simulator started with auto-update loop (+ Eletrocentro)")
         else:
             logger.info("▶️  Simulator started")
 
@@ -293,7 +301,10 @@ class GrainTerminalSimulator:
 
         self.shiploader.setpoint_tph = 0.0
 
-        logger.info("⏹️  Simulator stopped")
+        # Desliga motores do Eletrocentro
+        self.eletrocentro.stop_all_motors()
+
+        logger.info("⏹️  Simulator stopped (+ Eletrocentro)")
 
     async def _auto_simulation_loop(self):
         """Loop automático que avança a simulação a cada segundo"""
@@ -365,6 +376,22 @@ class GrainTerminalSimulator:
         if self.test_counter > 10:
             self.test_counter = 0
 
+        # 7. Atualiza Eletrocentro com cargas baseadas nas correias
+        motor_loads = {
+            "CCM01_CORR01": self.belts["CORR01"].load_pct,
+            "CCM01_CORR02": self.belts["CORR02"].load_pct,
+            "CCM01_CORR03": self.belts["CORR03"].load_pct,
+            "CCM01_SLD01": (self.shiploader.flow_tph / 1500.0) * 100.0,  # Lança proporcional à vazão
+            "CCM01_SLD02": 40.0 + (self.shiploader.flow_tph / 1500.0) * 30.0,  # Giro moderado
+            "CCM01_ELV01": 60.0 if self.running else 0.0,  # Elevador carga média
+            "CCM01_VNT01": 80.0 if self.running else 0.0,  # Ventilador alta carga
+            "CCM01_VNT02": 75.0 if self.running else 0.0,  # Ventilador alta carga
+        }
+        self.eletrocentro.step(motor_loads, dt_s)
+
+        # Atualiza energia total do sistema (Eletrocentro tem valores mais precisos)
+        self.total_kwh = self.eletrocentro.total_energy_kwh
+
     def step(self, dt_s: float = 1.0):
         """
         Executa step de simulação (sync wrapper)
@@ -413,6 +440,22 @@ class GrainTerminalSimulator:
         self.test_counter += 1
         if self.test_counter > 10:
             self.test_counter = 0
+
+        # 7. Atualiza Eletrocentro com cargas baseadas nas correias
+        motor_loads = {
+            "CCM01_CORR01": self.belts["CORR01"].load_pct,
+            "CCM01_CORR02": self.belts["CORR02"].load_pct,
+            "CCM01_CORR03": self.belts["CORR03"].load_pct,
+            "CCM01_SLD01": (self.shiploader.flow_tph / 1500.0) * 100.0,
+            "CCM01_SLD02": 40.0 + (self.shiploader.flow_tph / 1500.0) * 30.0,
+            "CCM01_ELV01": 60.0 if self.running else 0.0,
+            "CCM01_VNT01": 80.0 if self.running else 0.0,
+            "CCM01_VNT02": 75.0 if self.running else 0.0,
+        }
+        self.eletrocentro.step(motor_loads, dt_s)
+
+        # Atualiza energia total do sistema
+        self.total_kwh = self.eletrocentro.total_energy_kwh
 
     def _process_failures(self):
         """Processa falhas programadas"""
@@ -473,7 +516,8 @@ class GrainTerminalSimulator:
                 "flow_tph": round(self.shiploader.flow_tph, 1),
                 "power_kw": round(self.shiploader.power_kw, 1),
                 "current_a": round(self.shiploader.current_a, 1),
-            }
+            },
+            "eletrocentro": self.eletrocentro.get_status()
         }
 
     def set_gate_setpoint(self, gate_id: int, setpoint_pct: float):
@@ -525,6 +569,10 @@ class GrainTerminalSimulator:
         tags['SLD01_FLOW_TPH_PV'] = self.shiploader.flow_tph
         tags['SLD01_POWER_KW_PV'] = self.shiploader.power_kw
         tags['SLD01_CURRENT_A_PV'] = self.shiploader.current_a
+
+        # Eletrocentro tags (todas as grandezas elétricas)
+        eletro_tags = self.eletrocentro.get_all_tags()
+        tags.update(eletro_tags)
 
         return tags
 

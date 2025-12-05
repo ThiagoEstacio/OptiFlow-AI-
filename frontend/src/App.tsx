@@ -49,6 +49,7 @@ const TremorMonitoring = lazy(() => import('./pages/tremor/TremorMonitoring'));
 const TremorHistory = lazy(() => import('./pages/tremor/TremorHistory'));
 const TremorQuality = lazy(() => import('./pages/tremor/TremorQuality'));
 const TremorMaintenance = lazy(() => import('./pages/tremor/TremorMaintenance'));
+const TremorAssetFramework = lazy(() => import('./pages/tremor/TremorAssetFramework'));
 
 // Placeholder for pages that need to be migrated
 function ComingSoonPage({ title }: { title: string }) {
@@ -148,6 +149,10 @@ function AppContent() {
             <Route path="maintenance/kpis" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
             <Route path="maintenance/backlog" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
             <Route path="maintenance/analysis" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+
+            {/* Asset Framework - PI Asset Framework style */}
+            <Route path="assets" element={<Suspense fallback={<PageLoading />}><TremorAssetFramework /></Suspense>} />
+            <Route path="assets/framework" element={<Suspense fallback={<PageLoading />}><TremorAssetFramework /></Suspense>} />
 
             {/* Legacy redirects */}
             <Route path="operations" element={<Navigate to="/dashboard" replace />} />

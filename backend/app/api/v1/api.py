@@ -50,6 +50,13 @@ from app.api.v1.endpoints import (
     rate_limits,
     demo,
     quality_analytics,
+    ml_anomaly,  # MELH-001: Anomaly Detection
+    ml_energy,  # MELH-002: Energy Forecast
+    ml_ishikawa,  # MELH-003: Dynamic Ishikawa Diagram
+    ml_correlation,  # MELH-004: Cross-Equipment Correlation
+    maintenance_kpis,  # MELH-006: MTBF/MTTR KPIs
+    spare_parts,  # MELH-007: Spare Parts Recommendation
+    pdca_automation,  # MELH-008: PDCA Auto-closure
 )
 from app.api.routes import consumer_metrics
 
@@ -101,5 +108,12 @@ api_router.include_router(prometheus.router, prefix="/prometheus", tags=["Promet
 api_router.include_router(rate_limits.router, prefix="/rate-limits", tags=["Rate Limiting & Throttling"])
 api_router.include_router(demo.router, prefix="/demo", tags=["Demo & Development Helpers"])
 api_router.include_router(quality_analytics.router, prefix="/quality", tags=["Quality Analytics - SPC, Pareto, Ishikawa, PDCA"])
+api_router.include_router(ml_anomaly.router, prefix="/ml/anomaly", tags=["ML Anomaly Detection - MELH-001"])
+api_router.include_router(ml_energy.router, prefix="/ml/energy", tags=["ML Energy Forecast - MELH-002"])
+api_router.include_router(ml_ishikawa.router, prefix="/ml/ishikawa", tags=["ML Ishikawa Analysis - MELH-003"])
+api_router.include_router(ml_correlation.router, prefix="/ml/correlation", tags=["ML Cross-Equipment Correlation - MELH-004"])
+api_router.include_router(maintenance_kpis.router, prefix="/maintenance", tags=["Maintenance KPIs - MELH-006"])
+api_router.include_router(spare_parts.router, prefix="/spare-parts", tags=["Spare Parts Management - MELH-007"])
+api_router.include_router(pdca_automation.router, prefix="/pdca", tags=["PDCA Automation - MELH-008"])
 api_router.include_router(metrics.router, tags=["Monitoring"])  # No prefix - metrics at /api/v1/metrics
 api_router.include_router(consumer_metrics.router, tags=["Pipeline Metrics"])  # Pipeline health endpoints at /api/v1/metrics/

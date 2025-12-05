@@ -95,13 +95,13 @@ class MQTTAdapter(BaseProtocolAdapter):
             logger.info(f"🔌 Connecting to MQTT broker: {self.config.host}:{self.config.port}")
 
             # Create MQTT client
+            # Note: asyncio-mqtt doesn't support 'timeout' in Client constructor
             client_kwargs = {
                 'hostname': self.config.host,
                 'port': self.config.port,
                 'client_id': self.client_id,
                 'clean_session': self.clean_session,
-                'keepalive': self.keepalive,
-                'timeout': self.config.timeout
+                'keepalive': self.keepalive
             }
 
             # Add authentication if provided

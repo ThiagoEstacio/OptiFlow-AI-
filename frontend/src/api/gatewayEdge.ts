@@ -7,9 +7,12 @@
 import axios from 'axios';
 
 // Gateway Edge runs on port 8080
-const GATEWAY_BASE_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8080';
-const API_BASE = `${GATEWAY_BASE_URL}/api`;
-const HEALTH_URL = GATEWAY_BASE_URL; // Health endpoint is at root, not under /api
+// In production (Docker), use the nginx proxy at /gateway-api
+// In development, connect directly to localhost:8080
+const isProduction = import.meta.env.PROD;
+const GATEWAY_BASE_URL = import.meta.env.VITE_GATEWAY_URL || (isProduction ? '' : 'http://localhost:8080');
+const API_BASE = isProduction ? '/gateway-api' : `${GATEWAY_BASE_URL}/api`;
+const HEALTH_URL = isProduction ? '/gateway-api' : GATEWAY_BASE_URL; // Health endpoint
 
 // Types
 export interface GatewayHealthResponse {
@@ -112,6 +115,106 @@ export interface AdapterStatus {
   last_scan: string | null;
   scan_rate_ms: number;
   error?: string;
+}
+
+// ========================================
+// Asset Framework Types (PI Asset Framework style)
+// ========================================
+
+export type ElementType = 'plant' | 'area' | 'equipment_group' | 'equipment' | 'component';
+export type AttributeType = 'tag' | 'formula' | 'constant' | 'rollup';
+
+export interface AssetAttribute {
+  id: string;
+  name: string;
+  description?: string;
+  data_type: string;
+  uom?: string;
+  attribute_type: AttributeType;
+  tag_id?: string;
+  tag_address?: string;
+  formula?: string;
+  constant_value?: any;
+  current_value?: any;
+  current_quality?: string;
+  current_timestamp?: string;
+  hi_hi?: number;
+  hi?: number;
+  lo?: number;
+  lo_lo?: number;
+  categories?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface AssetElement {
+  id: string;
+  name: string;
+  description?: string;
+  element_type: ElementType;
+  template_id?: string;
+  parent_id?: string;
+  path: string;
+  attributes: AssetAttribute[];
+  children: string[];
+  icon?: string;
+  color?: string;
+  position?: { x: number; y: number };
+  metadata?: Record<string, any>;
+  tags?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetElementHierarchy {
+  id: string;
+  name: string;
+  type: ElementType;
+  path: string;
+  template_id?: string;
+  icon?: string;
+  color?: string;
+  attributes_count: number;
+  children: AssetElementHierarchy[];
+}
+
+export interface AttributeTemplate {
+  name: string;
+  description?: string;
+  data_type: string;
+  default_uom?: string;
+  attribute_type: AttributeType;
+  tag_pattern?: string;
+  formula?: string;
+  categories?: string[];
+  hi_hi?: number;
+  hi?: number;
+  lo?: number;
+  lo_lo?: number;
+}
+
+export interface AssetTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  element_type: ElementType;
+  base_template_id?: string;
+  attributes: AttributeTemplate[];
+  icon?: string;
+  color?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  elements_count?: number;
+}
+
+export interface AssetFrameworkStats {
+  total_templates: number;
+  total_elements: number;
+  root_elements: number;
+  elements_by_type: Record<ElementType, number>;
+  total_attributes: number;
+  linked_attributes: number;
+  unlinked_attributes: number;
 }
 
 // API Client
@@ -456,6 +559,395 @@ export const gatewayEdgeApi = {
   getAlarmsWebSocketUrl: (): string => {
     const wsBase = GATEWAY_BASE_URL.replace('http', 'ws');
     return `${wsBase}/ws/alarms`;
+  },
+
+  // ========================================
+  // Asset Framework (PI Asset Framework style)
+  // ========================================
+
+  /**
+   * Get asset framework hierarchy
+   */
+  getAssetHierarchy: async (rootId?: string): Promise<AssetElementHierarchy[]> => {
+    try {
+      const params = rootId ? { root_id: rootId } : {};
+      const response = await axios.get<{ success: boolean; hierarchy: AssetElementHierarchy[]; root_count: number }>(
+        `${API_BASE}/assets/hierarchy`,
+        { params }
+      );
+      return response.data.hierarchy;
+    } catch (error) {
+      console.error('Failed to get asset hierarchy:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get asset framework statistics
+   */
+  getAssetStats: async (): Promise<AssetFrameworkStats> => {
+    try {
+      const response = await axios.get<AssetFrameworkStats & { success: boolean }>(
+        `${API_BASE}/assets/statistics`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get asset stats:', error);
+      return {
+        total_templates: 0,
+        total_elements: 0,
+        root_elements: 0,
+        elements_by_type: {} as Record<ElementType, number>,
+        total_attributes: 0,
+        linked_attributes: 0,
+        unlinked_attributes: 0
+      };
+    }
+  },
+
+  /**
+   * List asset elements with optional filters
+   */
+  listAssetElements: async (params?: {
+    element_type?: ElementType;
+    template_id?: string;
+    parent_id?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ total: number; elements: AssetElement[] }> => {
+    try {
+      const response = await axios.get<{
+        success: boolean;
+        total: number;
+        limit: number;
+        offset: number;
+        elements: AssetElement[];
+      }>(`${API_BASE}/assets/elements`, { params });
+      return { total: response.data.total, elements: response.data.elements };
+    } catch (error) {
+      console.error('Failed to list asset elements:', error);
+      return { total: 0, elements: [] };
+    }
+  },
+
+  /**
+   * Get asset element by ID
+   */
+  getAssetElement: async (elementId: string, includeChildren?: boolean): Promise<AssetElement | null> => {
+    try {
+      const params = includeChildren ? { include_children: true } : {};
+      const response = await axios.get<{ success: boolean; element: AssetElement }>(
+        `${API_BASE}/assets/elements/${elementId}`,
+        { params }
+      );
+      return response.data.element;
+    } catch (error) {
+      console.error('Failed to get asset element:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Get asset element by path
+   */
+  getAssetElementByPath: async (path: string): Promise<AssetElement | null> => {
+    try {
+      const response = await axios.get<{ success: boolean; element: AssetElement }>(
+        `${API_BASE}/assets/elements/by-path/${encodeURIComponent(path)}`
+      );
+      return response.data.element;
+    } catch (error) {
+      console.error('Failed to get asset element by path:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Create a new asset element
+   */
+  createAssetElement: async (element: {
+    name: string;
+    description?: string;
+    element_type: ElementType;
+    template_id?: string;
+    parent_id?: string;
+    icon?: string;
+    color?: string;
+    attributes?: Partial<AssetAttribute>[];
+    metadata?: Record<string, any>;
+  }): Promise<AssetElement | null> => {
+    try {
+      const response = await axios.post<{ success: boolean; message: string; element: AssetElement }>(
+        `${API_BASE}/assets/elements`,
+        element
+      );
+      return response.data.element;
+    } catch (error) {
+      console.error('Failed to create asset element:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Update an asset element
+   */
+  updateAssetElement: async (
+    elementId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      template_id?: string;
+      icon?: string;
+      color?: string;
+      metadata?: Record<string, any>;
+    }
+  ): Promise<AssetElement | null> => {
+    try {
+      const response = await axios.put<{ success: boolean; message: string; element: AssetElement }>(
+        `${API_BASE}/assets/elements/${elementId}`,
+        updates
+      );
+      return response.data.element;
+    } catch (error) {
+      console.error('Failed to update asset element:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Delete an asset element
+   */
+  deleteAssetElement: async (elementId: string, recursive?: boolean): Promise<boolean> => {
+    try {
+      const params = recursive ? { recursive: true } : {};
+      await axios.delete(`${API_BASE}/assets/elements/${elementId}`, { params });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete asset element:', error);
+      return false;
+    }
+  },
+
+  /**
+   * List asset templates
+   */
+  listAssetTemplates: async (elementType?: ElementType): Promise<AssetTemplate[]> => {
+    try {
+      const params = elementType ? { element_type: elementType } : {};
+      const response = await axios.get<{ success: boolean; total: number; templates: AssetTemplate[] }>(
+        `${API_BASE}/assets/templates`,
+        { params }
+      );
+      return response.data.templates;
+    } catch (error) {
+      console.error('Failed to list asset templates:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get asset template by ID
+   */
+  getAssetTemplate: async (templateId: string): Promise<AssetTemplate | null> => {
+    try {
+      const response = await axios.get<{ success: boolean; template: AssetTemplate }>(
+        `${API_BASE}/assets/templates/${templateId}`
+      );
+      return response.data.template;
+    } catch (error) {
+      console.error('Failed to get asset template:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Create a new asset template
+   */
+  createAssetTemplate: async (template: {
+    name: string;
+    description?: string;
+    element_type: ElementType;
+    base_template_id?: string;
+    icon?: string;
+    color?: string;
+    attributes?: AttributeTemplate[];
+    metadata?: Record<string, any>;
+  }): Promise<AssetTemplate | null> => {
+    try {
+      const response = await axios.post<{ success: boolean; message: string; template: AssetTemplate }>(
+        `${API_BASE}/assets/templates`,
+        template
+      );
+      return response.data.template;
+    } catch (error) {
+      console.error('Failed to create asset template:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Delete an asset template
+   */
+  deleteAssetTemplate: async (templateId: string): Promise<boolean> => {
+    try {
+      await axios.delete(`${API_BASE}/assets/templates/${templateId}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to delete asset template:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Build asset hierarchy from tags_config.json
+   */
+  buildAssetHierarchyFromTags: async (): Promise<AssetFrameworkStats> => {
+    try {
+      const response = await axios.post<{
+        success: boolean;
+        message: string;
+        statistics: AssetFrameworkStats;
+      }>(`${API_BASE}/assets/build`);
+      return response.data.statistics;
+    } catch (error) {
+      console.error('Failed to build asset hierarchy:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Save asset framework configuration
+   */
+  saveAssetConfiguration: async (): Promise<boolean> => {
+    try {
+      await axios.post(`${API_BASE}/assets/save`);
+      return true;
+    } catch (error) {
+      console.error('Failed to save asset configuration:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Reload asset framework configuration
+   */
+  reloadAssetConfiguration: async (): Promise<AssetFrameworkStats> => {
+    try {
+      const response = await axios.post<{
+        success: boolean;
+        message: string;
+        statistics: AssetFrameworkStats;
+      }>(`${API_BASE}/assets/reload`);
+      return response.data.statistics;
+    } catch (error) {
+      console.error('Failed to reload asset configuration:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get available tags for linking to attributes
+   */
+  getAvailableTags: async (adapterId?: string, search?: string): Promise<{
+    tags: Array<{
+      tag_id: string;
+      tag_name: string;
+      address: string;
+      adapter_id: string;
+      data_type: string;
+      metadata?: {
+        engineering_units?: string;
+        description?: string;
+      };
+    }>;
+    total: number;
+    adapters: string[];
+  }> => {
+    try {
+      const params: Record<string, string> = {};
+      if (adapterId) params.adapter_id = adapterId;
+      if (search) params.search = search;
+
+      const response = await axios.get(`${API_BASE}/assets/available-tags`, { params });
+      return {
+        tags: response.data.tags,
+        total: response.data.total,
+        adapters: response.data.adapters
+      };
+    } catch (error) {
+      console.error('Failed to get available tags:', error);
+      return { tags: [], total: 0, adapters: [] };
+    }
+  },
+
+  /**
+   * Add attribute (tag link) to element
+   */
+  addAttributeToElement: async (elementId: string, attribute: {
+    name: string;
+    description?: string;
+    data_type?: string;
+    uom?: string;
+    tag_id?: string;
+    tag_address?: string;
+    hi_hi?: number;
+    hi?: number;
+    lo?: number;
+    lo_lo?: number;
+  }): Promise<AssetElement | null> => {
+    try {
+      const response = await axios.post<{
+        success: boolean;
+        message: string;
+        element: AssetElement;
+      }>(`${API_BASE}/assets/elements/${elementId}/attributes`, attribute);
+      return response.data.element;
+    } catch (error) {
+      console.error('Failed to add attribute:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update attribute on element
+   */
+  updateAttribute: async (elementId: string, attributeId: string, attribute: {
+    name: string;
+    description?: string;
+    data_type?: string;
+    uom?: string;
+    tag_id?: string;
+    tag_address?: string;
+    hi_hi?: number;
+    hi?: number;
+    lo?: number;
+    lo_lo?: number;
+  }): Promise<AssetElement | null> => {
+    try {
+      const response = await axios.put<{
+        success: boolean;
+        message: string;
+        element: AssetElement;
+      }>(`${API_BASE}/assets/elements/${elementId}/attributes/${attributeId}`, attribute);
+      return response.data.element;
+    } catch (error) {
+      console.error('Failed to update attribute:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete attribute from element
+   */
+  deleteAttribute: async (elementId: string, attributeId: string): Promise<boolean> => {
+    try {
+      await axios.delete(`${API_BASE}/assets/elements/${elementId}/attributes/${attributeId}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to delete attribute:', error);
+      return false;
+    }
   },
 };
 

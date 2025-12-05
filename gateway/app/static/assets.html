@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiFlow Gateway - Asset Tree</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { color: #667eea; font-size: 28px; margin-bottom: 4px; }
+        .header p { color: #6b7280; font-size: 14px; }
+        .header-actions { display: flex; gap: 12px; }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover { background: #5a67d8; transform: translateY(-1px); }
+        .btn:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #6b7280; }
+        .btn-secondary:hover { background: #4b5563; }
+        .btn-success { background: #10b981; }
+        .btn-success:hover { background: #059669; }
+        .btn-sm { padding: 8px 16px; font-size: 12px; }
+        .stats-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+        .stat-item { text-align: center; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+        .main-content { display: grid; grid-template-columns: 400px 1fr; gap: 24px; }
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .panel-header {
+            background: #f9fafb;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            color: #374151;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-body { padding: 20px; max-height: 600px; overflow-y: auto; }
+        .tree-node {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .tree-node:hover { background: #f3f4f6; }
+        .tree-node.selected { background: #ede9fe; border-left: 3px solid #667eea; }
+        .tree-node .icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .tree-node .name { flex: 1; font-size: 14px; color: #374151; font-weight: 500; }
+        .tree-node .badge { background: #e5e7eb; color: #6b7280; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+        .tree-children { margin-left: 28px; border-left: 2px solid #e5e7eb; padding-left: 12px; }
+        .tree-toggle { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #9ca3af; font-size: 10px; }
+        .element-info { margin-bottom: 24px; }
+        .element-info h3 { font-size: 22px; color: #111827; margin-bottom: 8px; }
+        .element-info p { color: #6b7280; font-size: 14px; }
+        .element-path { background: #f3f4f6; padding: 10px 14px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #4b5563; margin-top: 12px; }
+        .attributes-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .attributes-table th, .attributes-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .attributes-table th { background: #f9fafb; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #6b7280; }
+        .attributes-table tr:hover { background: #f9fafb; }
+        .tag-badge { display: inline-flex; align-items: center; gap: 6px; background: #ede9fe; color: #5b21b6; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-family: monospace; }
+        .type-badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .type-area { background: #dcfce7; color: #166534; }
+        .type-equipment { background: #e0e7ff; color: #3730a3; }
+        .type-equipment_group { background: #fef3c7; color: #92400e; }
+        .type-component { background: #f3e8ff; color: #6b21a8; }
+        .type-plant { background: #dbeafe; color: #1e40af; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; }
+        .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: #374151; }
+        .loading { display: flex; align-items: center; justify-content: center; padding: 40px; }
+        .spinner { width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .alert { padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .nav-link { color: #667eea; text-decoration: none; font-size: 14px; }
+        .nav-link:hover { text-decoration: underline; }
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: white; border-radius: 12px; padding: 24px; width: 500px; max-width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #111827; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px; }
+        .form-input, .form-select { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        .form-input:focus, .form-select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+        .action-buttons { display: flex; gap: 8px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Asset Tree</h1>
+                <p>Organização hierárquica de ativos industriais</p>
+                <a href="/ui/" class="nav-link">Voltar para Dashboard</a>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-success" onclick="buildHierarchy()" id="buildBtn">Construir de Tags</button>
+                <button class="btn" onclick="showCreateModal()">+ Novo Elemento</button>
+                <button class="btn btn-secondary" onclick="loadData()">Atualizar</button>
+            </div>
+        </div>
+
+        <div id="alert" style="display: none;"></div>
+
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-item"><div class="stat-value" id="statElements">-</div><div class="stat-label">Elementos</div></div>
+            <div class="stat-item"><div class="stat-value" id="statTemplates">-</div><div class="stat-label">Templates</div></div>
+            <div class="stat-item"><div class="stat-value" id="statAttributes">-</div><div class="stat-label">Atributos</div></div>
+            <div class="stat-item"><div class="stat-value" id="statLinked">-</div><div class="stat-label">Vinculados</div></div>
+            <div class="stat-item"><div class="stat-value" id="statRoots">-</div><div class="stat-label">Raízes</div></div>
+        </div>
+
+        <div class="main-content">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Hierarquia</span>
+                    <span id="treeCount" class="badge">0 elementos</span>
+                </div>
+                <div class="panel-body" id="treeContainer">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header"><span>Detalhes do Elemento</span></div>
+                <div class="panel-body" id="detailsContainer">
+                    <div class="empty-state">
+                        <h3>Nenhum elemento selecionado</h3>
+                        <p>Clique em um elemento na hierarquia para ver seus detalhes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Element Modal -->
+    <div class="modal" id="createModal">
+        <div class="modal-content">
+            <div class="modal-header">Criar Novo Elemento</div>
+            <div class="form-group">
+                <label class="form-label">Nome *</label>
+                <input type="text" class="form-input" id="elementName" placeholder="Ex: Silo1, Motor2, etc.">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descrição</label>
+                <input type="text" class="form-input" id="elementDescription" placeholder="Descrição do elemento">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tipo *</label>
+                <select class="form-select" id="elementType">
+                    <option value="plant">Planta</option>
+                    <option value="area" selected>Área</option>
+                    <option value="equipment_group">Grupo de Equipamentos</option>
+                    <option value="equipment">Equipamento</option>
+                    <option value="component">Componente</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Elemento Pai (opcional)</label>
+                <select class="form-select" id="elementParent">
+                    <option value="">-- Raiz (sem pai) --</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideCreateModal()">Cancelar</button>
+                <button class="btn btn-success" onclick="createElement()">Criar Elemento</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Attribute Modal -->
+    <div class="modal" id="attrModal">
+        <div class="modal-content">
+            <div class="modal-header">Adicionar Atributo</div>
+            <div class="form-group">
+                <label class="form-label">Nome *</label>
+                <input type="text" class="form-input" id="attrName" placeholder="Ex: Temperatura, Pressão">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descrição</label>
+                <input type="text" class="form-input" id="attrDescription" placeholder="Descrição do atributo">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tipo de Dado</label>
+                <select class="form-select" id="attrDataType">
+                    <option value="double">Double (número decimal)</option>
+                    <option value="int32">Int32 (número inteiro)</option>
+                    <option value="boolean">Boolean (verdadeiro/falso)</option>
+                    <option value="string">String (texto)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Unidade</label>
+                <input type="text" class="form-input" id="attrUom" placeholder="Ex: °C, bar, m³/h">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tag Address (OPC-UA)</label>
+                <input type="text" class="form-input" id="attrTagAddress" placeholder="Ex: ns=2;s=TEAG.Silo1.Temperatura">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideAttrModal()">Cancelar</button>
+                <button class="btn btn-success" onclick="addAttribute()">Adicionar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/assets';
+        let hierarchyData = [];
+        let allElements = [];
+        let selectedElement = null;
+        let expandedNodes = new Set();
+
+        async function loadData() {
+            try {
+                const [hierarchyResponse, stats, elementsResponse] = await Promise.all([
+                    fetch(`${API_BASE}/hierarchy`).then(r => r.json()),
+                    fetch(`${API_BASE}/statistics`).then(r => r.json()),
+                    fetch(`${API_BASE}/elements`).then(r => r.json())
+                ]);
+
+                const hierarchy = hierarchyResponse.hierarchy || [];
+                hierarchyData = Array.isArray(hierarchy) ? hierarchy : [];
+                allElements = elementsResponse.elements || [];
+
+                updateStats(stats);
+                updateParentSelect();
+
+                // Auto-expand first level
+                hierarchyData.forEach(h => expandedNodes.add(h.id));
+                renderTree(hierarchyData);
+
+            } catch (err) {
+                console.error('Error loading data:', err);
+                showAlert('Erro ao carregar dados: ' + err.message, 'error');
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('statElements').textContent = stats.total_elements || 0;
+            document.getElementById('statTemplates').textContent = stats.total_templates || 0;
+            document.getElementById('statAttributes').textContent = stats.total_attributes || 0;
+            document.getElementById('statLinked').textContent = stats.linked_attributes || 0;
+            document.getElementById('statRoots').textContent = stats.root_elements || 0;
+            document.getElementById('treeCount').textContent = `${stats.total_elements || 0} elementos`;
+        }
+
+        function updateParentSelect() {
+            const select = document.getElementById('elementParent');
+            select.innerHTML = '<option value="">-- Raiz (sem pai) --</option>';
+            allElements.forEach(el => {
+                select.innerHTML += `<option value="${el.id}">${el.path || el.name}</option>`;
+            });
+        }
+
+        function renderTree(nodes, container = null) {
+            const target = container || document.getElementById('treeContainer');
+            if (!container) target.innerHTML = '';
+
+            if (!nodes || nodes.length === 0) {
+                target.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Nenhum elemento encontrado</h3>
+                        <p>Clique em "Construir de Tags" ou "Novo Elemento"</p>
+                    </div>`;
+                return;
+            }
+
+            nodes.forEach(node => {
+                const hasChildren = node.children && node.children.length > 0;
+                const isExpanded = expandedNodes.has(node.id);
+                const isSelected = selectedElement && selectedElement.id === node.id;
+                const nodeType = node.type || node.element_type || 'equipment';
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = `tree-node ${isSelected ? 'selected' : ''}`;
+                nodeEl.onclick = (e) => { e.stopPropagation(); selectElement(node); };
+
+                const attrCount = node.attributes_count || node.attributes?.length || 0;
+                nodeEl.innerHTML = `
+                    <span class="tree-toggle" onclick="event.stopPropagation(); toggleNode('${node.id}')">${hasChildren ? (isExpanded ? '▼' : '▶') : ''}</span>
+                    <span class="icon">${getTypeIcon(nodeType)}</span>
+                    <span class="name">${node.name}</span>
+                    <span class="type-badge type-${nodeType}">${getTypeLabel(nodeType)}</span>
+                    ${attrCount ? `<span class="badge">${attrCount} attr</span>` : ''}
+                `;
+                target.appendChild(nodeEl);
+
+                if (hasChildren && isExpanded) {
+                    const childContainer = document.createElement('div');
+                    childContainer.className = 'tree-children';
+                    target.appendChild(childContainer);
+                    renderTree(node.children, childContainer);
+                }
+            });
+        }
+
+        function toggleNode(id) {
+            if (expandedNodes.has(id)) expandedNodes.delete(id);
+            else expandedNodes.add(id);
+            renderTree(hierarchyData);
+        }
+
+        async function selectElement(node) {
+            selectedElement = node;
+            renderTree(hierarchyData);
+
+            try {
+                const response = await fetch(`${API_BASE}/elements/${node.id}?include_children=true`);
+                const data = await response.json();
+                const element = data.element || data;
+                renderDetails(element);
+            } catch (err) {
+                console.error('Error loading element:', err);
+                renderDetails(node);
+            }
+        }
+
+        function renderDetails(element) {
+            const container = document.getElementById('detailsContainer');
+            const nodeType = element.type || element.element_type || 'equipment';
+            const attrs = element.attributes || [];
+
+            const attributesHtml = attrs.length > 0 ? `
+                <table class="attributes-table">
+                    <thead><tr><th>Nome</th><th>Tag Address</th><th>Tipo</th><th>Unidade</th></tr></thead>
+                    <tbody>
+                        ${attrs.map(attr => `
+                            <tr>
+                                <td><strong>${attr.name}</strong></td>
+                                <td><span class="tag-badge">${attr.tag_address || '-'}</span></td>
+                                <td>${attr.data_type || '-'}</td>
+                                <td>${attr.uom || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            ` : '<p style="color: #6b7280; text-align: center; padding: 20px;">Nenhum atributo vinculado</p>';
+
+            container.innerHTML = `
+                <div class="element-info">
+                    <h3>${element.name}</h3>
+                    <p>${element.description || 'Sem descrição'}</p>
+                    <div class="element-path">${element.path || '/'}</div>
+                    <div style="margin-top: 12px;">
+                        <span class="type-badge type-${nodeType}">${getTypeLabel(nodeType)}</span>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-sm" onclick="showAttrModal()">+ Atributo</button>
+                        <button class="btn btn-sm btn-secondary" onclick="deleteElement('${element.id}')">Excluir</button>
+                    </div>
+                </div>
+                <h4 style="margin-bottom: 12px; color: #374151;">Atributos (${attrs.length})</h4>
+                ${attributesHtml}
+            `;
+        }
+
+        async function buildHierarchy() {
+            const btn = document.getElementById('buildBtn');
+            btn.disabled = true;
+            btn.textContent = 'Construindo...';
+
+            try {
+                const response = await fetch(`${API_BASE}/build`, { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(`Hierarquia construída: ${result.statistics.total_elements} elementos, ${result.statistics.total_attributes} atributos`, 'success');
+                    await loadData();
+                } else {
+                    showAlert('Erro ao construir hierarquia', 'error');
+                }
+            } catch (err) {
+                showAlert('Erro: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Construir de Tags';
+            }
+        }
+
+        function showCreateModal() {
+            document.getElementById('createModal').classList.add('show');
+            document.getElementById('elementName').value = '';
+            document.getElementById('elementDescription').value = '';
+        }
+
+        function hideCreateModal() {
+            document.getElementById('createModal').classList.remove('show');
+        }
+
+        async function createElement() {
+            const name = document.getElementById('elementName').value.trim();
+            const description = document.getElementById('elementDescription').value.trim();
+            const elementType = document.getElementById('elementType').value;
+            const parentId = document.getElementById('elementParent').value || null;
+
+            if (!name) {
+                showAlert('Nome é obrigatório', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/elements`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        description: description || `${name} - Criado manualmente`,
+                        element_type: elementType,
+                        parent_id: parentId,
+                        attributes: []
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showAlert(`Elemento "${name}" criado com sucesso!`, 'success');
+                    hideCreateModal();
+                    await loadData();
+                } else {
+                    showAlert(result.detail || 'Erro ao criar elemento', 'error');
+                }
+            } catch (err) {
+                showAlert('Erro: ' + err.message, 'error');
+            }
+        }
+
+        function showAttrModal() {
+            if (!selectedElement) {
+                showAlert('Selecione um elemento primeiro', 'error');
+                return;
+            }
+            document.getElementById('attrModal').classList.add('show');
+            document.getElementById('attrName').value = '';
+            document.getElementById('attrDescription').value = '';
+            document.getElementById('attrUom').value = '';
+            document.getElementById('attrTagAddress').value = '';
+        }
+
+        function hideAttrModal() {
+            document.getElementById('attrModal').classList.remove('show');
+        }
+
+        async function addAttribute() {
+            if (!selectedElement) return;
+
+            const name = document.getElementById('attrName').value.trim();
+            const description = document.getElementById('attrDescription').value.trim();
+            const dataType = document.getElementById('attrDataType').value;
+            const uom = document.getElementById('attrUom').value.trim();
+            const tagAddress = document.getElementById('attrTagAddress').value.trim();
+
+            if (!name) {
+                showAlert('Nome é obrigatório', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/elements/${selectedElement.id}/attributes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        description: description,
+                        data_type: dataType,
+                        uom: uom,
+                        tag_address: tagAddress
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showAlert(`Atributo "${name}" adicionado!`, 'success');
+                    hideAttrModal();
+                    await loadData();
+                    // Re-select element to refresh details
+                    const updated = allElements.find(e => e.id === selectedElement.id);
+                    if (updated) selectElement(updated);
+                } else {
+                    showAlert(result.detail || 'Erro ao adicionar atributo', 'error');
+                }
+            } catch (err) {
+                showAlert('Erro: ' + err.message, 'error');
+            }
+        }
+
+        async function deleteElement(elementId) {
+            if (!confirm('Tem certeza que deseja excluir este elemento?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/elements/${elementId}`, { method: 'DELETE' });
+
+                if (response.ok) {
+                    showAlert('Elemento excluído!', 'success');
+                    selectedElement = null;
+                    await loadData();
+                    document.getElementById('detailsContainer').innerHTML = `
+                        <div class="empty-state">
+                            <h3>Nenhum elemento selecionado</h3>
+                            <p>Clique em um elemento na hierarquia para ver seus detalhes</p>
+                        </div>
+                    `;
+                } else {
+                    const result = await response.json();
+                    showAlert(result.detail || 'Erro ao excluir', 'error');
+                }
+            } catch (err) {
+                showAlert('Erro: ' + err.message, 'error');
+            }
+        }
+
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = message;
+            alert.style.display = 'flex';
+            setTimeout(() => { alert.style.display = 'none'; }, 5000);
+        }
+
+        function getTypeIcon(type) {
+            return { plant: '🏭', area: '🏢', equipment_group: '📦', equipment: '⚙️', component: '🔧' }[type] || '📁';
+        }
+
+        function getTypeLabel(type) {
+            return { plant: 'Planta', area: 'Área', equipment_group: 'Grupo', equipment: 'Equipamento', component: 'Componente' }[type] || type;
+        }
+
+        // Close modals on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideCreateModal();
+                hideAttrModal();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

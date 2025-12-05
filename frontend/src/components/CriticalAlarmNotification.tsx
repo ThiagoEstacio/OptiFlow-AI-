@@ -1,5 +1,5 @@
 /**
- * PDCA #5: Critical Alarm Notification System
+ * PDCA #5: Critical Alarm Notification System (No MUI Version)
  *
  * Features:
  * - Screen flash (red overlay) for Critical/High alarms
@@ -8,24 +8,7 @@
  * - Target MTTR <30 seconds
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  Button,
-  Stack,
-  Fade,
-  IconButton,
-  Tooltip,
-  alpha
-} from '@mui/material';
-import {
-  NotificationsActive,
-  VolumeOff,
-  VolumeUp,
-  Close,
-  Warning
-} from '@mui/icons-material';
+import { AlertTriangle, Bell, Volume2, VolumeX, X } from 'lucide-react';
 
 interface CriticalAlarm {
   id: string;
@@ -175,147 +158,97 @@ export const CriticalAlarmNotification: React.FC<CriticalAlarmNotificationProps>
   if (!alarm) return null;
 
   const isCritical = alarm.severity === 'CRITICAL' || alarm.severity === 'HIGH';
-  const severityColor = alarm.severity === 'CRITICAL' ? '#dc2626' : '#f59e0b';
+  const bgColor = alarm.severity === 'CRITICAL' ? 'bg-red-600' : 'bg-amber-500';
+  const borderColor = alarm.severity === 'CRITICAL' ? 'border-red-700' : 'border-amber-600';
 
   return (
     <>
       {/* Screen Flash Overlay */}
       {isCritical && flashVisible && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: alpha(severityColor, 0.15),
-            pointerEvents: 'none',
-            zIndex: 9998,
-            animation: 'pulse 0.5s ease-in-out infinite'
+        <div
+          className="fixed inset-0 pointer-events-none z-[9998] animate-pulse"
+          style={{
+            backgroundColor: alarm.severity === 'CRITICAL'
+              ? 'rgba(220, 38, 38, 0.15)'
+              : 'rgba(245, 158, 11, 0.15)'
           }}
         />
       )}
 
       {/* Notification Card */}
-      <Fade in={true}>
-        <Paper
-          elevation={24}
-          sx={{
-            position: 'fixed',
-            top: 20,
-            right: 20,
-            maxWidth: 400,
-            zIndex: 9999,
-            backgroundColor: alpha(severityColor, 0.95),
-            color: 'white',
-            backdropFilter: 'blur(10px)',
-            border: `2px solid ${severityColor}`,
-            boxShadow: `0 0 20px ${alpha(severityColor, 0.5)}`,
-            animation: isCritical ? 'shake 0.5s ease-in-out infinite' : 'none'
-          }}
-        >
-          <Box sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              {/* Header */}
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <NotificationsActive
-                    sx={{
-                      fontSize: 28,
-                      animation: 'ring 1s ease-in-out infinite'
-                    }}
-                  />
-                  <Typography variant="h6" fontWeight="bold">
-                    {alarm.severity} ALARM
-                  </Typography>
-                </Stack>
-                <Stack direction="row" spacing={0.5}>
-                  <Tooltip title={soundEnabled ? 'Mute sound' : 'Enable sound'}>
-                    <IconButton
-                      size="small"
-                      onClick={toggleSound}
-                      sx={{ color: 'white' }}
-                    >
-                      {soundEnabled ? <VolumeUp /> : <VolumeOff />}
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Close">
-                    <IconButton
-                      size="small"
-                      onClick={handleClose}
-                      sx={{ color: 'white' }}
-                    >
-                      <Close />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Stack>
-
-              {/* Tag Name */}
-              {alarm.tag_name && (
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Warning />
-                  <Typography variant="subtitle1" fontWeight="600">
-                    {alarm.tag_name}
-                  </Typography>
-                </Stack>
-              )}
-
-              {/* Message */}
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                {alarm.message}
-              </Typography>
-
-              {/* Value Details */}
-              <Box
-                sx={{
-                  p: 1.5,
-                  backgroundColor: alpha('#000', 0.2),
-                  borderRadius: 1
-                }}
+      <div
+        className={`fixed top-5 right-5 max-w-md z-[9999] ${bgColor} text-white rounded-lg shadow-2xl border-2 ${borderColor} backdrop-blur-sm ${isCritical ? 'animate-shake' : ''}`}
+        style={{
+          boxShadow: alarm.severity === 'CRITICAL'
+            ? '0 0 20px rgba(220, 38, 38, 0.5)'
+            : '0 0 20px rgba(245, 158, 11, 0.5)'
+        }}
+      >
+        <div className="p-4">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Bell className="w-7 h-7 animate-ring" />
+              <span className="text-lg font-bold">{alarm.severity} ALARM</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleSound}
+                className="p-1.5 rounded hover:bg-white/20 transition-colors"
+                title={soundEnabled ? 'Mute sound' : 'Enable sound'}
               >
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography variant="body2">Current Value:</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    {alarm.value.toFixed(2)}
-                  </Typography>
-                </Stack>
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography variant="body2">Limit:</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    {alarm.limit.toFixed(2)}
-                  </Typography>
-                </Stack>
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography variant="body2">Time:</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    {new Date(alarm.occurred_at).toLocaleTimeString()}
-                  </Typography>
-                </Stack>
-              </Box>
-
-              {/* Acknowledge Button */}
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={handleAcknowledge}
-                sx={{
-                  backgroundColor: 'white',
-                  color: severityColor,
-                  fontWeight: 'bold',
-                  fontSize: '1rem',
-                  py: 1.5,
-                  '&:hover': {
-                    backgroundColor: alpha('#fff', 0.9)
-                  }
-                }}
+                {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={handleClose}
+                className="p-1.5 rounded hover:bg-white/20 transition-colors"
+                title="Close"
               >
-                ACKNOWLEDGE ALARM
-              </Button>
-            </Stack>
-          </Box>
-        </Paper>
-      </Fade>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Tag Name */}
+          {alarm.tag_name && (
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-5 h-5" />
+              <span className="font-semibold">{alarm.tag_name}</span>
+            </div>
+          )}
+
+          {/* Message */}
+          <p className="font-medium mb-3">{alarm.message}</p>
+
+          {/* Value Details */}
+          <div className="bg-black/20 rounded p-3 mb-4 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span>Current Value:</span>
+              <span className="font-bold">{alarm.value.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Limit:</span>
+              <span className="font-bold">{alarm.limit.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Time:</span>
+              <span className="font-bold">{new Date(alarm.occurred_at).toLocaleTimeString()}</span>
+            </div>
+          </div>
+
+          {/* Acknowledge Button */}
+          <button
+            onClick={handleAcknowledge}
+            className={`w-full py-3 rounded font-bold text-base transition-colors ${
+              alarm.severity === 'CRITICAL'
+                ? 'bg-white text-red-600 hover:bg-red-50'
+                : 'bg-white text-amber-600 hover:bg-amber-50'
+            }`}
+          >
+            ACKNOWLEDGE ALARM
+          </button>
+        </div>
+      </div>
 
       {/* CSS Animations */}
       <style>
@@ -325,15 +258,16 @@ export const CriticalAlarmNotification: React.FC<CriticalAlarmNotificationProps>
             25% { transform: translateX(-5px); }
             75% { transform: translateX(5px); }
           }
+          .animate-shake {
+            animation: shake 0.5s ease-in-out infinite;
+          }
 
           @keyframes ring {
             0%, 100% { transform: rotate(-15deg); }
             50% { transform: rotate(15deg); }
           }
-
-          @keyframes pulse {
-            0%, 100% { opacity: 0.15; }
-            50% { opacity: 0.3; }
+          .animate-ring {
+            animation: ring 1s ease-in-out infinite;
           }
         `}
       </style>

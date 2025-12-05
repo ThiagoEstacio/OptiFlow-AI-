@@ -36,7 +36,15 @@ export const useCriticalAlarms = (): UseCriticalAlarmsReturn => {
   const fetchCriticalAlarms = useCallback(async () => {
     try {
       const response = await apiClient.get('/api/v1/alarms/active');
-      const alarms = response.data || [];
+      // Handle different response formats - could be array directly or {alarms: [...]} or {items: [...]}
+      let alarms: CriticalAlarm[] = [];
+      if (Array.isArray(response.data)) {
+        alarms = response.data;
+      } else if (response.data?.alarms && Array.isArray(response.data.alarms)) {
+        alarms = response.data.alarms;
+      } else if (response.data?.items && Array.isArray(response.data.items)) {
+        alarms = response.data.items;
+      }
 
       // Filter for CRITICAL and HIGH severity only
       const criticalAlarms = alarms.filter(

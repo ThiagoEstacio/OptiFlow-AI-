@@ -1,0 +1,167 @@
+{
+  "timestamp": "2025-12-04T12:37:48.512283",
+  "suites": [
+    {
+      "name": "Backend API Tests",
+      "total": 10,
+      "passed": 7,
+      "failed": 3,
+      "duration_ms": 320.35017013549805,
+      "tests": [
+        {
+          "name": "Health Check",
+          "passed": true,
+          "duration_ms": 27.614593505859375,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "Dashboard Stats",
+          "passed": true,
+          "duration_ms": 33.565521240234375,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "Tags List",
+          "passed": false,
+          "duration_ms": 32.370567321777344,
+          "error": "",
+          "details": {
+            "count": 0
+          }
+        },
+        {
+          "name": "Quality SPC Analysis",
+          "passed": true,
+          "duration_ms": 32.53602981567383,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "Maintenance KPIs",
+          "passed": true,
+          "duration_ms": 37.189483642578125,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "Executive Summary",
+          "passed": true,
+          "duration_ms": 35.764217376708984,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "Alarms List",
+          "passed": true,
+          "duration_ms": 28.44095230102539,
+          "error": "",
+          "details": {
+            "status": 404
+          }
+        },
+        {
+          "name": "Energy Dashboard",
+          "passed": true,
+          "duration_ms": 30.18927574157715,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "ML Anomaly Detection",
+          "passed": false,
+          "duration_ms": 32.5930118560791,
+          "error": "",
+          "details": {
+            "status": 404
+          }
+        },
+        {
+          "name": "PDCA Cycles",
+          "passed": false,
+          "duration_ms": 30.086517333984375,
+          "error": "",
+          "details": {
+            "status": 404
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gateway Integration Tests",
+      "total": 4,
+      "passed": 3,
+      "failed": 1,
+      "duration_ms": 103.07621955871582,
+      "tests": [
+        {
+          "name": "Gateway Health",
+          "passed": true,
+          "duration_ms": 23.71954917907715,
+          "error": "",
+          "details": {
+            "status": 200
+          }
+        },
+        {
+          "name": "Gateway Adapters",
+          "passed": true,
+          "duration_ms": 24.0933895111084,
+          "error": "",
+          "details": {
+            "adapters": 5
+          }
+        },
+        {
+          "name": "Gateway Tags",
+          "passed": true,
+          "duration_ms": 26.327848434448242,
+          "error": "",
+          "details": {
+            "tags": 2
+          }
+        },
+        {
+          "name": "Gateway Realtime Values",
+          "passed": false,
+          "duration_ms": 28.93543243408203,
+          "error": "",
+          "details": {
+            "status": 404
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integration Tests",
+      "total": 1,
+      "passed": 0,
+      "failed": 1,
+      "duration_ms": 28.315305709838867,
+      "tests": [
+        {
+          "name": "Data Pipeline Status",
+          "passed": false,
+          "duration_ms": 28.315305709838867,
+          "error": "",
+          "details": {
+            "status": 404
+          }
+        }
+      ]
+    }
+  ]
+}

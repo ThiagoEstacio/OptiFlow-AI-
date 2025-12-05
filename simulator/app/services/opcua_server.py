@@ -151,6 +151,157 @@ class OPCUASimulatorServer:
                 await node.set_writable(False)  # READ-ONLY
                 self.tag_nodes[sim_tag] = node
 
+            # ===================================================================
+            # ELETROCENTRO - Sistema Elétrico Completo
+            # ===================================================================
+            eletro_folder = await plant_folder.add_folder(namespace_idx, "ELETROCENTRO")
+
+            # --- Transformador Principal ---
+            tr_folder = await eletro_folder.add_folder(namespace_idx, "TR01")
+            tr_tags = [
+                "TR01_LOAD_PCT_PV", "TR01_POWER_KW_PV", "TR01_POWER_KVAR_PV", "TR01_POWER_KVA_PV",
+                "TR01_PF_PV", "TR01_CURRENT_PRI_A_PV", "TR01_CURRENT_SEC_A_PV",
+                "TR01_TEMP_WINDING_C_PV", "TR01_TEMP_OIL_C_PV",
+                "TR01_ALARM_OVERTEMP_PV", "TR01_ALARM_OVERLOAD_PV"
+            ]
+            for tag in tr_tags:
+                opc_name = tag.replace("TR01_", "")
+                node = await tr_folder.add_variable(namespace_idx, opc_name, 0.0)
+                await node.set_writable(False)
+                self.tag_nodes[tag] = node
+
+            # --- CCM (Centro de Controle de Motores) ---
+            ccm_folder = await eletro_folder.add_folder(namespace_idx, "CCM01")
+
+            # Equipamentos do CCM (correias, shiploader, elevador, ventiladores)
+            ccm_equipment = ["CORR01", "CORR02", "CORR03", "SLD01", "SLD02", "ELV01", "VNT01", "VNT02"]
+
+            for equip in ccm_equipment:
+                eq_folder = await ccm_folder.add_folder(namespace_idx, equip)
+
+                # Tags básicas de cada gaveta
+                basic_tags = [
+                    f"{equip}_RUNNING_PV", f"{equip}_BREAKER_PV", f"{equip}_CONTACTOR_PV",
+                    f"{equip}_CURRENT_A_PV", f"{equip}_POWER_KW_PV", f"{equip}_POWER_KVAR_PV"
+                ]
+
+                for tag in basic_tags:
+                    opc_name = tag.replace(f"{equip}_", "")
+                    node = await eq_folder.add_variable(namespace_idx, opc_name, 0.0)
+                    await node.set_writable(False)
+                    self.tag_nodes[tag] = node
+
+                # Softstart tags (para CORR01, CORR02, CORR03, ELV01)
+                if equip in ["CORR01", "CORR02", "CORR03", "ELV01"]:
+                    ss_folder = await eq_folder.add_folder(namespace_idx, "SOFTSTART")
+                    ss_tags = [
+                        f"{equip}_SS_STATE_PV", f"{equip}_SS_VOLTAGE_PCT_PV",
+                        f"{equip}_SS_MOTOR_TEMP_PCT_PV", f"{equip}_SS_FAULT_PV"
+                    ]
+                    for tag in ss_tags:
+                        opc_name = tag.replace(f"{equip}_SS_", "")
+                        node = await ss_folder.add_variable(namespace_idx, opc_name, 0.0)
+                        await node.set_writable(False)
+                        self.tag_nodes[tag] = node
+
+                # VFD tags (para SLD01, SLD02)
+                if equip in ["SLD01", "SLD02"]:
+                    vfd_folder = await eq_folder.add_folder(namespace_idx, "VFD")
+                    vfd_tags = [
+                        f"{equip}_VFD_STATE_PV", f"{equip}_VFD_FREQ_HZ_PV", f"{equip}_VFD_VOLTAGE_V_PV",
+                        f"{equip}_VFD_SPEED_RPM_PV", f"{equip}_VFD_TORQUE_PCT_PV",
+                        f"{equip}_VFD_DC_BUS_V_PV", f"{equip}_VFD_TEMP_C_PV",
+                        f"{equip}_VFD_ENERGY_KWH_PV", f"{equip}_VFD_FAULT_PV"
+                    ]
+                    for tag in vfd_tags:
+                        opc_name = tag.replace(f"{equip}_VFD_", "")
+                        node = await vfd_folder.add_variable(namespace_idx, opc_name, 0.0)
+                        await node.set_writable(False)
+                        self.tag_nodes[tag] = node
+
+                # Relé de proteção
+                rel_folder = await eq_folder.add_folder(namespace_idx, "RELAY")
+                rel_tags = [
+                    f"{equip}_REL_STATE_PV", f"{equip}_REL_THERMAL_PCT_PV",
+                    f"{equip}_REL_FN50_PV", f"{equip}_REL_FN51_PV",
+                    f"{equip}_REL_FN49_PV", f"{equip}_REL_TRIP_PV"
+                ]
+                for tag in rel_tags:
+                    opc_name = tag.replace(f"{equip}_REL_", "")
+                    node = await rel_folder.add_variable(namespace_idx, opc_name, 0.0)
+                    await node.set_writable(False)
+                    self.tag_nodes[tag] = node
+
+                # Multi-medidor da gaveta
+                pm_folder = await eq_folder.add_folder(namespace_idx, "POWERMETER")
+                pm_tags = [
+                    f"{equip}_PM_V_AB_PV", f"{equip}_PM_V_BC_PV", f"{equip}_PM_V_CA_PV",
+                    f"{equip}_PM_I_A_PV", f"{equip}_PM_I_B_PV", f"{equip}_PM_I_C_PV",
+                    f"{equip}_PM_FREQ_HZ_PV", f"{equip}_PM_PF_PV", f"{equip}_PM_KWH_PV"
+                ]
+                for tag in pm_tags:
+                    opc_name = tag.replace(f"{equip}_PM_", "")
+                    node = await pm_folder.add_variable(namespace_idx, opc_name, 0.0)
+                    await node.set_writable(False)
+                    self.tag_nodes[tag] = node
+
+            # --- Multi-Medidores de Setor ---
+            meters_folder = await eletro_folder.add_folder(namespace_idx, "POWERMETERS")
+
+            sector_meters = ["PM_GERAL", "PM_CCM01", "PM_ILUM"]
+            for meter in sector_meters:
+                m_folder = await meters_folder.add_folder(namespace_idx, meter)
+                meter_tags = [
+                    f"{meter}_V_AB_PV", f"{meter}_V_BC_PV", f"{meter}_V_CA_PV",
+                    f"{meter}_V_AN_PV", f"{meter}_V_BN_PV", f"{meter}_V_CN_PV",
+                    f"{meter}_I_A_PV", f"{meter}_I_B_PV", f"{meter}_I_C_PV", f"{meter}_I_N_PV",
+                    f"{meter}_KW_PV", f"{meter}_KVAR_PV", f"{meter}_KVA_PV", f"{meter}_PF_PV",
+                    f"{meter}_FREQ_HZ_PV", f"{meter}_KWH_PV", f"{meter}_KVARH_PV",
+                    f"{meter}_THD_V_PCT_PV", f"{meter}_THD_I_PCT_PV",
+                    f"{meter}_DEMAND_KW_PV", f"{meter}_DEMAND_MAX_KW_PV"
+                ]
+                for tag in meter_tags:
+                    opc_name = tag.replace(f"{meter}_", "")
+                    node = await m_folder.add_variable(namespace_idx, opc_name, 0.0)
+                    await node.set_writable(False)
+                    self.tag_nodes[tag] = node
+
+            # --- Banco de Capacitores ---
+            bc_folder = await eletro_folder.add_folder(namespace_idx, "BC01")
+            bc_tags = [
+                "BC01_STAGES_ON_PV", "BC01_STAGES_TOTAL_PV", "BC01_KVAR_PV",
+                "BC01_CURRENT_A_PV", "BC01_TEMP_C_PV"
+            ]
+            for tag in bc_tags:
+                opc_name = tag.replace("BC01_", "")
+                node = await bc_folder.add_variable(namespace_idx, opc_name, 0.0)
+                await node.set_writable(False)
+                self.tag_nodes[tag] = node
+
+            # --- Relé Geral ---
+            rel_geral_folder = await eletro_folder.add_folder(namespace_idx, "REL_GERAL")
+            rel_geral_tags = [
+                "REL_GERAL_STATE_PV", "REL_GERAL_THERMAL_PCT_PV",
+                "REL_GERAL_TRIP_PV", "REL_GERAL_TRIP_COUNT_PV"
+            ]
+            for tag in rel_geral_tags:
+                opc_name = tag.replace("REL_GERAL_", "")
+                node = await rel_geral_folder.add_variable(namespace_idx, opc_name, 0.0)
+                await node.set_writable(False)
+                self.tag_nodes[tag] = node
+
+            # --- Totalizadores do Eletrocentro ---
+            totals_folder = await eletro_folder.add_folder(namespace_idx, "TOTALS")
+            total_tags = [
+                "ELETRO_TOTAL_KWH_PV", "ELETRO_TOTAL_KVARH_PV",
+                "ELETRO_PEAK_DEMAND_KW_PV", "ELETRO_TIME_S_PV"
+            ]
+            for tag in total_tags:
+                opc_name = tag.replace("ELETRO_", "")
+                node = await totals_folder.add_variable(namespace_idx, opc_name, 0.0)
+                await node.set_writable(False)
+                self.tag_nodes[tag] = node
+
             # Inicia servidor
             async with self.server:
                 logger.info(f"✅ OPC-UA Server started at {self.endpoint}")

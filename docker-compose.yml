@@ -69,7 +69,7 @@ services:
       timeout: 3s
       retries: 5
 
-  # RabbitMQ Message Broker
+  # RabbitMQ Message Broker (with MQTT plugin)
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: optiflow-rabbitmq
@@ -77,13 +77,18 @@ services:
       RABBITMQ_DEFAULT_USER: optiflow
       RABBITMQ_DEFAULT_PASS: optiflow_password
       RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_PLUGINS: rabbitmq_management rabbitmq_mqtt
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
+      - "1883:1883"   # MQTT port for Node-RED and IoT devices
     networks:
       - it-network
+    command: >
+      bash -c "rabbitmq-plugins enable --offline rabbitmq_mqtt &&
+               rabbitmq-server"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -732,6 +737,39 @@ services:
       - node-exporter
       - cadvisor
 
+  # ========================================
+  # Node-RED (Protocol Validation & Testing)
+  # ========================================
+  # Used for validating industrial protocol communication (READ-ONLY)
+  # Pre-installed: Siemens S7, Rockwell EtherNet/IP, MQTT, OPC-UA, Modbus
+  nodered:
+    build:
+      context: ./nodered
+      dockerfile: Dockerfile
+    container_name: optiflow-nodered
+    environment:
+      - TZ=America/Sao_Paulo
+    ports:
+      - "1880:1880"
+      - "4841:4840"    # OPC-UA Server (Node-RED simulator) - Use 4841 to avoid conflict with opcua-server
+      - "5020:502"     # Modbus TCP Server (Node-RED simulator) - Use 5020 to avoid conflict with modbus-simulator
+    volumes:
+      - nodered_data:/data
+      - ./nodered/settings.js:/data/settings.js:ro
+    networks:
+      - ot-network   # Access to PLCs (Siemens, Rockwell, Modbus)
+      - it-network   # Access to MQTT broker, Kafka, InfluxDB
+    depends_on:
+      - rabbitmq
+      - influxdb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O /dev/null http://127.0.0.1:1880/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   # Grafana (Dashboards)
   grafana:
     image: grafana/grafana:latest
@@ -781,3 +819,4 @@ volumes:
   kafka_1_data:  # PDCA #15: Multi-broker volumes
   kafka_2_data:
   kafka_3_data:
+  nodered_data:  # Node-RED flows and configurations

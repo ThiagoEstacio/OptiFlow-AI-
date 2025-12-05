@@ -142,13 +142,48 @@ export const ProfessionalRealtime: React.FC = () => {
 
         setAdapters(adaptersResponse.data);
 
-        // Find key metrics by tag name
-        const getTagValue = (name: string) => realtimeTags[name]?.value || 0;
+        // Find key metrics by tag name (supports partial matching and virtual: prefix)
+        const getTagValue = (name: string): number => {
+          // Direct match first
+          if (realtimeTags[name]) return Number(realtimeTags[name].value) || 0;
 
-        const pumpFlow = getTagValue('Pump 1 Flow');
-        const pumpTemp = getTagValue('Pump 1 Temperature');
-        const tankLevel = getTagValue('Tank 1 Level');
-        const totalPower = getTagValue('Total Power');
+          // Try with virtual prefix patterns
+          const virtualPatterns = [
+            `virtual:OPC-UA:${name}`,
+            `virtual:MODBUS:${name}`,
+            `virtual:PROFINET:${name}`,
+            `virtual:ETHERNET-IP:${name}`
+          ];
+          for (const pattern of virtualPatterns) {
+            if (realtimeTags[pattern]) return Number(realtimeTags[pattern].value) || 0;
+          }
+
+          // Search by partial match (contains)
+          const matchingKey = Object.keys(realtimeTags).find(key =>
+            key.includes(name) || key.endsWith(name)
+          );
+          if (matchingKey) return Number(realtimeTags[matchingKey].value) || 0;
+
+          return 0;
+        };
+
+        // Use real tags from Node-RED Grain Terminal Simulator
+        // Flow from conveyors (CORR01, CORR02, CORR03)
+        const conveyorFlow = getTagValue('CORR01_FLOW_TPH_PV') +
+                            getTagValue('CORR02_FLOW_TPH_PV') +
+                            getTagValue('CORR03_FLOW_TPH_PV');
+        // Temperature from conveyor motors
+        const avgTemp = (getTagValue('CORR01_MOTOR_TEMP_C_PV') +
+                        getTagValue('CORR02_MOTOR_TEMP_C_PV') +
+                        getTagValue('CORR03_MOTOR_TEMP_C_PV')) / 3;
+        // Elevator flow as tank level proxy
+        const elevatorFlow = getTagValue('ELV01_FLOW_TPH_PV');
+        // Total power from all equipment
+        const totalPower = getTagValue('CORR01_POWER_KW_PV') +
+                          getTagValue('CORR02_POWER_KW_PV') +
+                          getTagValue('CORR03_POWER_KW_PV') +
+                          getTagValue('ELV01_POWER_KW_PV') +
+                          getTagValue('SLD01_POWER_KW_PV');
 
         // Store previous values for trend
         setPrevValues({
@@ -158,20 +193,20 @@ export const ProfessionalRealtime: React.FC = () => {
           power: metrics.power
         });
 
-        // Update metrics
+        // Update metrics with real values from Grain Terminal Simulator
         setMetrics({
-          flow: pumpFlow,
-          temperature: pumpTemp / 10,
-          tankLevel: tankLevel,
-          power: totalPower
+          flow: conveyorFlow,        // Total conveyor flow (ton/h)
+          temperature: avgTemp,       // Average motor temperature (°C)
+          tankLevel: elevatorFlow,    // Elevator throughput (ton/h)
+          power: totalPower           // Total power consumption (kW)
         });
 
-        // Update chart with flow data
+        // Update chart with total conveyor flow data
         const timestamp = new Date();
         setChartData(prev => {
           const newPoint = {
             time: timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            value: pumpFlow
+            value: conveyorFlow
           };
           const updated = [...prev, newPoint];
           return updated.slice(-20);
@@ -387,50 +422,50 @@ export const ProfessionalRealtime: React.FC = () => {
           </Grid>
         </Paper>
 
-        {/* Key Metrics - Gauges */}
+        {/* Key Metrics - Gauges - Grain Terminal */}
         <Typography variant="h6" fontWeight={600} mb={2}>
-          Key Process Metrics
+          Grain Terminal - Process Metrics
         </Typography>
         <Grid container spacing={3} mb={3}>
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Pump 1 Flow"
+              title="Conveyor Flow"
               value={metrics.flow}
               min={0}
-              max={200}
-              unit="L/min"
-              thresholds={{ low: 80, medium: 120, high: 160 }}
+              max={1500}
+              unit="ton/h"
+              thresholds={{ low: 500, medium: 900, high: 1200 }}
               trend={metrics.flow > prevValues.flow ? 'up' : metrics.flow < prevValues.flow ? 'down' : 'neutral'}
-              trendValue="150 L/min target"
-              subtitle="Production rate"
+              trendValue="CORR01+CORR02+CORR03"
+              subtitle="Total belt throughput"
               size="medium"
             />
           </Grid>
 
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Pump Temperature"
+              title="Motor Temperature"
               value={metrics.temperature}
               min={0}
               max={100}
               unit="°C"
               thresholds={{ low: 40, medium: 60, high: 80 }}
               trend={metrics.temperature > prevValues.temperature ? 'up' : metrics.temperature < prevValues.temperature ? 'down' : 'neutral'}
-              subtitle="Pump 1 Motor"
+              subtitle="Average conveyor motors"
               size="medium"
             />
           </Grid>
 
           <Grid xs={12} sm={6} md={3}>
             <GaugeWidget
-              title="Tank 1 Level"
+              title="Elevator Flow"
               value={metrics.tankLevel}
               min={0}
-              max={100}
-              unit="%"
-              thresholds={{ low: 30, medium: 60, high: 85 }}
+              max={500}
+              unit="ton/h"
+              thresholds={{ low: 150, medium: 300, high: 400 }}
               trend={metrics.tankLevel > prevValues.tankLevel ? 'up' : metrics.tankLevel < prevValues.tankLevel ? 'down' : 'neutral'}
-              subtitle="Storage capacity"
+              subtitle="ELV01 throughput"
               size="medium"
             />
           </Grid>
@@ -440,12 +475,12 @@ export const ProfessionalRealtime: React.FC = () => {
               title="Total Power"
               value={metrics.power}
               min={0}
-              max={1000}
+              max={500}
               unit="kW"
-              thresholds={{ low: 400, medium: 600, high: 800 }}
+              thresholds={{ low: 150, medium: 300, high: 400 }}
               trend={metrics.power > prevValues.power ? 'up' : metrics.power < prevValues.power ? 'down' : 'neutral'}
-              trendValue="System consumption"
-              subtitle="Plant power"
+              trendValue="All equipment"
+              subtitle="Plant consumption"
               size="medium"
             />
           </Grid>
@@ -455,8 +490,8 @@ export const ProfessionalRealtime: React.FC = () => {
         <Grid container spacing={3}>
           <Grid xs={12}>
             <ChartWidget
-              title="Flow Rate Trend"
-              subtitle="Real-time data from Gateway Edge"
+              title="Conveyor Flow Trend"
+              subtitle="Real-time data from Node-RED Grain Terminal Simulator"
               data={chartData}
               type="line"
               dataKey="value"

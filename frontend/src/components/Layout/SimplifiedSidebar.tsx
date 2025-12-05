@@ -39,6 +39,7 @@ import {
   WifiOff,
   X,
   Menu,
+  Network,
 } from 'lucide-react';
 
 interface NavItem {
@@ -157,6 +158,11 @@ export const SimplifiedSidebar: React.FC = () => {
       label: 'Alarmes',
       icon: <Bell className="w-5 h-5" />,
       badge: activeAlarmsCount > 0 ? activeAlarmsCount : undefined,
+    },
+    {
+      path: '/assets',
+      label: 'Asset Tree',
+      icon: <Network className="w-5 h-5" />,
     },
   ];
 

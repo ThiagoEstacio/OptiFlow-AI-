@@ -38,6 +38,14 @@ from app.services.influxdb import influxdb_service
 from app.services.circuit_breaker import CircuitBreaker
 from app.services.persistent_buffer import PersistentBuffer
 
+# === SPRINT 1: Quality Gates (CORR-004) ===
+try:
+    from app.services.quality_gate import get_quality_gate, evaluate_data_quality
+    QUALITY_GATE_AVAILABLE = True
+except ImportError:
+    QUALITY_GATE_AVAILABLE = False
+    logging.warning("Quality gate service not available")
+
 # Redis for deduplication
 try:
     import redis.asyncio as aioredis
@@ -80,6 +88,13 @@ consumer_dlq_messages_total = Counter(
     'consumer_dlq_messages_total',
     'Total number of messages sent to DLQ',
     ['reason']  # write_failed, processing_error
+)
+
+# === SPRINT 1: Quality Gate Metrics (CORR-004) ===
+consumer_quality_gate_total = Counter(
+    'consumer_quality_gate_total',
+    'Total messages evaluated by quality gate',
+    ['action']  # pass, flag, block
 )
 
 
@@ -375,12 +390,40 @@ class TimeSeriesConsumer:
         - Buffer is automatically flushed to InfluxDB
         - Data is recovered in order (FIFO)
 
+        === SPRINT 1: Quality Gates (CORR-004) ===
+        Before writing, data is evaluated by quality gates which can:
+        - PASS: Allow data through
+        - FLAG: Allow but mark with warning
+        - BLOCK: Reject the data point
+
         Args:
             batch: List of tag data dictionaries
 
         Returns:
             True if write succeeded (or buffered successfully), False if failed
         """
+        # === SPRINT 1: Apply Quality Gates (CORR-004) ===
+        if QUALITY_GATE_AVAILABLE:
+            quality_gate = get_quality_gate()
+            passed_batch, blocked_batch, summary = quality_gate.evaluate_batch(batch)
+
+            # Update Prometheus metrics
+            consumer_quality_gate_total.labels(action='pass').inc(summary['passed'])
+            consumer_quality_gate_total.labels(action='flag').inc(summary['flagged'])
+            consumer_quality_gate_total.labels(action='block').inc(summary['blocked'])
+
+            # Send blocked messages to DLQ
+            if blocked_batch:
+                logger.warning(f"🚫 Quality gate blocked {len(blocked_batch)} messages")
+                await self._send_to_dlq(blocked_batch, reason="quality_gate_blocked")
+
+            # Continue with only passed messages
+            batch = passed_batch
+
+            if not batch:
+                logger.info("📊 All messages blocked by quality gate, nothing to write")
+                return True  # Nothing to write, but not a failure
+
         # === SPRINT 1: Check for circuit state transition and trigger flush ===
         current_state = self._influxdb_circuit_breaker.state.value
         if self._previous_circuit_state == "open" and current_state == "closed":

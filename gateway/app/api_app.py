@@ -58,6 +58,27 @@ try:
 except ImportError:
     alarms_routes = None  # Alarm routes optional
 
+try:
+    from app.api.routes import data_ingest
+except ImportError:
+    data_ingest = None  # Data ingestion routes optional
+
+try:
+    from app.api.routes import communication
+except ImportError:
+    communication = None  # Communication monitoring routes optional (CORR-003)
+
+try:
+    from app.api.routes import asset_framework
+except ImportError:
+    asset_framework = None  # Asset Framework routes optional
+
+try:
+    from app.services.asset_framework import init_asset_framework, get_asset_framework
+except ImportError:
+    init_asset_framework = None
+    get_asset_framework = None
+
 # DEPRECATED - Moved to Backend:
 # - tags_advanced (Tag CRUD) -> Backend: /api/v1/tags
 # - tags_automation (Alarms, Events, Actions) -> Backend: /api/v1/alarms, /api/v1/events
@@ -137,6 +158,35 @@ if config_sync:
 if alarms_routes:
     app.include_router(alarms_routes.router, prefix="/api/alarms", tags=["alarms"])
     logger.info("✅ Alarm routes mounted at /api/alarms")
+
+# Data Ingestion Routes (for Node-RED, external SCADA, etc.)
+if data_ingest:
+    app.include_router(data_ingest.router, prefix="/api/v1/data", tags=["data-ingest"])
+    logger.info("✅ Data ingestion routes mounted at /api/v1/data")
+
+# Communication Monitoring Routes (CORR-003)
+if communication:
+    app.include_router(communication.router, prefix="/api/communication", tags=["communication"])
+    logger.info("✅ Communication monitoring routes mounted at /api/communication")
+
+# Asset Framework Routes (PI Asset Framework-style)
+if asset_framework:
+    app.include_router(asset_framework.router, prefix="/api/assets", tags=["asset-framework"])
+    logger.info("✅ Asset Framework routes mounted at /api/assets")
+
+
+# Startup event to initialize Asset Framework
+@app.on_event("startup")
+async def startup_asset_framework():
+    """Initialize Asset Framework on startup"""
+    if init_asset_framework:
+        try:
+            config_dir = str(Path(__file__).parent.parent / "config")
+            af = await init_asset_framework(config_dir)
+            stats = af.get_statistics()
+            logger.info(f"✅ Asset Framework initialized: {stats['total_elements']} elements, {stats['total_templates']} templates")
+        except Exception as e:
+            logger.error(f"⚠️ Failed to initialize Asset Framework: {e}")
 
 # Mount static files for UI
 static_path = Path(__file__).parent / "static"

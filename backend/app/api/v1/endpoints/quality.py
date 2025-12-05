@@ -18,6 +18,13 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.services.pareto_analyzer import ParetoAnalyzer
 
+# === SPRINT 1: Quality Gate (CORR-004) ===
+try:
+    from app.services.quality_gate import get_quality_gate
+    QUALITY_GATE_AVAILABLE = True
+except ImportError:
+    QUALITY_GATE_AVAILABLE = False
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -319,3 +326,122 @@ async def get_quality_tools_info(
             "tools_integrated": ["pareto", "spc", "pattern_analysis"],
         },
     }
+
+
+# === SPRINT 1: Quality Gate Endpoints (CORR-004) ===
+
+@router.get("/gate/stats")
+async def get_quality_gate_statistics(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Get Quality Gate statistics.
+
+    CORR-004: Shows how many data points have been:
+    - Passed: Allowed through the quality gate
+    - Flagged: Allowed but with quality warnings
+    - Blocked: Rejected due to bad quality
+
+    Quality gates ensure data integrity by filtering out invalid data
+    before it is stored in the time-series database.
+    """
+    if not QUALITY_GATE_AVAILABLE:
+        return {
+            "available": False,
+            "message": "Quality gate service not available"
+        }
+
+    try:
+        quality_gate = get_quality_gate()
+        stats = quality_gate.get_statistics()
+
+        return {
+            "available": True,
+            **stats
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting quality gate stats: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get quality gate statistics: {str(e)}"
+        )
+
+
+@router.post("/gate/config")
+async def configure_quality_gate(
+    strict_mode: Optional[bool] = Query(default=None, description="Enable strict mode (blocks bad quality)"),
+    enabled: Optional[bool] = Query(default=None, description="Enable/disable quality gates"),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Configure Quality Gate behavior.
+
+    CORR-004: Allows operators to adjust quality gate behavior:
+    - strict_mode: If True, blocks bad quality data; if False, only flags
+    - enabled: Enable or disable quality gates entirely
+    """
+    if not QUALITY_GATE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Quality gate service not available"
+        )
+
+    try:
+        quality_gate = get_quality_gate()
+
+        if strict_mode is not None:
+            quality_gate.set_strict_mode(strict_mode)
+
+        if enabled is not None:
+            quality_gate.config.enabled = enabled
+            logger.info(f"Quality gate {'enabled' if enabled else 'disabled'}")
+
+        return {
+            "success": True,
+            "config": {
+                "strict_mode": quality_gate.config.strict_mode,
+                "enabled": quality_gate.config.enabled,
+                "action_on_bad": quality_gate.config.action_on_bad.value,
+                "action_on_comm_loss": quality_gate.config.action_on_comm_loss.value,
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error configuring quality gate: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to configure quality gate: {str(e)}"
+        )
+
+
+@router.post("/gate/reset")
+async def reset_quality_gate_stats(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Reset Quality Gate statistics.
+
+    Clears accumulated statistics but keeps configuration intact.
+    """
+    if not QUALITY_GATE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Quality gate service not available"
+        )
+
+    try:
+        quality_gate = get_quality_gate()
+        quality_gate.reset_statistics()
+
+        return {
+            "success": True,
+            "message": "Quality gate statistics reset"
+        }
+
+    except Exception as e:
+        logger.error(f"Error resetting quality gate stats: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reset quality gate statistics: {str(e)}"
+        )

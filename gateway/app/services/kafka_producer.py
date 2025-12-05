@@ -39,6 +39,14 @@ except ImportError:
     DATA_QUALITY_AVAILABLE = False
     logging.warning("Data quality validation not available")
 
+# === SPRINT 1: Communication Monitor (CORR-003) ===
+try:
+    from app.services.communication_monitor import get_communication_monitor, annotate_data_point
+    COMM_MONITOR_AVAILABLE = True
+except ImportError:
+    COMM_MONITOR_AVAILABLE = False
+    logging.warning("Communication monitor not available")
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,6 +176,32 @@ class KafkaProducerService:
         start_time = time.time()
 
         try:
+            # === SPRINT 1: Communication monitoring (CORR-003) ===
+            # Annotate each message with communication status to distinguish
+            # between real zero values and communication loss
+            if COMM_MONITOR_AVAILABLE:
+                comm_annotated = []
+                for msg in messages:
+                    tag_id = msg.get("tag_id") or msg.get("tag_name") or msg.get("name")
+                    adapter_id = msg.get("adapter_id") or msg.get("source") or "unknown"
+                    value = msg.get("value")
+                    quality = msg.get("quality", "Good")
+
+                    # Get communication annotations
+                    comm_info = annotate_data_point(
+                        tag_id=tag_id,
+                        adapter_id=adapter_id,
+                        value=value,
+                        quality=quality
+                    )
+
+                    # Merge communication info into message
+                    annotated_msg = {**msg, **comm_info}
+                    comm_annotated.append(annotated_msg)
+
+                messages = comm_annotated
+                logger.debug(f"📡 Communication annotated {len(messages)} messages")
+
             # === SPRINT 1: Validate data quality ===
             if validate_quality and DATA_QUALITY_AVAILABLE:
                 validated_messages = validate_data_quality(messages)

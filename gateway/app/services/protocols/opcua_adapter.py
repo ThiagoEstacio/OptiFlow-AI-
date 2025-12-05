@@ -71,6 +71,9 @@ class OPCUAAdapter(BaseProtocolAdapter):
         # Cache for realtime API access (last received values from subscription)
         self.last_values: Dict[str, Dict[str, Any]] = {}  # {address: {value, quality, timestamp}}
 
+        # ALL discovered tags (for UI/browsing) - includes unmanaged tags
+        self._discovered_tags: List[Dict[str, Any]] = []
+
         # Connection settings
         self.endpoint = f"opc.tcp://{config.host}:{config.port}"
         self.username = config.extra_config.get('username')
@@ -104,14 +107,15 @@ class OPCUAAdapter(BaseProtocolAdapter):
             namespaces = await self.client.get_namespace_array()
             logger.info(f"✅ Connected to OPC UA server - Namespaces: {len(namespaces)}")
 
-            # Load tags from tags_config.json (Point Builder concept)
-            # Only tags in config will be historized
-            await self._load_managed_tags()
+            # Discover ALL tags from OPC-UA server (for UI/realtime API)
+            # This populates self._discovered_tags for browsing/UI purposes
+            logger.info("🔍 Starting auto-discovery of OPC-UA tags...")
+            await self._discover_tags()
 
-            # If still no tags, fall back to auto-discovery
-            if not self.config.tags:
-                logger.info("🔍 No managed tags found - starting auto-discovery...")
-                await self._discover_tags()
+            # Load MANAGED tags from tags_config.json
+            # ONLY managed tags go to Kafka → Backend → Frontend
+            # This is a key architectural premise - Gateway controls which tags are published
+            await self._load_managed_tags()
 
             # Create subscription
             await self._create_subscription()
@@ -349,11 +353,15 @@ class OPCUAAdapter(BaseProtocolAdapter):
 
     async def _load_managed_tags(self):
         """
-        Load tags from tags_config.json (Point Builder concept)
+        Load MANAGED tags from tags_config.json
 
-        Only tags explicitly configured in tags_config.json will be historized.
-        This follows the PI System pattern where tags must be created in Point Builder
-        before they can be archived.
+        ARCHITECTURAL PREMISE:
+        - Tags are DISCOVERED by Gateway via protocol (auto-discovery)
+        - Only MANAGED tags (listed in tags_config.json) go to Kafka → Backend → Frontend
+        - Gateway is the SINGLE SOURCE OF TRUTH for tags
+
+        This function loads only tags that are explicitly configured for this adapter.
+        Discovered tags are stored in self._discovered_tags for UI/browsing.
         """
         import json
         from pathlib import Path
@@ -362,45 +370,60 @@ class OPCUAAdapter(BaseProtocolAdapter):
             config_path = Path("/app/config/tags_config.json")
 
             if not config_path.exists():
-                logger.warning("⚠️  tags_config.json not found - no managed tags to load")
+                logger.warning("📋 tags_config.json not found - no managed tags will be published to Kafka")
+                self.config.tags = []
                 return
 
             with open(config_path, 'r') as f:
                 config_data = json.load(f)
 
-            all_tags = config_data.get("tags", [])
-
-            # Filter tags for this adapter
-            adapter_tags = [
-                t for t in all_tags
-                if t.get("adapter_id") == self.adapter_id or t.get("protocol_type") == "opcua"
-            ]
-
-            if not adapter_tags:
-                logger.info(f"📋 No managed tags found for adapter {self.adapter_id}")
+            all_config_tags = config_data.get("tags", [])
+            if not all_config_tags:
+                logger.warning("📋 No tags in tags_config.json - no managed tags will be published to Kafka")
+                self.config.tags = []
                 return
 
-            # Convert to adapter config format
+            # Filter tags for THIS adapter
             managed_tags = []
-            for tag in adapter_tags:
+            for tag in all_config_tags:
+                # Check if tag belongs to this adapter
+                tag_adapter = tag.get('adapter_id')
+                if tag_adapter and tag_adapter != self.adapter_id:
+                    continue  # Skip tags for other adapters
+
+                # Check if tag is enabled
+                if not tag.get('enabled', True):
+                    continue
+
+                # Validate required fields
+                if not tag.get('address'):
+                    logger.warning(f"⚠️  Skipping tag without address: {tag.get('tag_name', 'unknown')}")
+                    continue
+
                 managed_tags.append({
-                    'tag_id': tag.get('tag_id'),  # Use the configured tag_id!
-                    'name': tag.get('tag_name') or tag.get('name'),
-                    'tag_name': tag.get('tag_name') or tag.get('name'),
+                    'name': tag.get('tag_name', tag.get('name', '')),
+                    'tag_name': tag.get('tag_name', tag.get('name', '')),
+                    'tag_id': tag.get('tag_id'),
                     'address': tag.get('address'),
-                    'data_type': tag.get('data_type', 'double')
+                    'data_type': tag.get('data_type', 'double'),
+                    'alarm': tag.get('alarm'),
+                    'historian': tag.get('historian'),
+                    'metadata': tag.get('metadata')
                 })
 
+            # Set managed tags for subscription/Kafka publishing
+            self.config.tags = managed_tags
+
             if managed_tags:
-                self.config.tags = managed_tags
-                logger.info(f"✅ Loaded {len(managed_tags)} managed tags from tags_config.json")
+                logger.info(f"📋 Loaded {len(managed_tags)} MANAGED tags for Kafka publishing")
                 for tag in managed_tags:
-                    logger.debug(f"   📌 {tag['tag_id']}: {tag['name']} @ {tag['address']}")
+                    logger.debug(f"  ✓ Managed: {tag['tag_name']} (id={tag['tag_id']})")
             else:
-                logger.info("📋 No managed tags found in tags_config.json")
+                logger.warning(f"⚠️  No managed tags found for adapter '{self.adapter_id}' - nothing will be published to Kafka")
 
         except Exception as e:
             logger.error(f"❌ Error loading managed tags: {e}", exc_info=True)
+            self.config.tags = []
 
     async def _discover_tags(self):
         """
@@ -499,10 +522,10 @@ class OPCUAAdapter(BaseProtocolAdapter):
 
             logger.info(f"✅ Discovery complete - Found {len(discovered_tags)} readable tags")
 
-            # Update config with discovered tags
+            # Store discovered tags for UI/browsing (does NOT affect Kafka publishing)
             if discovered_tags:
-                self.config.tags = discovered_tags
-                logger.info(f"📊 Configured {len(discovered_tags)} tags for monitoring")
+                self._discovered_tags = discovered_tags
+                logger.info(f"📊 Discovered {len(discovered_tags)} tags (for UI/browsing)")
             else:
                 logger.warning("⚠️  No tags discovered - check OPC UA server configuration")
 
@@ -529,6 +552,10 @@ class OPCUAAdapter(BaseProtocolAdapter):
         This bypasses the subscription cache and reads values directly.
         Used by the Gateway UI to show real-time values for all tags.
 
+        NOTE: This reads ALL discovered tags, not just managed ones.
+        Managed tags (in tags_config.json) go to Kafka.
+        Discovered tags are shown in the Gateway UI for browsing.
+
         Returns:
             List of dicts with tag info and current values
         """
@@ -538,14 +565,14 @@ class OPCUAAdapter(BaseProtocolAdapter):
 
         results = []
 
-        # Use tags from config (which includes discovered tags)
-        tags_to_read = self.config.tags if hasattr(self.config, 'tags') else []
+        # Use discovered tags (all tags from OPC-UA server)
+        tags_to_read = self._discovered_tags if self._discovered_tags else []
 
         if not tags_to_read:
-            logger.warning("No tags configured/discovered to read")
+            logger.warning("No tags discovered to read")
             return []
 
-        logger.info(f"📖 Reading {len(tags_to_read)} tags directly from OPC-UA server...")
+        logger.info(f"📖 Reading {len(tags_to_read)} discovered tags from OPC-UA server...")
 
         for tag in tags_to_read:
             tag_addr = tag.get('address', '')
