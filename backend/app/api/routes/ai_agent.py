@@ -20,6 +20,7 @@ import json
 import re
 import logging
 import asyncio
+import time
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -186,7 +187,7 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
         return None
 
     query_lower = query.lower()
-    logger.error(f"🔍 find_best_matching_tag called with query: {query}")
+    logger.debug(f"🔍 find_best_matching_tag called with query: {query}")
 
     # Identify measurement type from query - EXPANDED for all industrial variables
     measurement_type = None
@@ -225,7 +226,7 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
     elif 'frequência' in query_lower or 'frequencia' in query_lower or 'frequency' in query_lower or 'freq' in query_lower:
         measurement_type = 'freq'
 
-    logger.error(f"🎯 Detected measurement_type: {measurement_type}")
+    logger.debug(f"🎯 Detected measurement_type: {measurement_type}")
 
     # Extract keywords from query (remove common words AND measurement type words)
     measurement_words = [
@@ -246,7 +247,7 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
         if clean_word and clean_word not in ['qual', 'a', 'o', 'do', 'da', 'de', 'valor', 'atual', 'é', 'está'] and clean_word not in measurement_words:
             keywords.append(clean_word)
 
-    logger.error(f"🔑 Extracted keywords: {keywords}")
+    logger.debug(f"🔑 Extracted keywords: {keywords}")
 
     # Try exact match first - EXPANDED to also check keywords for exact matches
     for tag in available_tags:
@@ -255,18 +256,18 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
 
         # Check if query mentions the exact tag name or ID
         if tag_name in query_lower or tag_id in query_lower:
-            logger.error(f"✅ EXACT MATCH: tag_name='{tag_name}' or tag_id='{tag_id}' found in query")
+            logger.debug(f"✅ EXACT MATCH: tag_name='{tag_name}' or tag_id='{tag_id}' found in query")
             return tag
 
         # Also check if any extracted keyword IS the exact tag name (e.g., "por_carregamento")
         for keyword in keywords:
             if keyword == tag_name or keyword == tag_id:
-                logger.error(f"✅ KEYWORD EXACT MATCH: keyword='{keyword}' matches tag")
+                logger.debug(f"✅ KEYWORD EXACT MATCH: keyword='{keyword}' matches tag")
                 return tag
 
     # PRIORITY: If measurement type identified, find tag with matching type
     if measurement_type:
-        logger.error(f"🔍 Searching for tags with measurement_type={measurement_type}")
+        logger.debug(f"🔍 Searching for tags with measurement_type={measurement_type}")
         # First, find all tags that match any keyword (fuzzy matching)
         matching_tags = []
         for tag in available_tags:
@@ -283,7 +284,7 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
                 # Simple fuzzy: check if most characters of keyword appear in order in tag name
                 if keyword in tag_name or keyword in tag_id:
                     matching_tags.append(tag)
-                    logger.error(f"  ➕ Tag matched keyword '{keyword}' (exact): {tag.get('name')}")
+                    logger.debug(f"  ➕ Tag matched keyword '{keyword}' (exact): {tag.get('name')}")
                     break
                 # Fuzzy match for partial names like "el01" -> "elev01"
                 elif len(keyword) >= 3 and all(char in tag_name_clean for char in keyword_parts):
@@ -296,23 +297,23 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
                         idx = new_idx + 1
                     else:
                         matching_tags.append(tag)
-                        logger.error(f"  ➕ Tag matched keyword '{keyword}' (fuzzy): {tag.get('name')}")
+                        logger.debug(f"  ➕ Tag matched keyword '{keyword}' (fuzzy): {tag.get('name')}")
                         break
 
-        logger.error(f"📋 Found {len(matching_tags)} tags matching keywords")
+        logger.debug(f"📋 Found {len(matching_tags)} tags matching keywords")
 
         # Then, filter by measurement type
         for tag in matching_tags:
             tag_name = tag.get('name', '').lower()
-            logger.error(f"  🔎 Checking tag '{tag.get('name')}': Does '{tag_name}' contain '{measurement_type}'? {measurement_type in tag_name}")
+            logger.debug(f"  🔎 Checking tag '{tag.get('name')}': Does '{tag_name}' contain '{measurement_type}'? {measurement_type in tag_name}")
             if measurement_type in tag_name:
-                logger.error(f"✅ MATCHED TAG with measurement_type={measurement_type}: {tag.get('name')}")
+                logger.debug(f"✅ MATCHED TAG with measurement_type={measurement_type}: {tag.get('name')}")
                 return tag
 
-        logger.error(f"⚠️ No tags found with measurement_type={measurement_type} in {len(matching_tags)} candidates")
+        logger.debug(f"⚠️ No tags found with measurement_type={measurement_type} in {len(matching_tags)} candidates")
 
     # Try partial match with fuzzy logic (e.g., "el01" matches "ELEV01_TEMP_C_PV")
-    logger.error(f"⚠️ No measurement type detected, trying fuzzy fallback with keywords: {keywords}")
+    logger.debug(f"⚠️ No measurement type detected, trying fuzzy fallback with keywords: {keywords}")
     for keyword in keywords:
         for tag in available_tags:
             tag_name = tag.get('name', '').lower()
@@ -320,7 +321,7 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
 
             # Exact match first
             if keyword in tag_name or keyword in tag_id:
-                logger.error(f"✅ FALLBACK exact match: keyword '{keyword}' in tag '{tag.get('name')}'")
+                logger.debug(f"✅ FALLBACK exact match: keyword '{keyword}' in tag '{tag.get('name')}'")
                 return tag
 
             # Fuzzy match as fallback
@@ -337,11 +338,11 @@ def find_best_matching_tag(query: str, available_tags: List[Dict]) -> Optional[D
                             break
                         idx = new_idx + 1
                     else:
-                        logger.error(f"✅ FALLBACK fuzzy match: keyword '{keyword}' → tag '{tag.get('name')}'")
+                        logger.debug(f"✅ FALLBACK fuzzy match: keyword '{keyword}' → tag '{tag.get('name')}'")
                         return tag
 
     # Last resort: return first tag
-    logger.error(f"⚠️ No matches found, returning first tag: {available_tags[0].get('name') if available_tags else 'None'}")
+    logger.debug(f"⚠️ No matches found, returning first tag: {available_tags[0].get('name') if available_tags else 'None'}")
     return available_tags[0]
 
 
@@ -392,12 +393,12 @@ async def pre_execute_tools_from_query(
         tag_name = None
         unit = ''
 
-        logger.error(f"🔍 PRE-EXECUTE: Query='{query}', available_tags count={len(available_tags) if available_tags else 0}")
+        logger.debug(f"🔍 PRE-EXECUTE: Query='{query}', available_tags count={len(available_tags) if available_tags else 0}")
 
         if available_tags:
-            logger.error("🔍 Calling find_best_matching_tag...")
+            logger.debug("🔍 Calling find_best_matching_tag...")
             matched_tag = find_best_matching_tag(query, available_tags)
-            logger.error(f"🔍 PRE-EXECUTE: Matched tag={matched_tag}")
+            logger.debug(f"🔍 PRE-EXECUTE: Matched tag={matched_tag}")
 
         if matched_tag:
             tag_id = matched_tag.get('id')
@@ -529,7 +530,7 @@ async def pre_execute_tools_from_query(
     is_frequency_query = any(pattern in query_lower for pattern in frequency_patterns)
 
     if any(pattern in query_lower for pattern in alarm_patterns) and not is_frequency_query:
-        logger.error(f"🚨 PRE-EXECUTE: Alarm query detected: '{query}'")
+        logger.info(f"🚨 PRE-EXECUTE: Alarm query detected: '{query}'")
 
         # Detect severity filter from query
         severity = None
@@ -557,7 +558,7 @@ async def pre_execute_tools_from_query(
                     if len(clean_word) >= 3:  # Minimum 3 characters
                         equipment_keywords.append(clean_word)
 
-            logger.error(f"🔍 Equipment keywords extracted: {equipment_keywords}")
+            logger.debug(f"🔍 Equipment keywords extracted: {equipment_keywords}")
 
             # Try to match equipment name with tags
             if equipment_keywords:
@@ -568,7 +569,7 @@ async def pre_execute_tools_from_query(
                     prefix = tag_name.split('_')[0] if '_' in tag_name else tag_name
                     equipment_names.add(prefix.lower())
 
-                logger.error(f"🏭 Available equipment: {sorted(equipment_names)}")
+                logger.debug(f"🏭 Available equipment: {sorted(equipment_names)}")
 
                 # Fuzzy match equipment name
                 for keyword in equipment_keywords:
@@ -594,7 +595,7 @@ async def pre_execute_tools_from_query(
 
                             if match:
                                 equipment_filter = eq_name.upper()
-                                logger.error(f"✅ Matched equipment: '{keyword}' → {equipment_filter}")
+                                logger.debug(f"✅ Matched equipment: '{keyword}' → {equipment_filter}")
                                 break
                     if equipment_filter:
                         break
@@ -603,9 +604,9 @@ async def pre_execute_tools_from_query(
         alarm_args = {"limit": 100}
         if severity:
             alarm_args["severity"] = severity
-            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(severity={severity}, limit=100)")
+            logger.info(f"🎯 PRE-EXECUTING: get_active_alarms(severity={severity}, limit=100)")
         else:
-            logger.error(f"🎯 PRE-EXECUTING: get_active_alarms(limit=100)")
+            logger.info(f"🎯 PRE-EXECUTING: get_active_alarms(limit=100)")
 
         result = await toolkit.execute_tool("get_active_alarms", alarm_args)
 
@@ -615,7 +616,7 @@ async def pre_execute_tools_from_query(
 
             # Filter by equipment if detected
             if equipment_filter and alarms:
-                logger.error(f"🔍 Filtering alarms by equipment: {equipment_filter}")
+                logger.debug(f"🔍 Filtering alarms by equipment: {equipment_filter}")
                 filtered_alarms = []
                 for alarm in alarms:
                     alarm_name = alarm.get('alarm_name', '').upper()
@@ -624,7 +625,7 @@ async def pre_execute_tools_from_query(
                     if equipment_filter in alarm_name or (tag_id and equipment_filter in str(tag_id).upper()):
                         filtered_alarms.append(alarm)
 
-                logger.error(f"📊 Filtered {len(filtered_alarms)} alarms from {len(alarms)} total")
+                logger.debug(f"📊 Filtered {len(filtered_alarms)} alarms from {len(alarms)} total")
                 alarms = filtered_alarms
                 total_active = len(filtered_alarms)  # Update count for filtered results
 
@@ -671,10 +672,10 @@ async def pre_execute_tools_from_query(
     # Pattern 5: Alarm frequency analysis queries (NEW)
     # Uses is_frequency_query already defined above
 
-    logger.error(f"🔍 DEBUG: is_frequency_query={is_frequency_query}, alarm_pattern_match={any(pattern in query_lower for pattern in alarm_patterns)}")
+    logger.debug(f"🔍 DEBUG: is_frequency_query={is_frequency_query}, alarm_pattern_match={any(pattern in query_lower for pattern in alarm_patterns)}")
 
     if is_frequency_query and any(pattern in query_lower for pattern in alarm_patterns):
-        logger.error(f"📊 PRE-EXECUTE: Alarm frequency analysis detected: '{query}'")
+        logger.debug(f"📊 PRE-EXECUTE: Alarm frequency analysis detected: '{query}'")
 
         # Detect specific alarm name filter from query (e.g., "LOAD PCT", "LOAD_PCT")
         alarm_name_filter = None
@@ -702,7 +703,7 @@ async def pre_execute_tools_from_query(
                 # Clean up trailing words like "NOS" or "NAS"
                 alarm_name_filter = re.sub(r'[_]?(NOS|NAS|NO|NA|EM|DURANTE)$', '', alarm_name_filter)
                 if len(alarm_name_filter) >= 4:  # Minimum 4 chars for valid alarm name
-                    logger.error(f"🔍 Detected alarm name filter: {alarm_name_filter} (pattern: {pattern[:30]}...)")
+                    logger.debug(f"🔍 Detected alarm name filter: {alarm_name_filter} (pattern: {pattern[:30]}...)")
                     break
                 else:
                     alarm_name_filter = None
@@ -728,13 +729,13 @@ async def pre_execute_tools_from_query(
                         break
 
         # Execute frequency analysis
-        logger.error(f"🔧 PRE-EXECUTE: Calling analyze_alarm_frequency with equipment_filter={equipment_filter}, alarm_name_filter={alarm_name_filter}")
+        logger.debug(f"🔧 PRE-EXECUTE: Calling analyze_alarm_frequency with equipment_filter={equipment_filter}, alarm_name_filter={alarm_name_filter}")
         result = await toolkit.execute_tool("analyze_alarm_frequency", {
             "duration": "7d",  # Use 7 days for better frequency analysis
             "equipment_filter": equipment_filter,
             "alarm_name_filter": alarm_name_filter
         })
-        logger.error(f"🔧 PRE-EXECUTE: analyze_alarm_frequency result.success={result.success}, has_data={bool(result.data)}, data_type={type(result.data)}, data_keys={result.data.keys() if isinstance(result.data, dict) else 'N/A'}")
+        logger.debug(f"🔧 PRE-EXECUTE: analyze_alarm_frequency result.success={result.success}, has_data={bool(result.data)}, data_type={type(result.data)}, data_keys={result.data.keys() if isinstance(result.data, dict) else 'N/A'}")
 
         if result.success and result.data:
             freq_data = result.data
@@ -790,7 +791,7 @@ async def pre_execute_tools_from_query(
     histogram_patterns = ['histograma', 'histogram', 'distribuição', 'distribution', 'faixa', 'range']
 
     if any(pattern in query_lower for pattern in histogram_patterns):
-        logger.error(f"📊 PRE-EXECUTE: Histogram query detected: '{query}'")
+        logger.debug(f"📊 PRE-EXECUTE: Histogram query detected: '{query}'")
 
         # Try to find tag from query
         matched_tag = find_best_matching_tag(query, available_tags) if available_tags else None
@@ -830,7 +831,7 @@ async def pre_execute_tools_from_query(
     trend_patterns = ['tendência', 'trend', 'crescendo', 'diminuindo', 'increasing', 'decreasing', 'subindo', 'caindo']
 
     if any(pattern in query_lower for pattern in trend_patterns):
-        logger.error(f"📈 PRE-EXECUTE: Trend analysis detected: '{query}'")
+        logger.debug(f"📈 PRE-EXECUTE: Trend analysis detected: '{query}'")
 
         matched_tag = find_best_matching_tag(query, available_tags) if available_tags else None
 
@@ -864,7 +865,7 @@ async def pre_execute_tools_from_query(
     insight_patterns = ['insight', 'insights', 'análise', 'analysis', 'recomendação', 'recommendation', 'resumo', 'summary']
 
     if any(pattern in query_lower for pattern in insight_patterns):
-        logger.error(f"💡 PRE-EXECUTE: Insights generation detected: '{query}'")
+        logger.debug(f"💡 PRE-EXECUTE: Insights generation detected: '{query}'")
 
         # Determine scope
         scope = "system"
@@ -1166,7 +1167,7 @@ async def pre_execute_tools_from_query(
     ]
 
     if any(pattern in query_lower for pattern in asset_patterns):
-        logger.error(f"🏭 PRE-EXECUTE: Asset Tree query detected: '{query}'")
+        logger.debug(f"🏭 PRE-EXECUTE: Asset Tree query detected: '{query}'")
 
         # Check if asking for statistics/count
         if any(word in query_lower for word in ['quanto', 'quantos', 'total', 'count', 'estatística']):
@@ -1205,7 +1206,7 @@ async def pre_execute_tools_from_query(
 
         # Check if searching for specific equipment
         elif any(word in query_lower for word in ['encontre', 'busque', 'procure', 'find', 'search', 'onde']):
-            logger.error(f"🔍 PRE-EXECUTE: Asset search pattern detected")
+            logger.debug(f"🔍 PRE-EXECUTE: Asset search pattern detected")
             # Extract search query
             search_keywords = []
             for word in query_lower.split():
@@ -1214,10 +1215,10 @@ async def pre_execute_tools_from_query(
                         search_keywords.append(word)
 
             search_query = ' '.join(search_keywords[:3]) if search_keywords else 'silo'
-            logger.error(f"🔍 PRE-EXECUTE: Searching assets with query='{search_query}'")
+            logger.debug(f"🔍 PRE-EXECUTE: Searching assets with query='{search_query}'")
 
             result = await toolkit.execute_tool("search_assets", {"query": search_query, "limit": 10})
-            logger.error(f"🔍 PRE-EXECUTE: Search result success={result.success}, data={result.data}")
+            logger.debug(f"🔍 PRE-EXECUTE: Search result success={result.success}, data={result.data}")
 
             if result.success and result.data:
                 # Handle both list and dict responses
@@ -1288,7 +1289,7 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
 
     async def _ollama_request():
         """Inner function for circuit breaker wrapping"""
-        logger.error(f"🔍 DEBUG: Calling Ollama at {OLLAMA_BASE_URL}")
+        logger.debug(f"🔍 DEBUG: Calling Ollama at {OLLAMA_BASE_URL}")
         # Increased timeout to 120s for first model load
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
@@ -1302,7 +1303,7 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
                         "temperature": 0.05,  # Even more deterministic = faster
                         "top_p": 0.8,        # More focused sampling
                         "top_k": 20,         # Limit token choices = faster
-                        "num_predict": 500,  # Allow longer responses for detailed analysis
+                        "num_predict": 800,  # Increased for complete responses (was 500)
                         "num_ctx": 4096,     # Increased context for system prompt + data + response
                         "num_gpu": 99,       # Force full GPU usage
                         "num_thread": 4,     # Optimize CPU threads
@@ -1311,7 +1312,7 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
                     }
                 }
             )
-            logger.error(f"🔍 DEBUG: Ollama response received - Status: {response.status_code}")
+            logger.debug(f"🔍 DEBUG: Ollama response received - Status: {response.status_code}")
 
             if response.status_code == 200:
                 result = response.json()
@@ -1353,8 +1354,8 @@ async def call_ollama_stream(messages: List[Dict[str, str]]) -> AsyncGenerator[s
                         "temperature": 0.05,
                         "top_p": 0.8,
                         "top_k": 20,
-                        "num_predict": 300,
-                        "num_ctx": 1536,
+                        "num_predict": 600,  # Increased for complete streaming responses (was 300)
+                        "num_ctx": 4096,     # Match non-streaming context (was 1536)
                         "num_gpu": 99,
                         "num_thread": 4,
                         "repeat_penalty": 1.1,
@@ -1891,6 +1892,9 @@ async def chat_with_agent(
     - Detect anomalies
     - Provide PCM/PCO expert analysis
     """
+    # Performance tracking
+    start_time = time.time()
+
     # Check cache first (5-minute TTL, ~8s → <100ms for cached queries)
     from app.core.ai_cache import get_ai_cache
     cache = get_ai_cache()
@@ -1901,12 +1905,13 @@ async def chat_with_agent(
     )
 
     if cached_response:
-        logger.info(f"⚡ Returning cached response for: '{chat_request.message[:50]}...'")
+        latency_ms = (time.time() - start_time) * 1000
+        logger.info(f"⚡ CACHE HIT [{latency_ms:.0f}ms]: '{chat_request.message[:50]}...'")
         return DashboardAgentResponse(**cached_response)
 
     # DEBUG: Log entrada do endpoint
-    logger.error(f"🔍 DEBUG: Starting chat request: '{chat_request.message}'")
-    logger.error(f"🔍 DEBUG: Available tags: {len(chat_request.available_tags or [])}")
+    logger.debug(f"🔍 DEBUG: Starting chat request: '{chat_request.message}'")
+    logger.debug(f"🔍 DEBUG: Available tags: {len(chat_request.available_tags or [])}")
 
     # Initialize services
     data_service = DataService(db)
@@ -1989,7 +1994,7 @@ async def chat_with_agent(
     tag_name_pattern = re.search(r'\b([a-zA-Z][a-zA-Z0-9_]*(?:_[a-zA-Z0-9]+)+)\b', chat_request.message)
     has_tag_name_in_query = tag_name_pattern is not None
     if has_tag_name_in_query:
-        logger.error(f"🏷️ DEBUG: Detected tag name pattern in query: {tag_name_pattern.group(1)}")
+        logger.debug(f"🏷️ Detected tag name pattern in query: {tag_name_pattern.group(1)}")
 
     use_fallback = any(keyword in message_lower for keyword in simple_keywords)
     use_fallback_realtime = any(keyword in message_lower for keyword in realtime_value_keywords) or has_tag_name_in_query
@@ -2031,20 +2036,20 @@ async def chat_with_agent(
     use_qwen_discovery = any(keyword in message_lower for keyword in discovery_keywords)
 
     # DEBUG: Log classification
-    logger.error(f"🔍 DEBUG: Query classification - fallback_realtime={use_fallback_realtime}, complex={use_qwen}, discovery={use_qwen_discovery}, executive={use_qwen_executive}")
+    logger.debug(f"🔍 DEBUG: Query classification - fallback_realtime={use_fallback_realtime}, complex={use_qwen}, discovery={use_qwen_discovery}, executive={use_qwen_executive}")
 
     # PRIORITY 0: Executive dashboard queries → Always use QWEN with PRE-EXECUTE
     if use_qwen_executive:
         use_fallback = False
         use_qwen = True
-        logger.error("📊 DEBUG: EXECUTIVE QUERY detected → Using Qwen with PRE-EXECUTE for executive data")
+        logger.debug("📊 EXECUTIVE QUERY detected → Using Qwen with PRE-EXECUTE for executive data")
 
     # PRIORITY 1: Realtime value queries → Use QWEN with PRE-EXECUTE for data-driven analysis
     # Changed: Realtime queries now use Qwen to ensure 2-step architecture (PostgreSQL → InfluxDB)
     elif use_fallback_realtime:
         use_fallback = False
         use_qwen = True
-        logger.error("⚡ DEBUG: REALTIME QUERY detected → Using Qwen with PRE-EXECUTE for data fetching")
+        logger.debug("⚡ REALTIME QUERY detected → Using Qwen with PRE-EXECUTE for data fetching")
 
     # PRIORITY 2: Discovery queries use Qwen (need search tools)
     elif use_qwen_discovery and not use_fallback_realtime:
@@ -2064,24 +2069,24 @@ async def chat_with_agent(
         use_qwen = True
         use_fallback = False
 
-    logger.error(f"🔍 DEBUG: Final classification: fallback={use_fallback}, qwen={use_qwen}, realtime={use_fallback_realtime}")
+    logger.debug(f"🔍 DEBUG: Final classification: fallback={use_fallback}, qwen={use_qwen}, realtime={use_fallback_realtime}")
 
     if use_fallback:
-        logger.error("⚡ DEBUG: Using specialized fallback mode (fast response)")
+        logger.debug("⚡ Using specialized fallback mode (fast response)")
         return await chat_fallback_mode(chat_request, data_service, toolkit, db)
 
     # Check if Ollama is available
-    logger.error(f"🔍 DEBUG: Checking Ollama availability at {OLLAMA_BASE_URL}")
+    logger.debug(f"🔍 DEBUG: Checking Ollama availability at {OLLAMA_BASE_URL}")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            logger.error(f"✅ DEBUG: Ollama available - Status {response.status_code}")
+            logger.debug(f"✅ DEBUG: Ollama available - Status {response.status_code}")
     except Exception as e:
-        logger.error(f"⚠️ DEBUG: Ollama not available, using fallback mode: {e}")
+        logger.warning(f"⚠️ Ollama not available, using fallback mode: {e}")
         return await chat_fallback_mode(chat_request, data_service, toolkit, db)
 
     # === NEW APPROACH: PRE-EXECUTE TOOLS FIRST ===
-    logger.error("🔍 DEBUG: Starting PRE-EXECUTE tools...")
+    logger.debug("🔍 Starting PRE-EXECUTE tools...")
     pre_fetched_data = await pre_execute_tools_from_query(
         query=chat_request.message,
         available_tags=chat_request.available_tags,
@@ -2106,6 +2111,15 @@ async def chat_with_agent(
         final_response = await call_ollama(messages, max_iterations=1)  # No tool calling needed!
 
         # Cache and return
+        # Validate response quality
+        response_length = len(final_response) if final_response else 0
+        latency_ms = (time.time() - start_time) * 1000
+
+        if response_length < 50:
+            logger.warning(f"⚠️ SHORT RESPONSE [{response_length} chars, {latency_ms:.0f}ms]: May be incomplete")
+
+        logger.info(f"✅ PRE-EXECUTE RESPONSE [{response_length} chars, {latency_ms:.0f}ms]: '{chat_request.message[:40]}...'")
+
         response_data = {
             "response": final_response,
             "widgets": None,
@@ -2478,7 +2492,7 @@ async def chat_with_agent_stream(
                 if use_fallback_realtime:
                     logger.info("⚡ STREAMING REALTIME QUERY detected → Using PRE-EXECUTE for data fetching")
                 if use_fallback_alarms:
-                    logger.error("🚨 STREAMING ALARM QUERY detected → Using PRE-EXECUTE for alarm data")
+                    logger.info("🚨 STREAMING ALARM QUERY detected → Using PRE-EXECUTE for alarm data")
 
             logger.info(f"🌊 Streaming query: fallback={use_fallback}, qwen={use_qwen}, realtime={use_fallback_realtime}")
 
@@ -2492,13 +2506,13 @@ async def chat_with_agent_stream(
 
             # === PRE-EXECUTE MODE (for realtime and alarm queries) ===
             if use_fallback_realtime or use_fallback_alarms:
-                logger.error(f"🔍 PRE-EXECUTING tools for streaming realtime query... Query={chat_request.message}, Tags count={len(chat_request.available_tags) if chat_request.available_tags else 0}")
+                logger.debug(f"🔍 PRE-EXECUTING tools for streaming realtime query... Query={chat_request.message}, Tags count={len(chat_request.available_tags) if chat_request.available_tags else 0}")
                 pre_fetched_data = await pre_execute_tools_from_query(
                     query=chat_request.message,
                     available_tags=chat_request.available_tags,
                     toolkit=toolkit
                 )
-                logger.error(f"✅ pre_fetched_data result: {pre_fetched_data}")
+                logger.debug(f"✅ pre_fetched_data result: {pre_fetched_data}")
 
                 if pre_fetched_data:
                     logger.info("✅ Data pre-fetched, using DATA-DRIVEN streaming mode")
