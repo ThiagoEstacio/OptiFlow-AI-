@@ -407,6 +407,7 @@ services:
 
       # Gateway
       GATEWAY_API_KEY: secure-gateway-api-key-change-in-production
+      GATEWAY_URL: http://optiflow-gateway:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9093,kafka-3:9096
 
       # AI Agent - Ollama
@@ -480,6 +481,9 @@ services:
 
       # MLflow (for ML retraining)
       MLFLOW_TRACKING_URI: http://mlflow:5000
+
+      # Gateway (for Asset Tree access)
+      GATEWAY_URL: http://optiflow-gateway:8080
     # SCALABILITY: Adicionado limites de recursos para workers
     deploy:
       resources:

@@ -630,21 +630,126 @@ AVAILABLE_TOOLS = [
                 }
             }
         }
+    },
+    # ========================================
+    # ASSET TREE - Hierarquia de Ativos
+    # ========================================
+    {
+        "name": "get_asset_hierarchy",
+        "description": "Get the complete asset hierarchy tree showing all industrial assets (plants, areas, equipment groups, equipment, components). Use when user asks about plant structure, equipment organization, asset tree, which equipment exists, or where a specific asset is located.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "root_id": {
+                    "type": "string",
+                    "description": "Optional: Start from specific element ID to get subtree"
+                }
+            }
+        }
+    },
+    {
+        "name": "get_asset_element",
+        "description": "Get detailed information about a specific asset element including its attributes (linked tags), children, path, and metadata. Use when user asks about specific equipment details, what sensors an equipment has, or equipment attributes.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "element_id": {
+                    "type": "string",
+                    "description": "Element ID or path (e.g., 'elem_123' or '/Plant/Area/Equipment')"
+                },
+                "include_children": {
+                    "type": "boolean",
+                    "description": "Include child elements in response (default: false)"
+                }
+            },
+            "required": ["element_id"]
+        }
+    },
+    {
+        "name": "search_assets",
+        "description": "Search for assets/equipment by name, type, or path. Use when user asks to find specific equipment, list equipment of a certain type, or locate assets.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query (name or path fragment)"
+                },
+                "element_type": {
+                    "type": "string",
+                    "enum": ["plant", "area", "equipment_group", "equipment", "component"],
+                    "description": "Filter by element type (optional)"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return (default: 20)"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "get_asset_statistics",
+        "description": "Get statistics about the asset tree including total elements, elements by type, total attributes/tags linked, and template usage. Use when user asks about asset counts, how many equipment exist, or asset tree overview.",
+        "parameters": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "get_element_attributes",
+        "description": "Get all attributes (linked tags/sensors) for a specific element. Returns tag IDs, descriptions, units, and current values. Use when user asks what tags/sensors an equipment has, or to see all measurements for an asset.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "element_id": {
+                    "type": "string",
+                    "description": "Element ID to get attributes for"
+                },
+                "include_values": {
+                    "type": "boolean",
+                    "description": "Include current real-time values (default: true)"
+                }
+            },
+            "required": ["element_id"]
+        }
+    },
+    {
+        "name": "get_tags_by_asset",
+        "description": "Get all tags associated with an asset and its children (recursive). Use when user asks about all sensors in an area, all tags for an equipment group, or monitoring points under a specific asset.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "element_id": {
+                    "type": "string",
+                    "description": "Element ID to get tags for"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "description": "Include tags from child elements (default: true)"
+                }
+            },
+            "required": ["element_id"]
+        }
     }
 ]
 
 
 class AgentToolkit:
     """Toolkit for executing agent tools"""
-    
+
     def __init__(self, data_service):
         """
         Initialize the toolkit with a data service
-        
+
         Args:
             data_service: DataService instance for data access
         """
         self.data_service = data_service
+        # Gateway client for Asset Tree access
+        from app.services.gateway_client import get_gateway_client
+        self.gateway_client = get_gateway_client()
+
         self.tools: Dict[str, Callable] = {
             "get_realtime_value": self._get_realtime_value,
             "get_multiple_realtime_values": self._get_multiple_realtime_values,
@@ -677,6 +782,13 @@ class AgentToolkit:
             "get_maintenance_dashboard": self._get_maintenance_dashboard,
             "generate_executive_report": self._generate_executive_report,
             "get_executive_trends": self._get_executive_trends,
+            # Asset Tree - Hierarquia de Ativos
+            "get_asset_hierarchy": self._get_asset_hierarchy,
+            "get_asset_element": self._get_asset_element,
+            "search_assets": self._search_assets,
+            "get_asset_statistics": self._get_asset_statistics,
+            "get_element_attributes": self._get_element_attributes,
+            "get_tags_by_asset": self._get_tags_by_asset,
         }
     
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
@@ -3227,6 +3339,358 @@ class AgentToolkit:
                 "trend": "up" if values[-1] > values[0] else "down" if values[-1] < values[0] else "stable"
             }
         }
+
+    # ========================================
+    # Asset Tree Tools Implementation
+    # ========================================
+
+    async def _get_asset_hierarchy(self, root_id: str = None) -> Dict[str, Any]:
+        """
+        Get complete asset hierarchy tree.
+
+        Args:
+            root_id: Optional root element ID
+
+        Returns:
+            Hierarchy tree structure
+        """
+        try:
+            result = await self.gateway_client.get_asset_hierarchy(root_id)
+
+            if result.get("success") and result.get("hierarchy"):
+                hierarchy = result["hierarchy"]
+
+                # Create a summary for the LLM
+                summary = self._summarize_hierarchy(hierarchy)
+
+                return {
+                    "success": True,
+                    "hierarchy": hierarchy,
+                    "summary": summary,
+                    "total_root_elements": result.get("root_count", len(hierarchy))
+                }
+            elif result.get("error"):
+                return {"error": result["error"], "success": False}
+            else:
+                return {"success": True, "hierarchy": [], "summary": "Asset tree is empty"}
+
+        except Exception as e:
+            logger.error(f"Error getting asset hierarchy: {e}")
+            return {"error": str(e), "success": False}
+
+    def _summarize_hierarchy(self, nodes: List[Dict], level: int = 0) -> str:
+        """Create text summary of hierarchy for LLM"""
+        lines = []
+        indent = "  " * level
+
+        for node in nodes[:10]:  # Limit to avoid huge outputs
+            name = node.get("name", "Unknown")
+            elem_type = node.get("type", node.get("element_type", "element"))
+            attr_count = len(node.get("attributes", []))
+            children_count = len(node.get("children", []))
+
+            lines.append(f"{indent}- {name} ({elem_type}): {attr_count} attributes, {children_count} children")
+
+            # Recurse into children (max 2 levels)
+            if level < 2 and node.get("children"):
+                lines.append(self._summarize_hierarchy(node["children"], level + 1))
+
+        if len(nodes) > 10:
+            lines.append(f"{indent}... and {len(nodes) - 10} more elements")
+
+        return "\n".join(lines)
+
+    async def _get_asset_element(
+        self,
+        element_id: str,
+        include_children: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get specific asset element details.
+
+        Args:
+            element_id: Element ID or path
+            include_children: Include child elements
+
+        Returns:
+            Element details
+        """
+        try:
+            result = await self.gateway_client.get_asset_element(element_id, include_children)
+
+            if result.get("success") and result.get("element"):
+                element = result["element"]
+
+                # Create a readable summary
+                summary = f"Element: {element.get('name', 'Unknown')}\n"
+                summary += f"Type: {element.get('type', element.get('element_type', 'Unknown'))}\n"
+                summary += f"Path: {element.get('path', 'N/A')}\n"
+                summary += f"Description: {element.get('description', 'N/A')}\n"
+
+                attrs = element.get("attributes", [])
+                if attrs:
+                    summary += f"\nAttributes ({len(attrs)}):\n"
+                    for attr in attrs[:10]:
+                        tag = attr.get("tag_id", "no-tag")
+                        unit = attr.get("uom", "")
+                        summary += f"  - {attr.get('name')}: {tag} ({unit})\n"
+                    if len(attrs) > 10:
+                        summary += f"  ... and {len(attrs) - 10} more\n"
+
+                return {
+                    "success": True,
+                    "element": element,
+                    "summary": summary
+                }
+            elif result.get("error"):
+                return {"error": result["error"], "success": False}
+            else:
+                return {"error": f"Element not found: {element_id}", "success": False}
+
+        except Exception as e:
+            logger.error(f"Error getting asset element: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _search_assets(
+        self,
+        query: str,
+        element_type: str = None,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Search for assets by name or path.
+
+        Args:
+            query: Search query
+            element_type: Filter by type
+            limit: Max results
+
+        Returns:
+            List of matching elements
+        """
+        try:
+            result = await self.gateway_client.search_assets(query, element_type, limit)
+
+            if result.get("success"):
+                elements = result.get("elements", [])
+
+                # Create summary
+                summary = f"Found {len(elements)} assets matching '{query}'"
+                if element_type:
+                    summary += f" (type: {element_type})"
+                summary += ":\n"
+
+                for elem in elements[:10]:
+                    name = elem.get("name", "Unknown")
+                    path = elem.get("path", "")
+                    etype = elem.get("type", elem.get("element_type", ""))
+                    summary += f"  - {name} ({etype}) at {path}\n"
+
+                if len(elements) > 10:
+                    summary += f"  ... and {len(elements) - 10} more\n"
+
+                return {
+                    "success": True,
+                    "elements": elements,
+                    "total": result.get("total", len(elements)),
+                    "summary": summary
+                }
+            else:
+                return {"error": result.get("error", "Search failed"), "success": False}
+
+        except Exception as e:
+            logger.error(f"Error searching assets: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _get_asset_statistics(self) -> Dict[str, Any]:
+        """
+        Get asset tree statistics.
+
+        Returns:
+            Statistics about elements, templates, attributes
+        """
+        try:
+            result = await self.gateway_client.get_asset_statistics()
+
+            if result.get("success"):
+                # Create readable summary
+                summary = "Asset Tree Statistics:\n"
+                summary += f"  Total Elements: {result.get('total_elements', 0)}\n"
+                summary += f"  Total Attributes: {result.get('total_attributes', 0)}\n"
+                summary += f"  Total Templates: {result.get('total_templates', 0)}\n"
+
+                by_type = result.get("elements_by_type", {})
+                if by_type:
+                    summary += "\n  Elements by Type:\n"
+                    for etype, count in by_type.items():
+                        summary += f"    - {etype}: {count}\n"
+
+                return {
+                    "success": True,
+                    "statistics": result,
+                    "summary": summary
+                }
+            else:
+                return {"error": result.get("error", "Failed to get statistics"), "success": False}
+
+        except Exception as e:
+            logger.error(f"Error getting asset statistics: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _get_element_attributes(
+        self,
+        element_id: str,
+        include_values: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Get all attributes for an element with optional real-time values.
+
+        Args:
+            element_id: Element ID
+            include_values: Include current values
+
+        Returns:
+            List of attributes with values
+        """
+        try:
+            # First get the element
+            element_result = await self.gateway_client.get_asset_element(element_id)
+
+            if not element_result.get("success"):
+                return {"error": f"Element not found: {element_id}", "success": False}
+
+            element = element_result.get("element", {})
+            attributes = element.get("attributes", [])
+
+            # Get real-time values if requested
+            if include_values and attributes:
+                tag_ids = [attr.get("tag_id") for attr in attributes if attr.get("tag_id")]
+                if tag_ids:
+                    values_result = await self.gateway_client.get_realtime_values(tag_ids)
+                    values_map = {}
+                    if values_result.get("success"):
+                        for value in values_result.get("values", []):
+                            values_map[value.get("tag_id")] = value
+
+                    # Merge values into attributes
+                    for attr in attributes:
+                        tag_id = attr.get("tag_id")
+                        if tag_id and tag_id in values_map:
+                            attr["current_value"] = values_map[tag_id].get("value")
+                            attr["timestamp"] = values_map[tag_id].get("timestamp")
+                            attr["quality"] = values_map[tag_id].get("quality", "Good")
+
+            # Create summary
+            summary = f"Attributes for {element.get('name', element_id)}:\n"
+            for attr in attributes[:15]:
+                name = attr.get("name", "Unknown")
+                tag_id = attr.get("tag_id", "no-tag")
+                unit = attr.get("uom", "")
+                value = attr.get("current_value", "N/A")
+                summary += f"  - {name}: {value} {unit} (tag: {tag_id})\n"
+
+            if len(attributes) > 15:
+                summary += f"  ... and {len(attributes) - 15} more attributes\n"
+
+            return {
+                "success": True,
+                "element_id": element_id,
+                "element_name": element.get("name"),
+                "attributes": attributes,
+                "count": len(attributes),
+                "summary": summary
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting element attributes: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _get_tags_by_asset(
+        self,
+        element_id: str,
+        recursive: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Get all tags for an asset and its children.
+
+        Args:
+            element_id: Element ID
+            recursive: Include child elements
+
+        Returns:
+            List of tags with element context
+        """
+        try:
+            # Get element with children if recursive
+            element_result = await self.gateway_client.get_asset_element(
+                element_id,
+                include_children=recursive
+            )
+
+            if not element_result.get("success"):
+                return {"error": f"Element not found: {element_id}", "success": False}
+
+            element = element_result.get("element", {})
+            all_tags = []
+
+            # Recursive function to collect tags
+            def collect_tags(elem, path=""):
+                current_path = f"{path}/{elem.get('name', '')}"
+
+                for attr in elem.get("attributes", []):
+                    if attr.get("tag_id"):
+                        all_tags.append({
+                            "tag_id": attr["tag_id"],
+                            "attribute_name": attr.get("name"),
+                            "element_name": elem.get("name"),
+                            "element_path": current_path,
+                            "unit": attr.get("uom", ""),
+                            "description": attr.get("description", "")
+                        })
+
+                if recursive:
+                    for child in elem.get("children", elem.get("children_elements", [])):
+                        collect_tags(child, current_path)
+
+            collect_tags(element)
+
+            # Create summary
+            summary = f"Tags for {element.get('name', element_id)}"
+            if recursive:
+                summary += " (including children)"
+            summary += f":\n  Total: {len(all_tags)} tags\n\n"
+
+            # Group by element
+            by_element = {}
+            for tag in all_tags:
+                elem_name = tag["element_name"]
+                if elem_name not in by_element:
+                    by_element[elem_name] = []
+                by_element[elem_name].append(tag)
+
+            for elem_name, tags in list(by_element.items())[:5]:
+                summary += f"  {elem_name}: {len(tags)} tags\n"
+                for tag in tags[:3]:
+                    summary += f"    - {tag['attribute_name']}: {tag['tag_id']}\n"
+                if len(tags) > 3:
+                    summary += f"    ... and {len(tags) - 3} more\n"
+
+            if len(by_element) > 5:
+                summary += f"\n  ... and {len(by_element) - 5} more elements\n"
+
+            return {
+                "success": True,
+                "element_id": element_id,
+                "element_name": element.get("name"),
+                "tags": all_tags,
+                "total_tags": len(all_tags),
+                "elements_with_tags": len(by_element),
+                "summary": summary
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting tags by asset: {e}")
+            return {"error": str(e), "success": False}
 
 
 def format_tools_for_prompt(tools: List[Dict[str, Any]]) -> str:
