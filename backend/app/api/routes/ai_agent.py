@@ -1120,6 +1120,94 @@ async def pre_execute_tools_from_query(
                 data_results.append(f"**❌ Erro ao gerar relatório:** {report.get('error', 'Erro desconhecido')}")
                 data_results.append(f"💡 {report.get('suggestion', '')}")
 
+    # Pattern 16: Asset Tree queries (NEW)
+    asset_patterns = [
+        'asset', 'ativo', 'ativos', 'hierarquia', 'hierarchy',
+        'equipamento', 'equipamentos', 'planta', 'área', 'áreas',
+        'elemento', 'elementos', 'estrutura', 'organização'
+    ]
+
+    if any(pattern in query_lower for pattern in asset_patterns):
+        logger.info(f"🏭 PRE-EXECUTE: Asset Tree query detected: '{query}'")
+
+        # Check if asking for statistics/count
+        if any(word in query_lower for word in ['quanto', 'quantos', 'total', 'count', 'estatística']):
+            result = await toolkit.execute_tool("get_asset_statistics", {})
+
+            if result.success and result.data:
+                stats = result.data.get('statistics', result.data)
+                summary = result.data.get('summary', '')
+
+                data_results.append("**🏭 Estatísticas do Asset Tree**")
+                data_results.append("")
+                data_results.append(f"- Total de Elementos: {stats.get('total_elements', 0)}")
+                data_results.append(f"- Total de Atributos: {stats.get('total_attributes', 0)}")
+                data_results.append(f"- Templates: {stats.get('total_templates', 0)}")
+                data_results.append("")
+
+                by_type = stats.get('elements_by_type', {})
+                if by_type:
+                    data_results.append("**Por Tipo:**")
+                    for etype, count in by_type.items():
+                        data_results.append(f"  - {etype}: {count}")
+
+        # Check if asking for hierarchy/structure
+        elif any(word in query_lower for word in ['hierarquia', 'hierarchy', 'estrutura', 'árvore', 'tree', 'organização']):
+            result = await toolkit.execute_tool("get_asset_hierarchy", {})
+
+            if result.success and result.data:
+                hierarchy = result.data.get('hierarchy', [])
+                summary = result.data.get('summary', '')
+
+                data_results.append("**🏭 Hierarquia de Ativos**")
+                data_results.append("")
+                data_results.append(f"Total de elementos raiz: {result.data.get('total_root_elements', len(hierarchy))}")
+                data_results.append("")
+                data_results.append(summary if summary else "Use a interface visual para ver a estrutura completa.")
+
+        # Check if searching for specific equipment
+        elif any(word in query_lower for word in ['encontre', 'busque', 'procure', 'find', 'search', 'onde']):
+            # Extract search query
+            search_keywords = []
+            for word in query_lower.split():
+                if word not in ['encontre', 'busque', 'procure', 'find', 'search', 'onde', 'está', 'fica', 'o', 'a', 'os', 'as', 'equipamento', 'equipamentos']:
+                    if len(word) >= 3:
+                        search_keywords.append(word)
+
+            search_query = ' '.join(search_keywords[:3]) if search_keywords else 'correia'
+
+            result = await toolkit.execute_tool("search_assets", {"query": search_query, "limit": 10})
+
+            if result.success and result.data:
+                elements = result.data.get('elements', [])
+                summary = result.data.get('summary', '')
+
+                data_results.append(f"**🔍 Busca de Ativos: '{search_query}'**")
+                data_results.append("")
+                data_results.append(f"Encontrados: {result.data.get('total', len(elements))} resultados")
+                data_results.append("")
+                data_results.append(summary if summary else "Nenhum resultado encontrado.")
+
+        # Default: show statistics
+        else:
+            result = await toolkit.execute_tool("get_asset_statistics", {})
+
+            if result.success and result.data:
+                stats = result.data.get('statistics', result.data)
+
+                data_results.append("**🏭 Visão Geral do Asset Tree**")
+                data_results.append("")
+                data_results.append(f"- Total de Elementos: {stats.get('total_elements', 0)}")
+                data_results.append(f"- Total de Atributos: {stats.get('total_attributes', 0)}")
+                data_results.append(f"- Templates: {stats.get('total_templates', 0)}")
+
+                by_type = stats.get('elements_by_type', {})
+                if by_type:
+                    data_results.append("")
+                    data_results.append("**Por Tipo:**")
+                    for etype, count in by_type.items():
+                        data_results.append(f"  - {etype}: {count}")
+
     if data_results:
         return "\n".join(data_results)
 
@@ -2031,6 +2119,13 @@ async def chat_with_agent(
 
     if any(word in message_lower for word in ["relatório", "report", "pdf", "exportar", "export", "gerar relatório", "generate report"]):
         core_tool_names.append("generate_executive_report")
+
+    # ASSET TREE tools
+    if any(word in message_lower for word in ["asset", "ativo", "ativos", "hierarquia", "hierarchy", "equipamento", "equipamentos", "planta", "área", "elemento", "elementos", "estrutura"]):
+        core_tool_names.extend(["get_asset_hierarchy", "get_asset_element", "search_assets", "get_asset_statistics"])
+
+    if any(word in message_lower for word in ["atributo", "atributos", "sensor", "sensores", "tag", "tags"]):
+        core_tool_names.extend(["get_element_attributes", "get_tags_by_asset"])
 
     # Filter tools to only relevant ones (reduces prompt tokens by 60-70%)
     relevant_tools = [t for t in all_tools if t.get("name") in set(core_tool_names)]
