@@ -905,9 +905,12 @@ async def pre_execute_tools_from_query(
                     data_results.append(f"  {rec}")
 
     # Pattern 9: Executive Dashboard queries (NEW)
+    # Also includes OEE, eficiência, disponibilidade, performance queries
     executive_patterns = [
         'executivo', 'executive', 'visão geral', 'overview', 'kpi', 'kpis',
-        'dashboard', 'gerencial', 'diretoria', 'indicadores', 'resumo executivo'
+        'dashboard', 'gerencial', 'diretoria', 'indicadores', 'resumo executivo',
+        'oee', 'eficiência', 'eficiencia', 'disponibilidade', 'availability',
+        'performance', 'qualidade', 'quality', 'mtbf', 'mttr'
     ]
 
     if any(pattern in query_lower for pattern in executive_patterns):
