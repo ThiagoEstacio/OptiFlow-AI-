@@ -832,11 +832,42 @@ class AgentToolkit:
             )
     
     async def _get_realtime_value(self, tag_id: str) -> Dict[str, Any]:
-        """Get real-time value for a tag"""
+        """Get real-time value for a tag - tries InfluxDB first, then Gateway"""
+        import httpx
+
+        # Try InfluxDB first (via data_service)
         result = await self.data_service.get_realtime_value(tag_id)
-        if not result:
-            return {"error": f"Tag not found: {tag_id}"}
-        return result
+        if result and result.get('value') is not None:
+            return result
+
+        # Fallback: Try Gateway Edge directly for real-time value
+        try:
+            gateway_url = "http://gateway:8080"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Search for tag in Gateway
+                response = await client.get(f"{gateway_url}/api/tags/")
+                if response.status_code == 200:
+                    tags = response.json()
+
+                    # Find matching tag (fuzzy match)
+                    tag_id_lower = tag_id.lower().replace('_', '').replace('-', '')
+                    for tag in tags:
+                        tag_name = tag.get('tag_name', '').lower().replace('_', '').replace('-', '')
+                        if tag_id_lower in tag_name or tag_name in tag_id_lower:
+                            # Found matching tag
+                            return {
+                                "tag_id": tag.get('tag_id'),
+                                "tag_name": tag.get('tag_name'),
+                                "value": tag.get('current_value'),
+                                "quality": tag.get('current_quality', 'Good'),
+                                "timestamp": tag.get('current_timestamp'),
+                                "unit": tag.get('metadata', {}).get('engineering_units', ''),
+                                "source": "gateway"
+                            }
+        except Exception as e:
+            logger.debug(f"Gateway fallback failed for {tag_id}: {e}")
+
+        return {"error": f"Tag not found: {tag_id}", "tag_id": tag_id}
     
     async def _get_multiple_realtime_values(self, tag_ids: List[str]) -> List[Dict[str, Any]]:
         """Get real-time values for multiple tags"""
@@ -856,14 +887,106 @@ class AgentToolkit:
         )
     
     async def _calculate_statistics(self, tag_id: str, duration: str = "1h") -> Dict[str, Any]:
-        """Calculate statistics for a tag"""
-        return await self.data_service.calculate_statistics(tag_id, duration)
+        """Calculate statistics for a tag - tries InfluxDB first, then Gateway current value"""
+        import httpx
+
+        # Try InfluxDB first
+        result = await self.data_service.calculate_statistics(tag_id, duration)
+        if result and result.get('count', 0) > 0:
+            return result
+
+        # Fallback: If no historical data, get current value from Gateway
+        try:
+            gateway_url = "http://gateway:8080"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{gateway_url}/api/tags/")
+                if response.status_code == 200:
+                    tags = response.json()
+
+                    # Find matching tag
+                    tag_id_lower = tag_id.lower().replace('_', '').replace('-', '')
+                    for tag in tags:
+                        tag_name = tag.get('tag_name', '').lower().replace('_', '').replace('-', '')
+                        if tag_id_lower in tag_name or tag_name in tag_id_lower:
+                            current_value = tag.get('current_value')
+                            if current_value is not None:
+                                # Return current value as stats (single point)
+                                return {
+                                    "tag_id": tag.get('tag_id'),
+                                    "tag_name": tag.get('tag_name'),
+                                    "duration": duration,
+                                    "count": 1,
+                                    "mean": current_value,
+                                    "min": current_value,
+                                    "max": current_value,
+                                    "std_dev": 0,
+                                    "current_value": current_value,
+                                    "unit": tag.get('metadata', {}).get('engineering_units', ''),
+                                    "note": "Dados históricos não disponíveis. Mostrando valor atual do Gateway.",
+                                    "source": "gateway"
+                                }
+        except Exception as e:
+            logger.debug(f"Gateway fallback failed for statistics {tag_id}: {e}")
+
+        return {
+            "tag_id": tag_id,
+            "duration": duration,
+            "count": 0,
+            "error": "Sem dados históricos disponíveis para este período"
+        }
     
     async def _search_tags(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """Search for tags (max 50 results to prevent overload)"""
+        """Search for tags - tries data_service first, then Gateway"""
+        import httpx
+
         # PROTECTION: Limit max results to prevent memory issues
         limit = min(limit, 50)
-        return await self.data_service.search_tags(query, limit)
+
+        # Try data_service first
+        result = await self.data_service.search_tags(query, limit)
+        if result and len(result) > 0:
+            return result
+
+        # Fallback: Search in Gateway
+        try:
+            gateway_url = "http://gateway:8080"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{gateway_url}/api/tags/")
+                if response.status_code == 200:
+                    all_tags = response.json()
+
+                    # Filter tags by query (case-insensitive)
+                    query_lower = query.lower()
+                    matching_tags = []
+
+                    for tag in all_tags:
+                        tag_name = tag.get('tag_name', '').lower()
+                        description = tag.get('metadata', {}).get('description', '').lower()
+
+                        if query_lower in tag_name or query_lower in description:
+                            matching_tags.append({
+                                "id": tag.get('tag_id'),
+                                "tag_id": tag.get('tag_id'),
+                                "name": tag.get('tag_name'),
+                                "tag_name": tag.get('tag_name'),
+                                "unit": tag.get('metadata', {}).get('engineering_units', ''),
+                                "description": tag.get('metadata', {}).get('description', ''),
+                                "current_value": tag.get('current_value'),
+                                "quality": tag.get('current_quality'),
+                                "source": "gateway"
+                            })
+
+                            if len(matching_tags) >= limit:
+                                break
+
+                    if matching_tags:
+                        logger.info(f"Found {len(matching_tags)} tags from Gateway for query '{query}'")
+                        return matching_tags
+
+        except Exception as e:
+            logger.debug(f"Gateway search failed for '{query}': {e}")
+
+        return []
     
     async def _compare_tags(self, tag_ids: List[str], duration: str = "24h") -> Dict[str, Any]:
         """

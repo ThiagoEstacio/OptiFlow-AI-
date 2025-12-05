@@ -373,11 +373,22 @@ async def pre_execute_tools_from_query(
 
     # Pattern 1: Realtime value queries
     # EXPANDED: Now includes "valor de {tag}", "qual o valor de {tag}", direct tag names
+    # NOTE: Include both accented and non-accented versions for PT-BR compatibility
     realtime_patterns = [
+        # With accents
         'temperatura atual', 'pressão atual', 'valor atual', 'velocidade atual',
-        'qual a temperatura', 'qual a pressão', 'qual o valor',
+        'qual a temperatura', 'qual a pressão', 'qual o valor', 'qual o nivel',
         'quanto está', 'quanto é', 'mostre', 'valor de', 'valor do', 'valor da',
-        'qual é o valor', 'me mostre o valor', 'leitura de', 'leitura do', 'leitura da'
+        'qual é o valor', 'me mostre o valor', 'leitura de', 'leitura do', 'leitura da',
+        # Without accents (PT-BR compatibility)
+        'pressao atual', 'qual a pressao', 'qual o nivel', 'qual a nivel',
+        'quanto esta', 'corrente atual', 'vazao atual', 'qual a vazao', 'qual a corrente',
+        # Direct measurement type queries
+        'qual a temperatura', 'qual a pressao', 'qual a velocidade',
+        'qual a corrente', 'qual a vazao', 'qual o nivel',
+        # Equipment-specific patterns
+        'temperatura da', 'temperatura do', 'pressao da', 'pressao do',
+        'nivel do', 'nivel da', 'vazao da', 'vazao do', 'corrente da', 'corrente do'
     ]
 
     # Also detect direct tag name queries (e.g., "por_carregamento" or "ELEV01_TEMP")
@@ -408,14 +419,89 @@ async def pre_execute_tools_from_query(
             # IMPORTANT: Use tag NAME for InfluxDB lookup, not UUID!
             tag_lookup = tag_name if tag_name else tag_id
         else:
-            # Heuristic: capture something like "ELEV01_TEMP_C_PV" directly from the prompt
-            tag_candidates = re.findall(r'[A-Za-z0-9]+(?:[_\-\.][A-Za-z0-9]+)+', query)
-            if tag_candidates:
-                tag_lookup = tag_candidates[0]
-                tag_name = tag_lookup
-                tag_id = tag_lookup
-            else:
-                tag_lookup = None
+            # AUTO-DISCOVER from Gateway based on query keywords
+            # Step 1: Detect measurement type
+            measurement_keyword = None
+            keyword_map = {
+                'temperatura': 'Temperatura', 'temperature': 'Temperatura', 'temp': 'Temperatura',
+                'pressão': 'Pressao', 'pressao': 'Pressao', 'pressure': 'Pressao',
+                'nível': 'Nivel', 'nivel': 'Nivel', 'level': 'Nivel',
+                'vazão': 'Vazao', 'vazao': 'Vazao', 'flow': 'Vazao',
+                'corrente': 'Corrente', 'current': 'Corrente',
+                'velocidade': 'Velocidade', 'speed': 'Velocidade',
+                'rpm': 'RPM', 'rotação': 'RPM', 'rotacao': 'RPM',
+                'potência': 'Potencia', 'potencia': 'Potencia', 'power': 'Potencia',
+                'umidade': 'Umidade', 'humidity': 'Umidade',
+                'peso': 'Peso', 'weight': 'Peso',
+            }
+
+            for keyword, gateway_keyword in keyword_map.items():
+                if keyword in query_lower:
+                    measurement_keyword = gateway_keyword
+                    break
+
+            # Step 2: Extract equipment context (silo1, linha1, motor1, etc.)
+            equipment_context = None
+            equipment_patterns = [
+                r'silo\s*(\d+)', r'linha\s*(\d+)', r'motor\s*(\d+)', r'bomba\s*(\d+)',
+                r'esteira\s*(\d+)', r'caldeira\s*(\d+)', r'compressor\s*(\d+)',
+                r'balanca\s*(\d+)', r'balanc[aç]a\s*(\d+)'
+            ]
+            for pattern in equipment_patterns:
+                match = re.search(pattern, query_lower)
+                if match:
+                    equip_name = pattern.split(r'\s')[0].replace('\\', '')  # Extract equipment type
+                    equip_num = match.group(1)
+                    equipment_context = f"{equip_name.title()}{equip_num}"
+                    break
+
+            # Step 3: Build search query combining measurement + equipment
+            if measurement_keyword:
+                if equipment_context:
+                    # Search with equipment context first (more specific)
+                    search_query = f"{equipment_context}_{measurement_keyword}"
+                    logger.info(f"🔍 PRE-EXECUTE: Searching specific tag '{search_query}'")
+                    search_result = await toolkit.execute_tool("search_tags", {"query": search_query, "limit": 5})
+
+                    if search_result.success and search_result.data:
+                        tags = search_result.data if isinstance(search_result.data, list) else search_result.data.get('tags', [])
+                        if tags and len(tags) > 0:
+                            tag_lookup = tags[0].get('name') or tags[0].get('tag_name') or tags[0].get('id')
+                            tag_name = tag_lookup
+                            unit = tags[0].get('unit', '') or tags[0].get('metadata', {}).get('engineering_units', '')
+                            logger.info(f"🎯 PRE-EXECUTE: Found specific tag: {tag_name}")
+
+                # If no specific tag found, try generic measurement search
+                if not tag_lookup:
+                    logger.info(f"🔍 PRE-EXECUTE: Searching generic '{measurement_keyword}'")
+                    search_result = await toolkit.execute_tool("search_tags", {"query": measurement_keyword, "limit": 5})
+                    if search_result.success and search_result.data:
+                        tags = search_result.data if isinstance(search_result.data, list) else search_result.data.get('tags', [])
+                        if tags and len(tags) > 0:
+                            # If we have equipment context, try to filter by it
+                            if equipment_context:
+                                for tag in tags:
+                                    tname = (tag.get('name') or tag.get('tag_name') or '').lower()
+                                    if equipment_context.lower().replace(' ', '') in tname.replace('_', ''):
+                                        tag_lookup = tag.get('name') or tag.get('tag_name') or tag.get('id')
+                                        tag_name = tag_lookup
+                                        unit = tag.get('unit', '') or tag.get('metadata', {}).get('engineering_units', '')
+                                        logger.info(f"🎯 PRE-EXECUTE: Matched with context: {tag_name}")
+                                        break
+                            # Fallback to first tag
+                            if not tag_lookup:
+                                tag_lookup = tags[0].get('name') or tags[0].get('tag_name') or tags[0].get('id')
+                                tag_name = tag_lookup
+                                unit = tags[0].get('unit', '') or tags[0].get('metadata', {}).get('engineering_units', '')
+                                logger.info(f"🎯 PRE-EXECUTE: Using first match: {tag_name}")
+
+            # Fallback: Heuristic capture from prompt (e.g., "ELEV01_TEMP_C_PV")
+            if not tag_lookup:
+                tag_candidates = re.findall(r'[A-Za-z0-9]+(?:[_\-\.][A-Za-z0-9]+)+', query)
+                if tag_candidates:
+                    tag_lookup = tag_candidates[0]
+                    tag_name = tag_lookup
+                    tag_id = tag_lookup
 
         if tag_lookup:
             logger.info(f"🎯 PRE-EXECUTING: get_realtime_value(tag_id={tag_lookup}) [matched from query]")
@@ -424,9 +510,23 @@ async def pre_execute_tools_from_query(
             if result.success and result.data:
                 value = result.data.get('value')
                 timestamp = result.data.get('timestamp', 'N/A')
-                data_results.append(f"**{tag_name}**: {value} {unit} (em {timestamp})")
+                source = result.data.get('source', 'influxdb')
+                actual_unit = result.data.get('unit', unit)
+                actual_name = result.data.get('tag_name', tag_name)
+
+                if value is not None:
+                    # Format value nicely
+                    if isinstance(value, float):
+                        value_str = f"{value:.2f}"
+                    else:
+                        value_str = str(value)
+                    data_results.append(f"**{actual_name}**: {value_str} {actual_unit} (em {timestamp})")
+                    if source == 'gateway':
+                        data_results.append(f"  _(Fonte: Gateway Edge - Dados em tempo real)_")
+                else:
+                    data_results.append(f"**{actual_name or tag_lookup}**: Sem dados disponíveis")
             else:
-                data_results.append(f"**{tag_name or tag_id}**: Sem dados disponíveis")
+                data_results.append(f"**{tag_name or tag_lookup}**: Sem dados disponíveis")
 
     # Pattern 2: Statistics queries
     stats_patterns = ['média', 'media', 'máximo', 'maximo', 'mínimo', 'minimo',
@@ -474,12 +574,33 @@ async def pre_execute_tools_from_query(
 
             if result.success and result.data:
                 stats = result.data
-                data_results.append(f"**Estatísticas de {tag_name} ({duration})**:")
-                data_results.append(f"  - Média: {stats.get('mean', 'N/A')}")
-                data_results.append(f"  - Mínimo: {stats.get('min', 'N/A')}")
-                data_results.append(f"  - Máximo: {stats.get('max', 'N/A')}")
-                data_results.append(f"  - Desvio padrão: {stats.get('std_dev', 'N/A')}")
+                actual_name = stats.get('tag_name', tag_name)
+                source = stats.get('source', 'influxdb')
+                note = stats.get('note', '')
+
+                data_results.append(f"**Estatísticas de {actual_name} ({duration})**:")
+
+                # Format numeric values
+                mean_val = stats.get('mean')
+                min_val = stats.get('min')
+                max_val = stats.get('max')
+                std_val = stats.get('std_dev')
+                unit = stats.get('unit', '')
+
+                if mean_val is not None:
+                    data_results.append(f"  - Média: {mean_val:.2f} {unit}" if isinstance(mean_val, float) else f"  - Média: {mean_val} {unit}")
+                if min_val is not None:
+                    data_results.append(f"  - Mínimo: {min_val:.2f} {unit}" if isinstance(min_val, float) else f"  - Mínimo: {min_val} {unit}")
+                if max_val is not None:
+                    data_results.append(f"  - Máximo: {max_val:.2f} {unit}" if isinstance(max_val, float) else f"  - Máximo: {max_val} {unit}")
+                if std_val is not None:
+                    data_results.append(f"  - Desvio padrão: {std_val:.2f}" if isinstance(std_val, float) else f"  - Desvio padrão: {std_val}")
                 data_results.append(f"  - Total de leituras: {stats.get('count', 'N/A')}")
+
+                if note:
+                    data_results.append(f"  _{note}_")
+                if source == 'gateway':
+                    data_results.append(f"  _(Fonte: Gateway Edge)_")
         else:
             data_results.append("**⚠️ Nenhuma tag encontrada para calcular estatísticas.**")
             data_results.append("💡 Especifique uma tag (ex: 'estatísticas de temperatura') ou selecione uma tag na interface.")
