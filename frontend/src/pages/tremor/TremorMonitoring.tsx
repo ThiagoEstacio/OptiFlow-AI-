@@ -6,8 +6,8 @@
  * - Real-time process supervision (from InfluxDB)
  * - Historical trends analysis
  * - Alarm status overview
- * - Equipment status monitoring
- * - Custom trend configurations
+ * - Equipment status monitoring (from OEE API)
+ * - System health monitoring
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -33,8 +33,6 @@ import {
   ProgressBar,
   DateRangePicker,
   DateRangePickerValue,
-  MultiSelect,
-  MultiSelectItem,
 } from '@tremor/react';
 import {
   ProfessionalAreaChart,
@@ -69,7 +67,11 @@ import {
   Wifi,
   WifiOff,
   Layers,
+  Search,
+  X,
+  ExternalLink,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { selectStyles } from '../../components/common/StyledSelect';
 
@@ -86,15 +88,19 @@ interface ProcessVariable {
   trend: 'up' | 'down' | 'stable';
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  category: string;
 }
 
 interface EquipmentStatus {
   id: string;
   name: string;
-  status: 'running' | 'warning' | 'stopped' | 'error';
-  health: number;
+  area: string;
+  status: 'good' | 'warning' | 'critical' | 'running' | 'stopped';
+  oee: number;
+  availability: number;
+  performance: number;
+  quality: number;
   uptime: string;
-  lastMaintenance: string;
 }
 
 interface TrendDataPoint {
@@ -115,15 +121,22 @@ interface SystemHealthItem {
   status: 'normal' | 'warning' | 'critical';
 }
 
+interface ConnectivityItem {
+  name: string;
+  status: 'connected' | 'disconnected' | 'degraded';
+  latency: string;
+  details?: string;
+}
+
 // Map category to icon
 const getCategoryIcon = (name: string, unit: string): React.ComponentType<{ className?: string }> => {
   const lowerName = name.toLowerCase();
   if (lowerName.includes('temp') || unit.includes('°C')) return Thermometer;
-  if (lowerName.includes('press') || unit.includes('bar')) return Gauge;
-  if (lowerName.includes('vaz') || lowerName.includes('flow')) return Droplets;
-  if (lowerName.includes('nível') || lowerName.includes('level')) return Layers;
-  if (lowerName.includes('veloc') || lowerName.includes('rpm')) return RotateCw;
-  if (lowerName.includes('energ') || lowerName.includes('potên') || unit.includes('kW')) return Zap;
+  if (lowerName.includes('press') || unit.includes('bar') || unit.includes('psi')) return Gauge;
+  if (lowerName.includes('vaz') || lowerName.includes('flow') || unit.includes('L/')) return Droplets;
+  if (lowerName.includes('nível') || lowerName.includes('level') || lowerName.includes('nivel')) return Layers;
+  if (lowerName.includes('veloc') || lowerName.includes('rpm') || lowerName.includes('speed')) return RotateCw;
+  if (lowerName.includes('energ') || lowerName.includes('potên') || lowerName.includes('power') || unit.includes('kW')) return Zap;
   return Activity;
 };
 
@@ -131,12 +144,24 @@ const getCategoryIcon = (name: string, unit: string): React.ComponentType<{ clas
 const getCategoryColor = (name: string, unit: string): string => {
   const lowerName = name.toLowerCase();
   if (lowerName.includes('temp') || unit.includes('°C')) return 'red';
-  if (lowerName.includes('press') || unit.includes('bar')) return 'amber';
-  if (lowerName.includes('vaz') || lowerName.includes('flow')) return 'blue';
-  if (lowerName.includes('nível') || lowerName.includes('level')) return 'cyan';
-  if (lowerName.includes('veloc') || lowerName.includes('rpm')) return 'purple';
-  if (lowerName.includes('energ') || lowerName.includes('potên') || unit.includes('kW')) return 'yellow';
+  if (lowerName.includes('press') || unit.includes('bar') || unit.includes('psi')) return 'amber';
+  if (lowerName.includes('vaz') || lowerName.includes('flow') || unit.includes('L/')) return 'blue';
+  if (lowerName.includes('nível') || lowerName.includes('level') || lowerName.includes('nivel')) return 'cyan';
+  if (lowerName.includes('veloc') || lowerName.includes('rpm') || lowerName.includes('speed')) return 'purple';
+  if (lowerName.includes('energ') || lowerName.includes('potên') || lowerName.includes('power') || unit.includes('kW')) return 'yellow';
   return 'gray';
+};
+
+// Derive category from name/unit
+const deriveCategory = (name: string, unit: string): string => {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes('temp') || unit.includes('°C')) return 'Temperatura';
+  if (lowerName.includes('press') || unit.includes('bar') || unit.includes('psi')) return 'Pressão';
+  if (lowerName.includes('vaz') || lowerName.includes('flow') || unit.includes('L/')) return 'Vazão';
+  if (lowerName.includes('nível') || lowerName.includes('level') || lowerName.includes('nivel')) return 'Nível';
+  if (lowerName.includes('veloc') || lowerName.includes('rpm') || lowerName.includes('speed')) return 'Velocidade';
+  if (lowerName.includes('energ') || lowerName.includes('potên') || lowerName.includes('power') || unit.includes('kW')) return 'Energia';
+  return 'Outros';
 };
 
 // Fetch real process variables from API
@@ -191,6 +216,7 @@ const fetchRealProcessVariables = async (): Promise<ProcessVariable[]> => {
         trend,
         icon: getCategoryIcon(name, unit),
         color: getCategoryColor(name, unit),
+        category: deriveCategory(name, unit),
       };
     });
   } catch (error) {
@@ -199,8 +225,38 @@ const fetchRealProcessVariables = async (): Promise<ProcessVariable[]> => {
   }
 };
 
+// Fetch real equipment status from OEE API
+const fetchRealEquipmentStatus = async (): Promise<EquipmentStatus[]> => {
+  try {
+    const response = await apiClient.get('/api/v1/oee/equipment', {
+      params: { time_range: '24h' }
+    });
+
+    const equipment = response.data?.equipment || [];
+
+    if (equipment.length === 0) {
+      return generateFallbackEquipment();
+    }
+
+    return equipment.map((eq: any) => ({
+      id: eq.id || eq.equipment_id,
+      name: eq.name || eq.equipment_name || eq.id,
+      area: eq.area || 'Geral',
+      status: eq.status || (eq.oee >= 85 ? 'good' : eq.oee >= 70 ? 'warning' : 'critical'),
+      oee: eq.oee ?? eq.oee_percentage ?? 0,
+      availability: eq.availability ?? eq.availability_percentage ?? 0,
+      performance: eq.performance ?? eq.performance_percentage ?? 0,
+      quality: eq.quality ?? eq.quality_percentage ?? 0,
+      uptime: eq.utilization_percent ? `${eq.utilization_percent.toFixed(1)}%` : '-',
+    }));
+  } catch (error) {
+    console.error('Error fetching equipment status:', error);
+    return generateFallbackEquipment();
+  }
+};
+
 // Fetch real trend data from API
-const fetchRealTrendData = async (hours: number = 24): Promise<TrendDataPoint[]> => {
+const fetchRealTrendData = async (hours: number = 24, selectedTags: string[]): Promise<TrendDataPoint[]> => {
   try {
     const response = await apiClient.get('/api/v1/timeseries/tags/active', {
       params: { lookback_hours: hours }
@@ -215,7 +271,12 @@ const fetchRealTrendData = async (hours: number = 24): Promise<TrendDataPoint[]>
     // Get unique timestamps from all tag histories
     const timeMap = new Map<string, TrendDataPoint>();
 
-    tags.slice(0, 4).forEach((tag: any) => {
+    // Filter tags if selection provided, otherwise use first 4
+    const tagsToUse = selectedTags.length > 0
+      ? tags.filter((t: any) => selectedTags.includes(t.name || t.tag_id))
+      : tags.slice(0, 4);
+
+    tagsToUse.forEach((tag: any) => {
       const history = tag.history || [];
       const tagName = tag.name || tag.tag_id;
 
@@ -250,7 +311,7 @@ const fetchRealTrendData = async (hours: number = 24): Promise<TrendDataPoint[]>
 // Fetch alarm summary
 const fetchAlarmSummary = async (): Promise<AlarmSummary> => {
   try {
-    const response = await apiClient.get('/api/v1/alarms/summary');
+    const response = await apiClient.get('/api/v1/alarms/statistics');
     const data = response.data;
 
     return {
@@ -265,38 +326,89 @@ const fetchAlarmSummary = async (): Promise<AlarmSummary> => {
   }
 };
 
-// Fetch system health
-const fetchSystemHealth = async (): Promise<SystemHealthItem[]> => {
+// Fetch system health and connectivity
+const fetchSystemHealth = async (): Promise<{ health: SystemHealthItem[], connectivity: ConnectivityItem[] }> => {
   try {
-    const response = await apiClient.get('/api/health');
-    const status = response.data?.status === 'healthy' ? 'normal' : 'warning';
+    // Fetch backend health
+    const backendHealth = await apiClient.get('/api/health').catch(() => ({ data: { status: 'unknown' } }));
 
-    // Return basic health info
-    return [
-      { name: 'CPU', value: 35 + Math.random() * 20, status: 'normal' },
-      { name: 'Memória', value: 50 + Math.random() * 20, status: 'normal' },
-      { name: 'Disco', value: 60 + Math.random() * 20, status: status === 'healthy' ? 'normal' : 'warning' },
-      { name: 'Rede', value: 10 + Math.random() * 10, status: 'normal' },
+    // Fetch gateway health
+    const gatewayHealth = await fetch('http://localhost:8080/api/health').then(r => r.json()).catch(() => ({ status: 'unknown' }));
+
+    // Fetch adapter statistics
+    const adapterStats = await fetch('http://localhost:8080/api/adapters').then(r => r.json()).catch(() => []);
+
+    const connectivity: ConnectivityItem[] = [
+      {
+        name: 'Backend API',
+        status: backendHealth.data?.status === 'healthy' ? 'connected' : 'degraded',
+        latency: '< 10ms',
+        details: backendHealth.data?.database || ''
+      },
+      {
+        name: 'Gateway OPC-UA',
+        status: gatewayHealth?.status === 'healthy' ? 'connected' : gatewayHealth?.status ? 'degraded' : 'disconnected',
+        latency: '< 5ms',
+        details: `${gatewayHealth?.adapters_count || 0} adapters`
+      },
+      {
+        name: 'InfluxDB',
+        status: backendHealth.data?.influxdb === 'connected' ? 'connected' : 'degraded',
+        latency: '< 3ms',
+      },
+      {
+        name: 'Kafka',
+        status: backendHealth.data?.kafka === 'connected' ? 'connected' : 'degraded',
+        latency: '< 15ms',
+      },
     ];
+
+    // Add adapter-specific connectivity
+    if (Array.isArray(adapterStats)) {
+      adapterStats.forEach((adapter: any) => {
+        connectivity.push({
+          name: `Adapter: ${adapter.adapter_id || adapter.name}`,
+          status: adapter.status === 'running' || adapter.status === 'connected' ? 'connected' : 'disconnected',
+          latency: adapter.latency_ms ? `${adapter.latency_ms}ms` : '-',
+          details: `${adapter.tags_count || 0} tags`
+        });
+      });
+    }
+
+    return {
+      health: [
+        { name: 'CPU', value: 35 + Math.random() * 20, status: 'normal' },
+        { name: 'Memória', value: 50 + Math.random() * 20, status: 'normal' },
+        { name: 'Disco', value: 60 + Math.random() * 15, status: 'normal' },
+        { name: 'Rede', value: 10 + Math.random() * 10, status: 'normal' },
+      ],
+      connectivity
+    };
   } catch (error) {
-    return [
-      { name: 'CPU', value: 45, status: 'normal' },
-      { name: 'Memória', value: 62, status: 'normal' },
-      { name: 'Disco', value: 78, status: 'warning' },
-      { name: 'Rede', value: 12, status: 'normal' },
-    ];
+    return {
+      health: [
+        { name: 'CPU', value: 45, status: 'normal' },
+        { name: 'Memória', value: 62, status: 'normal' },
+        { name: 'Disco', value: 78, status: 'warning' },
+        { name: 'Rede', value: 12, status: 'normal' },
+      ],
+      connectivity: [
+        { name: 'Backend API', status: 'disconnected', latency: '-' },
+        { name: 'Gateway OPC-UA', status: 'disconnected', latency: '-' },
+      ]
+    };
   }
 };
 
 // Fallback data generators
 const generateFallbackVariables = (): ProcessVariable[] => {
   return [
-    { id: 'TEMP_001', name: 'Temperatura Reator 1', value: 85.4, unit: '°C', min: 0, max: 120, setpoint: 85, status: 'normal', trend: 'stable', icon: Thermometer, color: 'red' },
-    { id: 'PRES_001', name: 'Pressão Sistema', value: 4.2, unit: 'bar', min: 0, max: 10, setpoint: 4.0, status: 'warning', trend: 'up', icon: Gauge, color: 'amber' },
-    { id: 'FLOW_001', name: 'Vazão Entrada', value: 125.8, unit: 'L/min', min: 0, max: 200, setpoint: 120, status: 'normal', trend: 'down', icon: Droplets, color: 'blue' },
-    { id: 'LEVEL_001', name: 'Nível Tanque', value: 72.3, unit: '%', min: 0, max: 100, setpoint: 75, status: 'normal', trend: 'stable', icon: Layers, color: 'cyan' },
-    { id: 'SPEED_001', name: 'Velocidade Motor', value: 1480, unit: 'RPM', min: 0, max: 1800, setpoint: 1500, status: 'normal', trend: 'up', icon: RotateCw, color: 'purple' },
-    { id: 'POWER_001', name: 'Potência Consumida', value: 45.2, unit: 'kW', min: 0, max: 100, setpoint: 50, status: 'normal', trend: 'stable', icon: Zap, color: 'yellow' },
+    { id: 'TEMP_001', name: 'Temperatura Reator 1', value: 85.4, unit: '°C', min: 0, max: 120, setpoint: 85, status: 'normal', trend: 'stable', icon: Thermometer, color: 'red', category: 'Temperatura' },
+    { id: 'PRES_001', name: 'Pressão Sistema', value: 4.2, unit: 'bar', min: 0, max: 10, setpoint: 4.0, status: 'warning', trend: 'up', icon: Gauge, color: 'amber', category: 'Pressão' },
+    { id: 'FLOW_001', name: 'Vazão Entrada', value: 125.8, unit: 'L/min', min: 0, max: 200, setpoint: 120, status: 'normal', trend: 'down', icon: Droplets, color: 'blue', category: 'Vazão' },
+    { id: 'LEVEL_001', name: 'Nível Tanque', value: 72.3, unit: '%', min: 0, max: 100, setpoint: 75, status: 'normal', trend: 'stable', icon: Layers, color: 'cyan', category: 'Nível' },
+    { id: 'SPEED_001', name: 'Velocidade Motor', value: 1480, unit: 'RPM', min: 0, max: 1800, setpoint: 1500, status: 'normal', trend: 'up', icon: RotateCw, color: 'purple', category: 'Velocidade' },
+    { id: 'POWER_001', name: 'Potência Consumida', value: 45.2, unit: 'kW', min: 0, max: 100, setpoint: 50, status: 'normal', trend: 'stable', icon: Zap, color: 'yellow', category: 'Energia' },
   ];
 };
 
@@ -318,25 +430,27 @@ const generateFallbackTrendData = (hours: number = 24): TrendDataPoint[] => {
 
 const generateFallbackEquipment = (): EquipmentStatus[] => {
   return [
-    { id: 'EQ001', name: 'Reator Principal', status: 'running', health: 95, uptime: '99.2%', lastMaintenance: '2024-01-10' },
-    { id: 'EQ002', name: 'Bomba de Transferência', status: 'running', health: 88, uptime: '98.5%', lastMaintenance: '2024-01-08' },
-    { id: 'EQ003', name: 'Compressor AR-01', status: 'warning', health: 72, uptime: '95.1%', lastMaintenance: '2023-12-20' },
-    { id: 'EQ004', name: 'Trocador de Calor', status: 'running', health: 91, uptime: '99.8%', lastMaintenance: '2024-01-05' },
-    { id: 'EQ005', name: 'Agitador Tank-02', status: 'stopped', health: 85, uptime: '0%', lastMaintenance: '2024-01-12' },
-    { id: 'EQ006', name: 'Centrífuga CEN-01', status: 'running', health: 94, uptime: '97.3%', lastMaintenance: '2024-01-02' },
+    { id: 'EQ001', name: 'Silo de Armazenamento 01', area: 'Armazenamento', status: 'good', oee: 85.2, availability: 95.1, performance: 92.3, quality: 97.5, uptime: '99.2%' },
+    { id: 'EQ002', name: 'Correia Transportadora 01', area: 'Recebimento', status: 'good', oee: 88.5, availability: 96.2, performance: 94.1, quality: 97.8, uptime: '98.5%' },
+    { id: 'EQ003', name: 'Elevador de Grãos 01', area: 'Movimentação', status: 'warning', oee: 72.4, availability: 85.3, performance: 88.2, quality: 96.2, uptime: '95.1%' },
+    { id: 'EQ004', name: 'Secador Industrial 01', area: 'Processamento', status: 'good', oee: 91.2, availability: 98.1, performance: 94.5, quality: 98.4, uptime: '99.8%' },
   ];
 };
 
 export default function TremorMonitoring() {
-  const [processVariables, setProcessVariables] = useState<ProcessVariable[]>(generateFallbackVariables());
-  const [trendData, setTrendData] = useState<TrendDataPoint[]>(generateFallbackTrendData());
-  const [equipmentStatus, setEquipmentStatus] = useState<EquipmentStatus[]>(generateFallbackEquipment());
+  const navigate = useNavigate();
+  const [processVariables, setProcessVariables] = useState<ProcessVariable[]>([]);
+  const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
+  const [equipmentStatus, setEquipmentStatus] = useState<EquipmentStatus[]>([]);
   const [alarmSummary, setAlarmSummary] = useState<AlarmSummary>({ critical: 0, warning: 0, info: 0, acknowledged: 0 });
   const [systemHealth, setSystemHealth] = useState<SystemHealthItem[]>([]);
+  const [connectivity, setConnectivity] = useState<ConnectivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState('24h');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showVariableDropdown, setShowVariableDropdown] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangePickerValue>({
     from: new Date(Date.now() - 24 * 60 * 60 * 1000),
     to: new Date(),
@@ -345,34 +459,46 @@ export default function TremorMonitoring() {
   // Fetch all real data from APIs
   const fetchAllData = useCallback(async () => {
     try {
-      const [variables, trends, alarms, health] = await Promise.all([
+      const [variables, equipment, alarms, systemData] = await Promise.all([
         fetchRealProcessVariables(),
-        fetchRealTrendData(24),
+        fetchRealEquipmentStatus(),
         fetchAlarmSummary(),
         fetchSystemHealth(),
       ]);
 
       setProcessVariables(variables);
-      setTrendData(trends);
+      setEquipmentStatus(equipment);
       setAlarmSummary(alarms);
-      setSystemHealth(health);
+      setSystemHealth(systemData.health);
+      setConnectivity(systemData.connectivity);
 
-      // Auto-select first variables for chart
-      if (selectedVariables.length === 0 && trends.length > 0) {
-        const availableKeys = Object.keys(trends[0]).filter(k => k !== 'time');
-        setSelectedVariables(availableKeys.slice(0, 2));
+      // Auto-select first 2 variables for chart if none selected
+      if (selectedVariables.length === 0 && variables.length > 0) {
+        const initialVars = variables.slice(0, 2).map(v => v.name);
+        setSelectedVariables(initialVars);
       }
+
+      // Fetch trend data
+      const trends = await fetchRealTrendData(24, selectedVariables);
+      setTrendData(trends);
     } catch (error) {
       console.error('Error fetching monitoring data:', error);
     } finally {
       setLoading(false);
     }
-  }, [selectedVariables.length]);
+  }, [selectedVariables]);
 
   // Initial data fetch
   useEffect(() => {
     fetchAllData();
   }, []);
+
+  // Refetch trends when selection changes
+  useEffect(() => {
+    if (selectedVariables.length > 0) {
+      fetchRealTrendData(24, selectedVariables).then(setTrendData);
+    }
+  }, [selectedVariables]);
 
   // Real-time updates
   useEffect(() => {
@@ -390,8 +516,8 @@ export default function TremorMonitoring() {
           time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         };
 
-        // Add current values from process variables
-        variables.slice(0, 4).forEach(v => {
+        // Add current values from selected process variables
+        variables.filter(v => selectedVariables.includes(v.name)).forEach(v => {
           newPoint[v.name] = v.value;
         });
 
@@ -401,18 +527,20 @@ export default function TremorMonitoring() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isLive]);
+  }, [isLive, selectedVariables]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'good':
       case 'running':
-        return <Badge color="green" icon={CheckCircle}>Em Operação</Badge>;
+        return <Badge color="green" icon={CheckCircle}>Operando</Badge>;
       case 'warning':
         return <Badge color="amber" icon={AlertTriangle}>Atenção</Badge>;
       case 'stopped':
         return <Badge color="gray" icon={Pause}>Parado</Badge>;
+      case 'critical':
       case 'error':
-        return <Badge color="red" icon={XCircle}>Falha</Badge>;
+        return <Badge color="red" icon={XCircle}>Crítico</Badge>;
       default:
         return <Badge color="gray">Desconhecido</Badge>;
     }
@@ -436,6 +564,23 @@ export default function TremorMonitoring() {
     return 'text-red-600';
   };
 
+  const toggleVariable = (varName: string) => {
+    if (selectedVariables.includes(varName)) {
+      setSelectedVariables(selectedVariables.filter(v => v !== varName));
+    } else if (selectedVariables.length < 6) {
+      setSelectedVariables([...selectedVariables, varName]);
+    }
+  };
+
+  // Filter variables for search
+  const filteredVariables = processVariables.filter(v =>
+    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    v.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Chart colors
+  const CHART_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#06b6d4', '#8b5cf6', '#10b981'];
+
   // Show loading state
   if (loading) {
     return (
@@ -455,14 +600,14 @@ export default function TremorMonitoring() {
         <div>
           <Title className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Activity className="h-8 w-8 text-blue-600" />
-            Monitoramento & Tendências
+            Monitoramento & Supervisão
           </Title>
           <Text className="text-gray-500 mt-1">
-            Supervisão em tempo real de variáveis de processo
+            Supervisão em tempo real de processos e equipamentos
           </Text>
         </div>
         <div className="flex items-center gap-2">
-          <Badge color={isLive ? 'green' : 'gray'} className="animate-pulse">
+          <Badge color={isLive ? 'green' : 'gray'} className={isLive ? 'animate-pulse' : ''}>
             {isLive ? '● LIVE' : '○ PAUSED'}
           </Badge>
           <Button
@@ -474,9 +619,6 @@ export default function TremorMonitoring() {
           </Button>
           <Button icon={RefreshCw} variant="secondary" onClick={fetchAllData}>
             Atualizar
-          </Button>
-          <Button icon={Settings} variant="secondary">
-            Configurar
           </Button>
         </div>
       </div>
@@ -494,15 +636,16 @@ export default function TremorMonitoring() {
           {/* Supervision Tab */}
           <TabPanel>
             <div className="space-y-6 mt-4">
-              {/* Quick Stats */}
+              {/* Quick Stats Grid */}
               <Grid numItems={2} numItemsSm={3} numItemsMd={6} className="gap-4">
-                {processVariables.map((variable) => (
+                {processVariables.slice(0, 6).map((variable) => (
                   <Card
                     key={variable.id}
-                    className={`hover:shadow-lg transition-shadow ${
+                    className={`hover:shadow-lg transition-shadow cursor-pointer ${
                       variable.status === 'warning' ? 'border-l-4 border-amber-500' :
                       variable.status === 'alarm' ? 'border-l-4 border-red-500' : ''
                     }`}
+                    onClick={() => navigate(`/monitoring/history`)}
                   >
                     <Flex alignItems="start" justifyContent="between">
                       <div className={`p-2 bg-${variable.color}-50 rounded-lg`}>
@@ -510,7 +653,7 @@ export default function TremorMonitoring() {
                       </div>
                       {getTrendIcon(variable.trend)}
                     </Flex>
-                    <Text className="mt-2 text-sm text-gray-500">{variable.name}</Text>
+                    <Text className="mt-2 text-sm text-gray-500 truncate">{variable.name}</Text>
                     <Flex alignItems="baseline" className="mt-1">
                       <Metric className={getValueColor(variable.value, variable.min, variable.max, variable.setpoint)}>
                         {variable.value.toFixed(1)}
@@ -529,48 +672,129 @@ export default function TremorMonitoring() {
                 ))}
               </Grid>
 
-              {/* Real-time Trend */}
+              {/* Real-time Trend with Variable Selector */}
               <Card>
-                <Flex justifyContent="between" alignItems="start">
+                <Flex justifyContent="between" alignItems="start" className="flex-wrap gap-4">
                   <div>
                     <Title>Tendência em Tempo Real</Title>
                     <Text className="text-gray-500">Últimas 24 horas</Text>
                   </div>
-                  <Flex className="gap-2">
-                    <MultiSelect
-                      value={selectedVariables}
-                      onValueChange={setSelectedVariables}
-                      placeholder="Variáveis"
-                    >
-                      <MultiSelectItem value="Temperatura">Temperatura</MultiSelectItem>
-                      <MultiSelectItem value="Pressão">Pressão</MultiSelectItem>
-                      <MultiSelectItem value="Vazão">Vazão</MultiSelectItem>
-                      <MultiSelectItem value="Nível">Nível</MultiSelectItem>
-                    </MultiSelect>
-                    <Button icon={Maximize2} variant="secondary" size="xs" />
+                  <div className="flex items-center gap-2">
+                    {/* Variable Selector Dropdown */}
+                    <div className="relative">
+                      <div
+                        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer hover:border-blue-500"
+                        onClick={() => setShowVariableDropdown(!showVariableDropdown)}
+                      >
+                        <Search className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">
+                          {selectedVariables.length} variáveis
+                        </span>
+                      </div>
+
+                      {showVariableDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setShowVariableDropdown(false)} />
+                          <div className="absolute right-0 z-50 w-72 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                            <div className="p-2 border-b">
+                              <input
+                                type="text"
+                                placeholder="Buscar variáveis..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div className="max-h-64 overflow-y-auto">
+                              {filteredVariables.map((v) => {
+                                const isSelected = selectedVariables.includes(v.name);
+                                const colorIdx = selectedVariables.indexOf(v.name);
+                                return (
+                                  <button
+                                    key={v.id}
+                                    onClick={() => toggleVariable(v.name)}
+                                    className={`w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 ${
+                                      isSelected ? 'bg-blue-50' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {isSelected && (
+                                        <span
+                                          className="w-3 h-3 rounded-full"
+                                          style={{ backgroundColor: CHART_COLORS[colorIdx] }}
+                                        />
+                                      )}
+                                      <span className={isSelected ? 'font-medium text-blue-700' : 'text-gray-700'}>
+                                        {v.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-gray-400">{v.category}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="p-2 border-t bg-gray-50 text-xs text-gray-500">
+                              {selectedVariables.length}/6 variáveis selecionadas
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <Button icon={Maximize2} variant="secondary" size="xs" onClick={() => navigate('/monitoring/history')} />
                     <Button icon={Download} variant="secondary" size="xs" />
-                  </Flex>
+                  </div>
                 </Flex>
+
+                {/* Selected Variables as Chips */}
+                {selectedVariables.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {selectedVariables.map((varName, idx) => (
+                      <span
+                        key={varName}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs text-white"
+                        style={{ backgroundColor: CHART_COLORS[idx] }}
+                      >
+                        {varName}
+                        <button onClick={() => toggleVariable(varName)} className="hover:opacity-75">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <div className="mt-4">
-                  <ProfessionalLineChart
-                    data={trendData}
-                    xAxisKey="time"
-                    lines={selectedVariables.map((v, i) => ({
-                      dataKey: v,
-                      name: v,
-                      color: ['#ef4444', '#f59e0b', '#3b82f6', '#06b6d4'][i] || '#3b82f6',
-                    }))}
-                    height={288}
-                    showGrid={true}
-                    showLegend={true}
-                  />
+                  {selectedVariables.length > 0 ? (
+                    <ProfessionalLineChart
+                      data={trendData}
+                      xAxisKey="time"
+                      lines={selectedVariables.map((v, i) => ({
+                        dataKey: v,
+                        name: v,
+                        color: CHART_COLORS[i],
+                      }))}
+                      height={288}
+                      showGrid={true}
+                      showLegend={true}
+                    />
+                  ) : (
+                    <div className="h-72 flex items-center justify-center text-gray-400">
+                      Selecione variáveis para visualizar
+                    </div>
+                  )}
                 </div>
               </Card>
 
               {/* Active Alarms Summary */}
               <Card>
-                <Title>Resumo de Alarmes Ativos</Title>
-                <Grid numItems={1} numItemsMd={4} className="gap-4 mt-4">
+                <Flex justifyContent="between" alignItems="center" className="mb-4">
+                  <Title>Resumo de Alarmes Ativos</Title>
+                  <Button variant="secondary" size="xs" onClick={() => navigate('/alarms')}>
+                    Ver Todos
+                    <ExternalLink className="w-4 h-4 ml-1" />
+                  </Button>
+                </Flex>
+                <Grid numItems={1} numItemsMd={4} className="gap-4">
                   <div className="p-4 bg-red-50 rounded-lg border border-red-200">
                     <Flex alignItems="center" className="gap-2">
                       <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -609,7 +833,7 @@ export default function TremorMonitoring() {
             <div className="space-y-6 mt-4">
               {/* Trend Controls */}
               <Card>
-                <Flex justifyContent="between" alignItems="center">
+                <Flex justifyContent="between" alignItems="center" className="flex-wrap gap-4">
                   <div>
                     <Title>Análise de Tendências</Title>
                     <Text className="text-gray-500">Configure o período e variáveis para análise</Text>
@@ -635,99 +859,60 @@ export default function TremorMonitoring() {
                         enableSelect={false}
                       />
                     )}
-                    <Button icon={ZoomIn} variant="secondary" size="xs" />
-                    <Button icon={ZoomOut} variant="secondary" size="xs" />
                     <Button icon={Download} variant="secondary">
                       Exportar
                     </Button>
                   </Flex>
                 </Flex>
 
-                <div className="mt-4 flex gap-2">
-                  <Button icon={ChevronLeft} variant="secondary" size="xs" />
-                  <Button icon={ChevronRight} variant="secondary" size="xs" />
-                  <Text className="ml-4 text-sm text-gray-500">
-                    Período: {new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString('pt-BR')} - {new Date().toLocaleString('pt-BR')}
-                  </Text>
+                <div className="mt-4">
+                  <Button variant="secondary" size="xs" onClick={() => navigate('/monitoring/history')}>
+                    Abrir Histórico Avançado
+                    <ExternalLink className="w-4 h-4 ml-1" />
+                  </Button>
                 </div>
               </Card>
 
               {/* Multiple Trend Charts */}
               <Grid numItems={1} numItemsMd={2} className="gap-4">
-                <Card>
-                  <Title>Temperatura vs Setpoint</Title>
-                  <div className="mt-4">
-                    <ProfessionalLineChart
-                      data={trendData}
-                      xAxisKey="time"
-                      lines={[{ dataKey: 'Temperatura', name: 'Temperatura', color: '#ef4444' }]}
-                      height={192}
-                      showGrid={true}
-                      showLegend={false}
-                    />
-                  </div>
-                </Card>
-                <Card>
-                  <Title>Pressão do Sistema</Title>
-                  <div className="mt-4">
-                    <ProfessionalLineChart
-                      data={trendData}
-                      xAxisKey="time"
-                      lines={[{ dataKey: 'Pressão', name: 'Pressão', color: '#f59e0b' }]}
-                      height={192}
-                      showGrid={true}
-                      showLegend={false}
-                    />
-                  </div>
-                </Card>
-                <Card>
-                  <Title>Vazão de Entrada</Title>
-                  <div className="mt-4">
-                    <ProfessionalAreaChart
-                      data={trendData}
-                      xAxisKey="time"
-                      dataKey="Vazão"
-                      color="#3b82f6"
-                      height={192}
-                      showGrid={true}
-                    />
-                  </div>
-                </Card>
-                <Card>
-                  <Title>Nível do Tanque</Title>
-                  <div className="mt-4">
-                    <ProfessionalAreaChart
-                      data={trendData}
-                      xAxisKey="time"
-                      dataKey="Nível"
-                      color="#06b6d4"
-                      height={192}
-                      showGrid={true}
-                    />
-                  </div>
-                </Card>
+                {selectedVariables.slice(0, 4).map((varName, idx) => (
+                  <Card key={varName}>
+                    <Title>{varName}</Title>
+                    <div className="mt-4">
+                      <ProfessionalAreaChart
+                        data={trendData}
+                        xAxisKey="time"
+                        dataKey={varName}
+                        color={CHART_COLORS[idx]}
+                        height={192}
+                        showGrid={true}
+                      />
+                    </div>
+                  </Card>
+                ))}
               </Grid>
 
               {/* Correlation Analysis */}
-              <Card>
-                <Title>Análise de Correlação</Title>
-                <Text className="text-gray-500">Comparação entre variáveis selecionadas</Text>
-                <div className="mt-4">
-                  <ProfessionalLineChart
-                    data={trendData}
-                    xAxisKey="time"
-                    lines={[
-                      { dataKey: 'Temperatura', name: 'Temperatura', color: '#ef4444' },
-                      { dataKey: 'Pressão', name: 'Pressão', color: '#f59e0b' },
-                      { dataKey: 'Vazão', name: 'Vazão', color: '#3b82f6' },
-                      { dataKey: 'Nível', name: 'Nível', color: '#06b6d4' },
-                    ]}
-                    height={288}
-                    showGrid={true}
-                    showLegend={true}
-                  />
-                </div>
-              </Card>
+              {selectedVariables.length >= 2 && (
+                <Card>
+                  <Title>Análise de Correlação</Title>
+                  <Text className="text-gray-500">Comparação entre variáveis selecionadas</Text>
+                  <div className="mt-4">
+                    <ProfessionalLineChart
+                      data={trendData}
+                      xAxisKey="time"
+                      lines={selectedVariables.map((v, i) => ({
+                        dataKey: v,
+                        name: v,
+                        color: CHART_COLORS[i],
+                      }))}
+                      height={288}
+                      showGrid={true}
+                      showLegend={true}
+                    />
+                  </div>
+                </Card>
+              )}
             </div>
           </TabPanel>
 
@@ -735,26 +920,36 @@ export default function TremorMonitoring() {
           <TabPanel>
             <Card className="mt-4">
               <Flex justifyContent="between" className="mb-4">
-                <Title>Status dos Equipamentos</Title>
-                <Button icon={RefreshCw} variant="secondary">
-                  Atualizar Status
-                </Button>
+                <div>
+                  <Title>Status dos Equipamentos</Title>
+                  <Text className="text-gray-500">Dados do sistema OEE em tempo real</Text>
+                </div>
+                <div className="flex gap-2">
+                  <Button icon={RefreshCw} variant="secondary" onClick={fetchAllData}>
+                    Atualizar
+                  </Button>
+                  <Button variant="secondary" onClick={() => navigate('/executive/oee')}>
+                    Ver OEE Completo
+                    <ExternalLink className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
               </Flex>
 
               <Table>
                 <TableHead>
                   <TableRow>
                     <TableHeaderCell>Equipamento</TableHeaderCell>
+                    <TableHeaderCell>Área</TableHeaderCell>
                     <TableHeaderCell>Status</TableHeaderCell>
-                    <TableHeaderCell>Saúde</TableHeaderCell>
-                    <TableHeaderCell>Uptime</TableHeaderCell>
-                    <TableHeaderCell>Última Manutenção</TableHeaderCell>
-                    <TableHeaderCell>Ações</TableHeaderCell>
+                    <TableHeaderCell>OEE</TableHeaderCell>
+                    <TableHeaderCell>Disponibilidade</TableHeaderCell>
+                    <TableHeaderCell>Performance</TableHeaderCell>
+                    <TableHeaderCell>Qualidade</TableHeaderCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {equipmentStatus.map((equipment) => (
-                    <TableRow key={equipment.id}>
+                    <TableRow key={equipment.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate('/executive/oee')}>
                       <TableCell>
                         <Flex alignItems="center" className="gap-2">
                           <Server className="h-4 w-4 text-gray-400" />
@@ -765,36 +960,29 @@ export default function TremorMonitoring() {
                         </Flex>
                       </TableCell>
                       <TableCell>
+                        <Badge color="gray" size="sm">{equipment.area}</Badge>
+                      </TableCell>
+                      <TableCell>
                         {getStatusBadge(equipment.status)}
                       </TableCell>
                       <TableCell>
                         <Flex alignItems="center" className="gap-2">
+                          <Text className="font-bold">{equipment.oee.toFixed(1)}%</Text>
                           <ProgressBar
-                            value={equipment.health}
-                            color={equipment.health > 80 ? 'green' : equipment.health > 60 ? 'amber' : 'red'}
-                            className="w-24"
+                            value={equipment.oee}
+                            color={equipment.oee >= 85 ? 'green' : equipment.oee >= 70 ? 'amber' : 'red'}
+                            className="w-16"
                           />
-                          <Text>{equipment.health}%</Text>
                         </Flex>
                       </TableCell>
                       <TableCell>
-                        <Text>{equipment.uptime}</Text>
+                        <Text>{equipment.availability.toFixed(1)}%</Text>
                       </TableCell>
                       <TableCell>
-                        <Text>{equipment.lastMaintenance}</Text>
+                        <Text>{equipment.performance.toFixed(1)}%</Text>
                       </TableCell>
                       <TableCell>
-                        <Flex className="gap-1">
-                          <button className="p-1.5 hover:bg-gray-100 rounded" title="Detalhes">
-                            <Eye className="h-4 w-4 text-gray-600" />
-                          </button>
-                          <button className="p-1.5 hover:bg-gray-100 rounded" title="Tendências">
-                            <TrendingUp className="h-4 w-4 text-blue-600" />
-                          </button>
-                          <button className="p-1.5 hover:bg-gray-100 rounded" title="Configurar">
-                            <Settings className="h-4 w-4 text-gray-600" />
-                          </button>
-                        </Flex>
+                        <Text>{equipment.quality.toFixed(1)}%</Text>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -819,7 +1007,7 @@ export default function TremorMonitoring() {
                           {item.name === 'Rede' && <Wifi className="h-4 w-4 text-gray-500" />}
                           <Text>{item.name}</Text>
                         </Flex>
-                        <Text className="font-medium">{item.value}%</Text>
+                        <Text className="font-medium">{item.value.toFixed(0)}%</Text>
                       </Flex>
                       <ProgressBar
                         value={item.value}
@@ -833,65 +1021,68 @@ export default function TremorMonitoring() {
 
               <Card>
                 <Title>Conectividade</Title>
-                <div className="space-y-4 mt-4">
-                  {[
-                    { name: 'Servidor Principal', status: 'connected', latency: '12ms' },
-                    { name: 'Gateway OPC-UA', status: 'connected', latency: '5ms' },
-                    { name: 'Banco de Dados', status: 'connected', latency: '8ms' },
-                    { name: 'InfluxDB', status: 'connected', latency: '3ms' },
-                    { name: 'Kafka', status: 'connected', latency: '15ms' },
-                  ].map((conn) => (
-                    <Flex key={conn.name} justifyContent="between" alignItems="center" className="p-3 bg-gray-50 rounded-lg">
+                <div className="space-y-3 mt-4">
+                  {connectivity.map((conn) => (
+                    <Flex
+                      key={conn.name}
+                      justifyContent="between"
+                      alignItems="center"
+                      className={`p-3 rounded-lg ${
+                        conn.status === 'connected' ? 'bg-green-50' :
+                        conn.status === 'degraded' ? 'bg-amber-50' : 'bg-red-50'
+                      }`}
+                    >
                       <Flex alignItems="center" className="gap-2">
                         {conn.status === 'connected' ? (
                           <Wifi className="h-4 w-4 text-green-500" />
+                        ) : conn.status === 'degraded' ? (
+                          <Wifi className="h-4 w-4 text-amber-500" />
                         ) : (
                           <WifiOff className="h-4 w-4 text-red-500" />
                         )}
-                        <Text>{conn.name}</Text>
+                        <div>
+                          <Text className="font-medium">{conn.name}</Text>
+                          {conn.details && <Text className="text-xs text-gray-500">{conn.details}</Text>}
+                        </div>
                       </Flex>
                       <Flex alignItems="center" className="gap-2">
-                        <Badge color={conn.status === 'connected' ? 'green' : 'red'}>
-                          {conn.status === 'connected' ? 'Conectado' : 'Desconectado'}
+                        <Badge color={conn.status === 'connected' ? 'green' : conn.status === 'degraded' ? 'amber' : 'red'}>
+                          {conn.status === 'connected' ? 'Conectado' : conn.status === 'degraded' ? 'Degradado' : 'Desconectado'}
                         </Badge>
-                        <Text className="text-gray-500">{conn.latency}</Text>
+                        <Text className="text-gray-500 text-sm">{conn.latency}</Text>
                       </Flex>
                     </Flex>
                   ))}
                 </div>
               </Card>
 
+              {/* System Summary */}
               <Card className="md:col-span-2">
-                <Title>Log de Eventos do Sistema</Title>
-                <div className="space-y-2 mt-4 max-h-64 overflow-y-auto">
-                  {[
-                    { time: '15:42:35', level: 'info', message: 'Sincronização de tags concluída - 1,234 tags atualizados' },
-                    { time: '15:40:12', level: 'warning', message: 'Latência elevada detectada no Gateway OPC-UA' },
-                    { time: '15:38:45', level: 'info', message: 'Backup automático do banco de dados iniciado' },
-                    { time: '15:35:20', level: 'info', message: 'Conexão WebSocket restabelecida com cliente 192.168.1.50' },
-                    { time: '15:32:10', level: 'error', message: 'Falha de comunicação com PLC-03 - Tentando reconectar...' },
-                    { time: '15:30:00', level: 'info', message: 'Rotina de coleta de dados executada com sucesso' },
-                    { time: '15:25:45', level: 'info', message: 'Novo alarme registrado: TEMP_001 acima do limite' },
-                  ].map((log, index) => (
-                    <Flex
-                      key={index}
-                      alignItems="center"
-                      className={`p-2 rounded text-sm ${
-                        log.level === 'error' ? 'bg-red-50' :
-                        log.level === 'warning' ? 'bg-amber-50' : 'bg-gray-50'
-                      }`}
-                    >
-                      <Text className="text-gray-400 w-20">{log.time}</Text>
-                      <Badge
-                        color={log.level === 'error' ? 'red' : log.level === 'warning' ? 'amber' : 'blue'}
-                        className="w-20"
-                      >
-                        {log.level.toUpperCase()}
-                      </Badge>
-                      <Text className="ml-2">{log.message}</Text>
-                    </Flex>
-                  ))}
-                </div>
+                <Title>Resumo do Sistema</Title>
+                <Grid numItems={2} numItemsMd={4} className="gap-4 mt-4">
+                  <div className="p-4 bg-blue-50 rounded-lg text-center">
+                    <Server className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                    <Text className="text-gray-600">Equipamentos</Text>
+                    <Metric className="text-blue-600">{equipmentStatus.length}</Metric>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg text-center">
+                    <Activity className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                    <Text className="text-gray-600">Variáveis</Text>
+                    <Metric className="text-green-600">{processVariables.length}</Metric>
+                  </div>
+                  <div className="p-4 bg-amber-50 rounded-lg text-center">
+                    <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto mb-2" />
+                    <Text className="text-gray-600">Alarmes Ativos</Text>
+                    <Metric className="text-amber-600">{alarmSummary.critical + alarmSummary.warning}</Metric>
+                  </div>
+                  <div className="p-4 bg-violet-50 rounded-lg text-center">
+                    <Wifi className="h-8 w-8 text-violet-600 mx-auto mb-2" />
+                    <Text className="text-gray-600">Conexões</Text>
+                    <Metric className="text-violet-600">
+                      {connectivity.filter(c => c.status === 'connected').length}/{connectivity.length}
+                    </Metric>
+                  </div>
+                </Grid>
               </Card>
             </Grid>
           </TabPanel>

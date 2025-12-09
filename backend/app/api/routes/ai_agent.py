@@ -2172,9 +2172,13 @@ async def chat_with_agent(
     logger.debug(f"🔍 DEBUG: Starting chat request: '{chat_request.message}'")
     logger.debug(f"🔍 DEBUG: Available tags: {len(chat_request.available_tags or [])}")
 
+    # Extract auth token from request headers
+    auth_header = request.headers.get("Authorization", "")
+    auth_token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else None
+
     # Initialize services
     data_service = DataService(db)
-    toolkit = AgentToolkit(data_service)
+    toolkit = AgentToolkit(data_service, auth_token=auth_token)
 
     # ========================================
     # DIRECT TOOL CALL: Bypass LLM for programmatic access
@@ -2683,12 +2687,16 @@ async def chat_with_agent_stream(
     - data: {JSON with chunk, done, metadata}
     """
 
+    # Extract auth token from request headers (outside generator)
+    auth_header = request.headers.get("Authorization", "")
+    auth_token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else None
+
     async def generate_sse_stream():
         """Generator for SSE stream"""
         try:
             # Initialize services
             data_service = DataService(db)
-            toolkit = AgentToolkit(data_service)
+            toolkit = AgentToolkit(data_service, auth_token=auth_token)
 
             message_lower = chat_request.message.lower()
 

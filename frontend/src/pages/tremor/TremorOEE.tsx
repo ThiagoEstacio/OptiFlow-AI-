@@ -150,10 +150,11 @@ const fetchRealOEEData = async (timeRange: string) => {
   // Calculate aggregated OEE from equipment metrics
   let totalOee = 0, totalAvail = 0, totalPerf = 0, totalQual = 0;
   const equipmentData = metrics.map((m: any) => {
-    const oee = m.oee_percentage || 85;
-    const avail = m.availability_percentage || 95;
-    const perf = m.performance_percentage || 92;
-    const qual = m.quality_percentage || 99;
+    // Support both API formats: oee/availability/performance/quality OR oee_percentage/availability_percentage/etc
+    const oee = m.oee ?? m.oee_percentage ?? 85;
+    const avail = m.availability ?? m.availability_percentage ?? 95;
+    const perf = m.performance ?? m.performance_percentage ?? 92;
+    const qual = m.quality ?? m.quality_percentage ?? 99;
 
     totalOee += oee;
     totalAvail += avail;
@@ -161,12 +162,15 @@ const fetchRealOEEData = async (timeRange: string) => {
     totalQual += qual;
 
     return {
-      name: m.equipment_name || m.equipment_id,
+      // Support both API formats: name/id OR equipment_name/equipment_id
+      name: m.name || m.equipment_name || m.id || m.equipment_id || 'Equipamento',
+      id: m.id || m.equipment_id,
+      area: m.area || '',
       oee,
       availability: avail,
       performance: perf,
       quality: qual,
-      status: oee >= 80 ? 'running' : 'warning',
+      status: m.status || (oee >= 85 ? 'good' : oee >= 80 ? 'warning' : 'critical'),
     };
   });
 
@@ -488,8 +492,8 @@ export const TremorOEE: React.FC = () => {
                           <Text className="font-medium">{eq.name}</Text>
                         </TableCell>
                         <TableCell>
-                          <Badge color={eq.status === 'running' ? 'emerald' : 'amber'}>
-                            {eq.status === 'running' ? 'Operando' : 'Atenção'}
+                          <Badge color={eq.status === 'good' || eq.status === 'running' ? 'emerald' : eq.status === 'warning' ? 'amber' : 'red'}>
+                            {eq.status === 'good' || eq.status === 'running' ? 'Operando' : eq.status === 'warning' ? 'Atenção' : 'Crítico'}
                           </Badge>
                         </TableCell>
                         <TableCell>

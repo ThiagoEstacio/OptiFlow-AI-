@@ -1,13 +1,13 @@
 /**
- * 🎯 Executive Dashboard - OptiFlow Showcase
- * ==========================================
+ * 🎯 Executive Dashboard - OptiFlow
+ * ==================================
  *
- * Professional executive dashboard showcasing OptiFlow's power:
- * - Real-time KPIs with clear visibility
- * - Top Offenders Analysis (Pareto)
- * - ML/AI Root Cause Analysis
- * - Predictive Maintenance insights
- * - Financial Impact Analysis
+ * Dashboard executivo simplificado para gerência e diretoria:
+ * - KPIs de alto nível (OEE, Disponibilidade, Performance, Qualidade)
+ * - Score de Saúde geral
+ * - Resumo de Alarmes (apenas contagem)
+ * - Resumo Financeiro
+ * - Tendências de produção
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -25,8 +25,6 @@ import {
 } from '@tremor/react';
 import {
   ProfessionalAreaChart,
-  ProfessionalDonutChart,
-  ProfessionalBarChart,
 } from '../../components/charts/ProfessionalCharts';
 import {
   TrendingUp,
@@ -34,7 +32,6 @@ import {
   CheckCircle,
   DollarSign,
   Activity,
-  Zap,
   Clock,
   Download,
   RefreshCw,
@@ -42,25 +39,16 @@ import {
   AlertCircle,
   Gauge,
   Factory,
-  Lightbulb,
-  Shield,
   Eye,
-  Brain,
-  Cpu,
-  Search,
-  BarChart3,
-  GitBranch,
-  Wrench,
-  TrendingDown,
-  CircleDot,
-  Sparkles,
-  LineChart,
+  Zap,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import apiClient from '../../api/client';
-import { NoInsightsAvailable } from '../../components/common/NoDataAvailable';
 import { selectStylesSmall } from '../../components/common/StyledSelect';
+import { useNavigate } from 'react-router-dom';
 
 // Types
 interface KPI {
@@ -88,13 +76,6 @@ interface ExecutiveSummary {
     trend: string;
     mttr_hours: number;
   };
-  critical_equipment: Array<{
-    name: string;
-    alarm_count: number;
-    health_score: number;
-    status: string;
-    last_alarm: string;
-  }>;
   production_trends: {
     production_rate: {
       current: number;
@@ -118,13 +99,6 @@ interface ExecutiveSummary {
       trend: string;
     };
   };
-  insights: Array<{
-    type: string;
-    icon: string;
-    title: string;
-    description: string;
-    impact: string;
-  }>;
   financial_summary: {
     estimated_savings_today: number;
     downtime_cost_avoided: number;
@@ -160,16 +134,6 @@ interface DashboardStats {
   total_tags: number;
   active_alarms: number;
   data_points_today: number;
-}
-
-interface RootCauseInsight {
-  equipment: string;
-  rootCause: string;
-  confidence: number;
-  method: string;
-  prediction: string;
-  recommendation: string;
-  savings: number;
 }
 
 // Helper functions
@@ -208,10 +172,10 @@ const getDeltaType = (trend: string): 'increase' | 'decrease' | 'unchanged' => {
 };
 
 export const TremorExecutive: React.FC = () => {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState<ExecutiveSummary | null>(null);
   const [energy, setEnergy] = useState<EnergyData | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [rootCauseAnalysis, setRootCauseAnalysis] = useState<RootCauseInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('24h');
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -222,47 +186,15 @@ export const TremorExecutive: React.FC = () => {
     setError(null);
 
     try {
-      // Map timeRange to ML insights format
-      const mlTimeRange = timeRange === '1h' ? 'last_24h' :
-                          timeRange === '24h' ? 'last_24h' :
-                          timeRange === '7d' ? 'last_7_days' : 'last_30_days';
-
-      const [summaryRes, energyRes, statsRes, reliabilityRes] = await Promise.all([
+      const [summaryRes, energyRes, statsRes] = await Promise.all([
         apiClient.get(`/api/v1/executive-summary/overview?time_range=${timeRange}`),
         apiClient.get(`/api/v1/executive-summary/energy?time_range=${timeRange}`),
         apiClient.get('/api/v1/dashboard/stats'),
-        apiClient.get(`/api/v1/ml/insights/reliability?time_range=${mlTimeRange}`).catch(() => ({ data: [] })),
       ]);
 
       setSummary(summaryRes.data);
       setEnergy(energyRes.data);
       setStats(statsRes.data);
-
-      // Transform ML reliability insights to root cause analysis format
-      // CORR-001: Remove Math.random() - only use real data from API
-      const reliabilityData = reliabilityRes.data || [];
-      if (Array.isArray(reliabilityData) && reliabilityData.length > 0) {
-        const transformedInsights: RootCauseInsight[] = reliabilityData
-          .filter((item: any) => item.type === 'root_cause' || item.equipment)
-          .slice(0, 5) // Top 5 insights
-          .map((item: any) => ({
-            equipment: item.equipment || item.asset_name || 'Equipamento',
-            rootCause: item.root_cause || item.description || item.message || 'Análise em andamento',
-            // CORR-001: Use only real confidence values, default to 0 if not available
-            confidence: item.confidence || item.reliability_score || 0,
-            method: item.method || item.analysis_type || 'Análise ML',
-            prediction: item.prediction || item.forecast || 'Aguardando análise',
-            recommendation: item.recommendation || item.action || 'Aguardando recomendação',
-            // CORR-001: Use only real savings values, default to 0 if not available
-            savings: item.estimated_savings || item.cost_impact || 0,
-          }));
-
-        setRootCauseAnalysis(transformedInsights);
-      } else {
-        // Clear insights when no data available
-        setRootCauseAnalysis([]);
-      }
-
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching executive data:', err);
@@ -293,7 +225,6 @@ export const TremorExecutive: React.FC = () => {
   const alarms = summary?.alarms;
   const production = summary?.production_trends;
   const financial = summary?.financial_summary;
-  const insights = summary?.insights || [];
 
   // Calculate overall health score
   const healthScore = kpis
@@ -306,40 +237,6 @@ export const TremorExecutive: React.FC = () => {
     hora: format(new Date(item.timestamp), 'HH:mm'),
     consumo: item.consumption_kwh,
   })) || [];
-
-  // GAP Analysis data
-  const gapData = kpis ? [
-    { name: 'OEE', atual: kpis.oee.value, meta: kpis.oee.target, gap: kpis.oee.target - kpis.oee.value, status: kpis.oee.status },
-    { name: 'Disponibilidade', atual: kpis.availability.value, meta: kpis.availability.target, gap: kpis.availability.target - kpis.availability.value, status: kpis.availability.status },
-    { name: 'Performance', atual: kpis.performance.value, meta: kpis.performance.target, gap: kpis.performance.target - kpis.performance.value, status: kpis.performance.status },
-    { name: 'Qualidade', atual: kpis.quality.value, meta: kpis.quality.target, gap: kpis.quality.target - kpis.quality.value, status: kpis.quality.status },
-  ] : [];
-
-  // Top Offenders data (Pareto) - sorted by alarm count
-  const topOffenders = summary?.critical_equipment?.sort((a, b) => b.alarm_count - a.alarm_count) || [];
-  const totalAlarms = topOffenders.reduce((sum, eq) => sum + eq.alarm_count, 0);
-  let cumulativePercent = 0;
-  const paretoData = topOffenders.map((eq) => {
-    const percent = (eq.alarm_count / totalAlarms) * 100;
-    cumulativePercent += percent;
-    return {
-      name: eq.name,
-      alarmes: eq.alarm_count,
-      percentual: percent,
-      acumulado: cumulativePercent,
-    };
-  });
-
-  // CORR-001: Removed fallback data - only show real data from API
-  // When no insights are available, the UI will show NoInsightsAvailable component
-
-  // OptiFlow Capabilities
-  const optiflowCapabilities = [
-    { icon: Brain, title: 'Machine Learning', desc: 'Detecção de anomalias e previsão de falhas', status: 'active' },
-    { icon: GitBranch, title: 'Análise de Causa Raiz', desc: 'Identificação automática de problemas', status: 'active' },
-    { icon: LineChart, title: 'Predição de Tendências', desc: 'Forecast de KPIs e consumo', status: 'active' },
-    { icon: Sparkles, title: 'IA Generativa', desc: 'Recomendações em linguagem natural', status: 'active' },
-  ];
 
   return (
     <div className="space-y-6 bg-slate-50 min-h-screen -m-6 p-6">
@@ -354,7 +251,7 @@ export const TremorExecutive: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold">Executive Dashboard</h1>
                 <p className="text-blue-300 text-sm">
-                  Powered by OptiFlow AI • {format(lastUpdated, "dd/MM HH:mm", { locale: ptBR })}
+                  Visão Geral • {format(lastUpdated, "dd/MM HH:mm", { locale: ptBR })}
                 </p>
               </div>
             </div>
@@ -434,7 +331,10 @@ export const TremorExecutive: React.FC = () => {
             </Flex>
           </div>
 
-          <div className="bg-white/10 rounded-xl p-4 backdrop-blur">
+          <div
+            className="bg-white/10 rounded-xl p-4 backdrop-blur cursor-pointer hover:bg-white/15 transition-colors"
+            onClick={() => navigate('/alarms')}
+          >
             <Flex justifyContent="between" alignItems="start">
               <div>
                 <p className="text-blue-200 text-xs font-medium">Alarmes Ativos</p>
@@ -463,8 +363,8 @@ export const TremorExecutive: React.FC = () => {
       {/* KPIs Section */}
       <div>
         <div className="mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Indicadores-Chave de Performance (KPIs)</h2>
-          <p className="text-gray-600 text-sm">Monitoramento em tempo real dos principais indicadores operacionais</p>
+          <h2 className="text-xl font-bold text-gray-900">Indicadores-Chave de Performance</h2>
+          <p className="text-gray-600 text-sm">Monitoramento dos principais indicadores operacionais</p>
         </div>
         <Grid numItemsSm={2} numItemsLg={4} className="gap-4">
           {/* OEE Card */}
@@ -549,271 +449,137 @@ export const TremorExecutive: React.FC = () => {
         </Grid>
       </div>
 
-      {/* Top Offenders & Root Cause Analysis */}
+      {/* Production Trends & Energy */}
       <Grid numItemsSm={1} numItemsLg={2} className="gap-6">
-        {/* Top Offenders (Pareto) */}
+        {/* Production Trends */}
         <Card className="bg-white">
           <Flex justifyContent="between" alignItems="center" className="mb-4">
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Maiores Ofensores</h3>
-              <p className="text-gray-600 text-sm">Análise Pareto - Equipamentos com mais paradas</p>
+              <h3 className="text-lg font-bold text-gray-900">Tendências de Produção</h3>
+              <p className="text-gray-600 text-sm">Comparativo com período anterior</p>
             </div>
-            <div className="p-2 bg-red-100 rounded-lg">
-              <BarChart3 className="w-6 h-6 text-red-600" />
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Activity className="w-6 h-6 text-blue-600" />
             </div>
           </Flex>
 
           <div className="space-y-4">
-            {paretoData.map((item, idx) => (
-              <div key={item.name}>
-                <Flex justifyContent="between" className="mb-2">
-                  <div className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">
-                      {idx + 1}
-                    </span>
-                    <p className="font-semibold text-gray-900">{item.name}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge color="red" size="sm">{item.alarmes} alarmes</Badge>
-                    <span className="text-sm font-medium text-gray-700">{item.percentual.toFixed(1)}%</span>
-                  </div>
-                </Flex>
-                <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="absolute h-full bg-gradient-to-r from-red-500 to-red-400 rounded-full"
-                    style={{ width: `${item.percentual}%` }}
-                  />
-                  <div
-                    className="absolute h-full border-r-2 border-gray-800"
-                    style={{ left: `${item.acumulado}%` }}
-                    title={`Acumulado: ${item.acumulado.toFixed(1)}%`}
-                  />
+            {/* Production Rate */}
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <Flex justifyContent="between" alignItems="center">
+                <div>
+                  <p className="text-sm text-gray-600">Taxa de Produção</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatNumber(production?.production_rate.current || 0, 0)} {production?.production_rate.unit || 't/h'}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Acumulado: {item.acumulado.toFixed(1)}% {item.acumulado >= 80 && <span className="text-amber-600 font-medium">(Regra 80/20)</span>}
-                </p>
-              </div>
-            ))}
-          </div>
+                <div className="text-right">
+                  <Flex alignItems="center" className={`gap-1 ${(production?.production_rate.change_percent || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {(production?.production_rate.change_percent || 0) >= 0 ? (
+                      <ArrowUpRight className="w-5 h-5" />
+                    ) : (
+                      <ArrowDownRight className="w-5 h-5" />
+                    )}
+                    <span className="font-semibold">{Math.abs(production?.production_rate.change_percent || 0).toFixed(1)}%</span>
+                  </Flex>
+                  <p className="text-xs text-gray-500">vs. período anterior</p>
+                </div>
+              </Flex>
+            </div>
 
-          <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
-            <Flex alignItems="start" className="gap-3">
-              <Lightbulb className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div>
-                <p className="font-semibold text-amber-800">Análise Pareto</p>
-                <p className="text-sm text-amber-700">
-                  {paretoData.filter(p => p.acumulado <= 80).length} equipamentos são responsáveis por 80% dos alarmes.
-                  Foque nestes para máximo impacto.
-                </p>
-              </div>
-            </Flex>
+            {/* Throughput */}
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <Flex justifyContent="between" alignItems="center">
+                <div>
+                  <p className="text-sm text-gray-600">Throughput</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatNumber(production?.throughput.current || 0, 0)} {production?.throughput.unit || 'ton'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <Flex alignItems="center" className={`gap-1 ${(production?.throughput.change_percent || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {(production?.throughput.change_percent || 0) >= 0 ? (
+                      <ArrowUpRight className="w-5 h-5" />
+                    ) : (
+                      <ArrowDownRight className="w-5 h-5" />
+                    )}
+                    <span className="font-semibold">{Math.abs(production?.throughput.change_percent || 0).toFixed(1)}%</span>
+                  </Flex>
+                  <p className="text-xs text-gray-500">vs. período anterior</p>
+                </div>
+              </Flex>
+            </div>
+
+            {/* Energy Efficiency */}
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <Flex justifyContent="between" alignItems="center">
+                <div>
+                  <p className="text-sm text-gray-600">Eficiência Energética</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatNumber(production?.energy_efficiency.current || 0, 1)} {production?.energy_efficiency.unit || 'kWh/ton'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <Flex alignItems="center" className={`gap-1 ${(production?.energy_efficiency.change_percent || 0) <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {(production?.energy_efficiency.change_percent || 0) <= 0 ? (
+                      <ArrowDownRight className="w-5 h-5" />
+                    ) : (
+                      <ArrowUpRight className="w-5 h-5" />
+                    )}
+                    <span className="font-semibold">{Math.abs(production?.energy_efficiency.change_percent || 0).toFixed(1)}%</span>
+                  </Flex>
+                  <p className="text-xs text-gray-500">menor = melhor</p>
+                </div>
+              </Flex>
+            </div>
           </div>
         </Card>
 
-        {/* ML/AI Root Cause Analysis */}
+        {/* Energy Consumption Chart */}
         <Card className="bg-white">
           <Flex justifyContent="between" alignItems="center" className="mb-4">
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Análise de Causa Raiz com IA</h3>
-              <p className="text-gray-600 text-sm">Machine Learning identifica a origem dos problemas</p>
+              <h3 className="text-lg font-bold text-gray-900">Consumo de Energia</h3>
+              <p className="text-gray-600 text-sm">Histórico do período selecionado</p>
             </div>
-            <div className="p-2 bg-violet-100 rounded-lg">
-              <Brain className="w-6 h-6 text-violet-600" />
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <Zap className="w-6 h-6 text-yellow-600" />
             </div>
           </Flex>
 
-          {/* CORR-001: Show NoInsightsAvailable when no data, never show fake data */}
-          {rootCauseAnalysis.length > 0 ? (
-            <div className="space-y-4">
-              {rootCauseAnalysis.map((analysis, idx) => (
-                <div key={idx} className="p-4 bg-gradient-to-r from-slate-50 to-violet-50 rounded-lg border border-violet-100">
-                  <Flex justifyContent="between" alignItems="start" className="mb-3">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-5 h-5 text-violet-600" />
-                      <span className="font-bold text-gray-900">{analysis.equipment}</span>
-                    </div>
-                    <Badge color="violet" size="sm">
-                      {analysis.confidence}% confiança
-                    </Badge>
-                  </Flex>
-
-                  <div className="space-y-2 mb-3">
-                    <div className="flex items-start gap-2">
-                      <Search className="w-4 h-4 text-gray-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-gray-500">Causa Raiz Identificada</p>
-                        <p className="text-sm font-medium text-gray-900">{analysis.rootCause}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <CircleDot className="w-4 h-4 text-gray-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-gray-500">Método de Detecção</p>
-                        <p className="text-sm text-gray-700">{analysis.method}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-gray-500">Predição</p>
-                        <p className="text-sm font-medium text-red-600">{analysis.prediction}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {analysis.savings > 0 && (
-                    <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                      <Flex justifyContent="between" alignItems="center">
-                        <div className="flex items-center gap-2">
-                          <Wrench className="w-4 h-4 text-emerald-600" />
-                          <p className="text-sm text-emerald-800">{analysis.recommendation}</p>
-                        </div>
-                        <Badge color="emerald" size="sm">
-                          Economia: {formatCurrency(analysis.savings)}
-                        </Badge>
-                      </Flex>
-                    </div>
-                  )}
+          {energyChartData.length > 0 ? (
+            <>
+              <ProfessionalAreaChart
+                data={energyChartData}
+                index="hora"
+                categories={['consumo']}
+                colors={['amber']}
+                valueFormatter={(value) => `${formatNumber(value, 0)} kWh`}
+                showLegend={false}
+                height="h-48"
+              />
+              <Grid numItemsSm={3} className="gap-4 mt-4">
+                <div className="text-center p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Consumo Total</p>
+                  <p className="text-lg font-bold text-gray-900">{formatNumber(energy?.period.total_kwh || 0, 0)} kWh</p>
                 </div>
-              ))}
-            </div>
+                <div className="text-center p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Média/Hora</p>
+                  <p className="text-lg font-bold text-gray-900">{formatNumber(energy?.period.average_kwh_hour || 0, 0)} kWh</p>
+                </div>
+                <div className="text-center p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Pico Demanda</p>
+                  <p className="text-lg font-bold text-gray-900">{formatNumber(energy?.period.peak_demand_kw || 0, 0)} kW</p>
+                </div>
+              </Grid>
+            </>
           ) : (
-            <NoInsightsAvailable period={timeRange} />
+            <div className="h-48 flex items-center justify-center text-gray-400">
+              <p>Sem dados de energia disponíveis</p>
+            </div>
           )}
         </Card>
       </Grid>
-
-      {/* GAP Analysis & AI Insights */}
-      <Grid numItemsSm={1} numItemsLg={2} className="gap-6">
-        {/* GAP Analysis */}
-        <Card className="bg-white">
-          <Flex justifyContent="between" alignItems="center" className="mb-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Análise de GAPs</h3>
-              <p className="text-gray-600 text-sm">Diferença entre meta e resultado atual</p>
-            </div>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Target className="w-6 h-6 text-blue-600" />
-            </div>
-          </Flex>
-
-          <div className="space-y-4">
-            {gapData.map((item) => (
-              <div key={item.name}>
-                <Flex justifyContent="between" className="mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${item.status === 'good' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'}`} />
-                    <p className="font-medium text-gray-900">{item.name}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <p className="text-gray-600 text-sm">{formatNumber(item.atual)}% / {item.meta}%</p>
-                    <Badge color={item.gap <= 0 ? 'emerald' : item.gap < 10 ? 'amber' : 'red'} size="sm">
-                      {item.gap <= 0 ? '✓ Meta' : `GAP: ${formatNumber(item.gap)}%`}
-                    </Badge>
-                  </div>
-                </Flex>
-                <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`absolute h-full rounded-full ${item.status === 'good' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'}`}
-                    style={{ width: `${Math.min(item.atual, 100)}%` }}
-                  />
-                  <div className="absolute h-full w-0.5 bg-gray-800" style={{ left: `${item.meta}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-emerald-50 rounded-lg">
-            <Grid numItemsSm={2} className="gap-4">
-              <div>
-                <p className="text-gray-600 text-sm">Impacto dos GAPs</p>
-                <p className="text-xl font-bold text-red-600">{formatCurrency(Math.abs(financial?.efficiency_improvement || 0) * 100000)}</p>
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Economia Projetada/Mês</p>
-                <p className="text-xl font-bold text-emerald-600">{formatCurrency(financial?.projected_monthly_savings || 0)}</p>
-              </div>
-            </Grid>
-          </div>
-        </Card>
-
-        {/* AI Insights */}
-        <Card className="bg-white">
-          <Flex justifyContent="between" alignItems="center" className="mb-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Insights Inteligentes</h3>
-              <p className="text-gray-600 text-sm">Recomendações baseadas em IA</p>
-            </div>
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <Lightbulb className="w-6 h-6 text-amber-600" />
-            </div>
-          </Flex>
-
-          <div className="space-y-3">
-            {insights.map((insight, idx) => (
-              <Callout
-                key={idx}
-                title={insight.title}
-                icon={insight.type === 'critical' ? AlertCircle : insight.type === 'warning' ? AlertTriangle : insight.type === 'info' ? Lightbulb : CheckCircle}
-                color={insight.type === 'critical' ? 'red' : insight.type === 'warning' ? 'amber' : insight.type === 'info' ? 'blue' : 'emerald'}
-              >
-                <p className="text-sm">{insight.description}</p>
-                <div className="mt-2 pt-2 border-t border-gray-200">
-                  <p className="text-xs"><strong>Impacto:</strong> {insight.impact}</p>
-                </div>
-              </Callout>
-            ))}
-          </div>
-        </Card>
-      </Grid>
-
-      {/* OptiFlow Capabilities Showcase */}
-      <Card className="bg-gradient-to-r from-violet-900 via-blue-900 to-slate-900 text-white">
-        <Flex justifyContent="between" alignItems="center" className="mb-6">
-          <div>
-            <h3 className="text-xl font-bold">OptiFlow AI - Capacidades</h3>
-            <p className="text-blue-200 text-sm">Plataforma completa de inteligência industrial</p>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 rounded-full">
-            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-            <span className="text-emerald-300 text-sm font-medium">Sistema Ativo</span>
-          </div>
-        </Flex>
-
-        <Grid numItemsSm={2} numItemsLg={4} className="gap-4">
-          {optiflowCapabilities.map((cap, idx) => (
-            <div key={idx} className="p-4 bg-white/10 rounded-xl backdrop-blur hover:bg-white/15 transition-all">
-              <div className="p-3 bg-white/10 rounded-lg w-fit mb-3">
-                <cap.icon className="w-6 h-6 text-blue-300" />
-              </div>
-              <p className="font-semibold text-white">{cap.title}</p>
-              <p className="text-blue-200 text-sm mt-1">{cap.desc}</p>
-              <Badge color="emerald" size="sm" className="mt-3">Ativo</Badge>
-            </div>
-          ))}
-        </Grid>
-
-        <div className="mt-6 p-4 bg-white/10 rounded-xl">
-          <Grid numItemsSm={2} numItemsLg={4} className="gap-6">
-            <div className="text-center">
-              <p className="text-blue-200 text-sm">Modelos ML Treinados</p>
-              <p className="text-3xl font-bold text-white mt-1">12</p>
-            </div>
-            <div className="text-center">
-              <p className="text-blue-200 text-sm">Predições/Dia</p>
-              <p className="text-3xl font-bold text-white mt-1">2.4k</p>
-            </div>
-            <div className="text-center">
-              <p className="text-blue-200 text-sm">Precisão Média</p>
-              <p className="text-3xl font-bold text-emerald-400 mt-1">94.2%</p>
-            </div>
-            <div className="text-center">
-              <p className="text-blue-200 text-sm">Falhas Evitadas</p>
-              <p className="text-3xl font-bold text-white mt-1">47</p>
-            </div>
-          </Grid>
-        </div>
-      </Card>
 
       {/* Financial Summary */}
       <Card className="bg-white">
@@ -851,6 +617,46 @@ export const TremorExecutive: React.FC = () => {
             <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(financial?.projected_monthly_savings || 0)}</p>
           </div>
         </Grid>
+      </Card>
+
+      {/* Quick Links */}
+      <Card className="bg-gradient-to-r from-slate-100 to-blue-50">
+        <Flex justifyContent="between" alignItems="center" className="flex-wrap gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Análises Detalhadas</h3>
+            <p className="text-gray-600 text-sm">Acesse relatórios e análises específicas</p>
+          </div>
+          <Flex className="gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/quality')}
+            >
+              Qualidade & Pareto
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/maintenance')}
+            >
+              Manutenção
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/analytics')}
+            >
+              Analytics & ML
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/alarms')}
+            >
+              Alarmes
+            </Button>
+          </Flex>
+        </Flex>
       </Card>
 
       {/* Error Alert */}

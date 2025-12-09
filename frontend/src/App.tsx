@@ -50,6 +50,10 @@ const TremorHistory = lazy(() => import('./pages/tremor/TremorHistory'));
 const TremorQuality = lazy(() => import('./pages/tremor/TremorQuality'));
 const TremorMaintenance = lazy(() => import('./pages/tremor/TremorMaintenance'));
 const TremorAssetFramework = lazy(() => import('./pages/tremor/TremorAssetFramework'));
+const TremorDashboardsList = lazy(() => import('./pages/tremor/TremorDashboardsList'));
+const TremorDashboardBuilder = lazy(() => import('./pages/tremor/TremorDashboardBuilder'));
+const TremorDashboardView = lazy(() => import('./pages/tremor/TremorDashboardView'));
+const TremorTagDetails = lazy(() => import('./pages/tremor/TremorTagDetails'));
 
 // Placeholder for pages that need to be migrated
 function ComingSoonPage({ title }: { title: string }) {
@@ -103,14 +107,14 @@ function AppContent() {
             <Route index element={<Suspense fallback={<PageLoading />}><TremorDashboard /></Suspense>} />
             <Route path="dashboard" element={<Suspense fallback={<PageLoading />}><TremorDashboard /></Suspense>} />
             <Route path="dashboard/executive" element={<Suspense fallback={<PageLoading />}><TremorExecutive /></Suspense>} />
-            <Route path="dashboards" element={<ComingSoonPage title="Meus Dashboards" />} />
-            <Route path="dashboards/builder" element={<ComingSoonPage title="Dashboard Builder" />} />
-            <Route path="dashboards/new" element={<ComingSoonPage title="Novo Dashboard" />} />
-            <Route path="dashboards/:id" element={<ComingSoonPage title="Dashboard" />} />
+            <Route path="dashboards" element={<Suspense fallback={<PageLoading />}><TremorDashboardsList /></Suspense>} />
+            <Route path="dashboards/builder" element={<Suspense fallback={<PageLoading />}><TremorDashboardBuilder /></Suspense>} />
+            <Route path="dashboards/new" element={<Suspense fallback={<PageLoading />}><TremorDashboardBuilder /></Suspense>} />
+            <Route path="dashboards/:id" element={<Suspense fallback={<PageLoading />}><TremorDashboardView /></Suspense>} />
 
             {/* Real-time - Tremor Professional */}
             <Route path="realtime" element={<Suspense fallback={<PageLoading />}><TremorRealtime /></Suspense>} />
-            <Route path="realtime/tags/:id" element={<ComingSoonPage title="Detalhes do Tag" />} />
+            <Route path="realtime/tags/:id" element={<Suspense fallback={<PageLoading />}><TremorTagDetails /></Suspense>} />
 
             {/* Alarms - Tremor Professional */}
             <Route path="alarms" element={<Suspense fallback={<PageLoading />}><TremorAlarms /></Suspense>} />
@@ -161,7 +165,7 @@ function AppContent() {
             <Route path="config" element={<Navigate to="/settings" replace />} />
             <Route path="config/*" element={<Navigate to="/settings" replace />} />
             <Route path="tags" element={<Navigate to="/realtime" replace />} />
-            <Route path="tags/:id" element={<ComingSoonPage title="Detalhes do Tag" />} />
+            <Route path="tags/:id" element={<Suspense fallback={<PageLoading />}><TremorTagDetails /></Suspense>} />
             <Route path="chat" element={<ComingSoonPage title="AI Chat" />} />
           </Route>
 

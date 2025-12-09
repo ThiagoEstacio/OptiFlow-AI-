@@ -170,7 +170,7 @@ export default function TremorMaintenance() {
     setLoading(true);
     try {
       // Fetch equipment KPIs
-      const kpisResponse = await apiClient.get('/maintenance/kpis/all', {
+      const kpisResponse = await apiClient.get('/api/v1/maintenance/kpis/all', {
         params: { days: timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 7 }
       });
 
@@ -188,7 +188,7 @@ export default function TremorMaintenance() {
       }
 
       // Fetch downtime analysis
-      const downtimeResponse = await apiClient.get('/maintenance/downtime/analysis', {
+      const downtimeResponse = await apiClient.get('/api/v1/maintenance/downtime/analysis', {
         params: { days: 30 }
       });
 
@@ -222,7 +222,7 @@ export default function TremorMaintenance() {
   // Fetch equipment-specific KPIs
   const fetchEquipmentKPIs = async (equipmentId: string) => {
     try {
-      const response = await apiClient.get(`/maintenance/kpis/${equipmentId}`, {
+      const response = await apiClient.get(`/api/v1/maintenance/kpis/${equipmentId}`, {
         params: { days: 90 }
       });
 
