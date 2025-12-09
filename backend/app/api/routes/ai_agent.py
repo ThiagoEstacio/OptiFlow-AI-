@@ -47,6 +47,13 @@ from ...services.ai import (
     extract_tool_calls_from_response,
     extract_tool_calls_with_fallback,
     format_tool_results_for_llm,
+    # Ollama client
+    OllamaConfig,
+    OllamaConnectionError,
+    OllamaAPIError,
+    call_ollama as ollama_call,
+    call_ollama_stream as ollama_call_stream,
+    extract_json_from_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,13 +62,7 @@ router = APIRouter()
 # Rate limiter for AI endpoints (expensive operations)
 limiter = Limiter(key_func=get_remote_address)
 
-# Ollama configuration
-import os
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-# Qwen2.5:7B - Superior reasoning for industrial applications
-# Optimized for 16GB RAM + 8GB VRAM (RTX 4060)
-# Alternative: mistral:7b (also excellent)
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+# NOTE: Ollama configuration is now in app.services.ai.ollama_client (OllamaConfig)
 
 # Circuit breaker for Ollama (prevent cascade failures when LLM is overloaded)
 ollama_circuit_breaker = CircuitBreaker(
@@ -1159,11 +1160,15 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
     Call Ollama API for chat completion with tool support.
     Optimized for MAXIMUM SPEED with GPU - Target: 3-8 seconds.
     Protected by circuit breaker to prevent cascade failures.
+
+    This is a wrapper around ollama_call from app.services.ai that adds:
+    - Circuit breaker integration for fault tolerance
+    - HTTPException conversion for FastAPI compatibility
     """
     # Check circuit breaker BEFORE attempting Ollama call
     if ollama_circuit_breaker.is_open:
         logger.warning(
-            f"⚡ Circuit breaker OPEN - Ollama unavailable "
+            f"Circuit breaker OPEN - Ollama unavailable "
             f"(will retry after {ollama_circuit_breaker.config.timeout}s)"
         )
         raise HTTPException(
@@ -1171,48 +1176,17 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
             detail="AI service temporarily unavailable due to high load. Please try again in a moment."
         )
 
-    async def _ollama_request():
-        """Inner function for circuit breaker wrapping"""
-        logger.debug(f"🔍 DEBUG: Calling Ollama at {OLLAMA_BASE_URL}")
-        # Increased timeout to 120s for first model load
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": MODEL_NAME,
-                    "messages": messages,
-                    "stream": False,
-                    "keep_alive": "30m",  # Keep model in VRAM for 30 minutes (faster subsequent queries)
-                    "options": {
-                        "temperature": 0.05,  # Even more deterministic = faster
-                        "top_p": 0.8,        # More focused sampling
-                        "top_k": 20,         # Limit token choices = faster
-                        "num_predict": 1000, # Increased for COMPLETE persona responses (was 800)
-                        "num_ctx": 4096,     # Increased context for system prompt + data + response
-                        "num_gpu": 99,       # Force full GPU usage
-                        "num_thread": 4,     # Optimize CPU threads
-                        "repeat_penalty": 1.1,  # Reduce repetition
-                        "stop": ["</response>", "\n\n\n"],  # Early stopping
-                    }
-                }
-            )
-            logger.debug(f"🔍 DEBUG: Ollama response received - Status: {response.status_code}")
-
-            if response.status_code == 200:
-                result = response.json()
-                return result["message"]["content"]
-            else:
-                raise Exception(f"Ollama API error: {response.text}")
-
     try:
-        # Execute through circuit breaker (using async version for async function)
-        result = await ollama_circuit_breaker.call_async(_ollama_request)
-        return result
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail="Cannot connect to Ollama. Make sure Ollama is running"
+        # Use the modular ollama_call with circuit breaker
+        result = await ollama_call(
+            messages=messages,
+            circuit_breaker=ollama_circuit_breaker
         )
+        return result
+    except OllamaConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except OllamaAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calling Ollama: {str(e)}")
 
@@ -1223,84 +1197,23 @@ async def call_ollama_stream(messages: List[Dict[str, str]]) -> AsyncGenerator[s
     Yields chunks of text as they are generated (SSE - Server-Sent Events).
 
     This provides real-time feedback to users, making 8s queries feel instant!
+
+    This is a wrapper around ollama_call_stream from app.services.ai that adds:
+    - HTTPException conversion for FastAPI compatibility
     """
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream(
-                "POST",
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": MODEL_NAME,
-                    "messages": messages,
-                    "stream": True,  # Enable streaming!
-                    "keep_alive": "30m",
-                    "options": {
-                        "temperature": 0.05,
-                        "top_p": 0.8,
-                        "top_k": 20,
-                        "num_predict": 800,  # Increased for complete streaming responses (was 600)
-                        "num_ctx": 4096,     # Match non-streaming context (was 1536)
-                        "num_gpu": 99,
-                        "num_thread": 4,
-                        "repeat_penalty": 1.1,
-                        "stop": ["</response>", "\n\n\n"],
-                    }
-                }
-            ) as response:
-                if response.status_code != 200:
-                    error_text = await response.aread()
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=f"Ollama API error: {error_text.decode()}"
-                    )
-
-                # Stream chunks from Ollama
-                async for line in response.aiter_lines():
-                    if line.strip():
-                        try:
-                            chunk = json.loads(line)
-                            if "message" in chunk and "content" in chunk["message"]:
-                                content = chunk["message"]["content"]
-                                if content:  # Only yield non-empty chunks
-                                    yield content
-
-                            # Check if done
-                            if chunk.get("done", False):
-                                break
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to decode JSON chunk: {line}")
-                            continue
-
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail="Cannot connect to Ollama. Make sure Ollama is running"
-        )
+        async for chunk in ollama_call_stream(messages):
+            yield chunk
+    except OllamaConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except OllamaAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as e:
         logger.error(f"Streaming error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error streaming from Ollama: {str(e)}")
 
 
-def extract_json_from_response(text: str) -> Optional[List[Dict[str, Any]]]:
-    """Extract JSON widget configurations from LLM response."""
-    # Find JSON code blocks
-    json_pattern = r'```json\s*([\s\S]*?)\s*```'
-    matches = re.findall(json_pattern, text)
-    
-    if not matches:
-        return None
-    
-    try:
-        # Parse the first JSON block found
-        json_str = matches[0].strip()
-        parsed = json.loads(json_str)
-        
-        # Ensure it's a list
-        if isinstance(parsed, dict):
-            return [parsed]
-        return parsed
-    except json.JSONDecodeError:
-        return None
+# NOTE: extract_json_from_response is now imported from app.services.ai.ollama_client
 
 
 def build_context_prompt(request: DashboardAgentRequest) -> str:
