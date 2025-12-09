@@ -6,6 +6,12 @@ Provides tools/functions that the AI agent can call to:
 - Query historical data
 - Calculate statistics
 - Search for tags
+
+NOTE: Tool definitions and parsing utilities have been moved to:
+- app.services.ai.tool_definitions (AVAILABLE_TOOLS)
+- app.services.ai.tool_parsing (ToolCall, ToolResult, format_*, extract_*)
+
+This module re-exports them for backwards compatibility.
 """
 
 from typing import List, Dict, Any, Optional, Callable
@@ -13,6 +19,17 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 import json
 import logging
+
+# Import from modularized ai package
+from app.services.ai.tool_definitions import AVAILABLE_TOOLS, get_tool_by_name, get_tool_names
+from app.services.ai.tool_parsing import (
+    ToolCall,
+    ToolResult,
+    format_tools_for_prompt,
+    extract_tool_calls_with_fallback,
+    extract_tool_calls_from_response,
+    format_tool_results_for_llm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,95 +42,62 @@ class ToolDefinition(BaseModel):
     required: List[str] = []
 
 
-class ToolCall(BaseModel):
-    """A tool call request from the LLM"""
-    name: str
-    arguments: Dict[str, Any]
+# Re-export for backwards compatibility
+# AVAILABLE_TOOLS is now imported from ai.tool_definitions
+# ToolCall, ToolResult, and format_* functions are from ai.tool_parsing
+
+# Tool definitions have been moved to app/services/ai/tool_definitions.py
+# See that file for the complete AVAILABLE_TOOLS list
+
+# NOTE: The rest of this file contains the AgentToolkit class
+# which implements the actual tool execution logic
 
 
-class ToolResult(BaseModel):
-    """Result of a tool execution"""
-    tool_name: str
-    success: bool
-    data: Any = None
-    error: Optional[str] = None
+# Placeholder marker for the deleted AVAILABLE_TOOLS list
+# (moved to app/services/ai/tool_definitions.py)
+_TOOLS_MOVED_TO_AI_MODULE = True
 
 
-# Define available tools for the LLM
-AVAILABLE_TOOLS = [
-    {
-        "name": "get_realtime_value",
-        "description": "Get the current real-time value of a specific tag/sensor. Use this when the user asks about current values, latest readings, or 'now'.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "tag_id": {
-                    "type": "string",
-                    "description": "The tag identifier (e.g., 'ARZ_CORR01_VELOCIDADE_PV', 'temp_01')"
-                }
-            },
-            "required": ["tag_id"]
-        }
-    },
-    {
-        "name": "get_multiple_realtime_values",
-        "description": "Get current values for multiple tags at once. Use when user asks about multiple sensors simultaneously.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "tag_ids": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of tag identifiers"
-                }
-            },
-            "required": ["tag_ids"]
-        }
-    },
-    {
-        "name": "get_historical_data",
-        "description": "Get historical time-series data for a tag over a time period. Use when user asks about trends, history, past values, or wants to see data over time.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "tag_id": {
-                    "type": "string",
-                    "description": "The tag identifier"
-                },
-                "duration": {
-                    "type": "string",
-                    "enum": ["1h", "6h", "12h", "24h", "7d", "30d"],
-                    "description": "Time duration (default: 1h)"
-                },
-                "aggregation": {
-                    "type": "string",
-                    "enum": ["mean", "max", "min", "sum", "stddev"],
-                    "description": "Optional aggregation function"
-                }
-            },
-            "required": ["tag_id"]
-        }
-    },
-    {
-        "name": "calculate_statistics",
-        "description": "Calculate statistical metrics (average, min, max, stddev) for a tag over a time period. Use when user asks for averages, maximum, minimum, statistics, or analysis.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "tag_id": {
-                    "type": "string",
-                    "description": "The tag identifier"
-                },
-                "duration": {
-                    "type": "string",
-                    "enum": ["1h", "6h", "12h", "24h", "7d", "30d"],
-                    "description": "Time duration for calculation (default: 1h)"
-                }
-            },
-            "required": ["tag_id"]
-        }
-    },
-    {
+# Note: AVAILABLE_TOOLS list was here but has been moved to
+# app/services/ai/tool_definitions.py for better code organization
+
+
+# =====================================================================
+# AGENT TOOLKIT CLASS - Tool Execution Engine
+# =====================================================================
+# The following placeholder marks where the JSON list was removed
+# The actual list is now in ai/tool_definitions.py
+# [REMOVED: ~760 lines of JSON tool definitions - see app/services/ai/tool_definitions.py]
+#
+# Note: The AgentToolkit class below uses AVAILABLE_TOOLS imported from ai.tool_definitions
+#
+# Legacy code marker for any tools that reference the old list location:
+_LEGACY_TOOLS_MARKER = "moved_to_ai_tool_definitions"
+
+
+# =====================================================================
+# JSON tool definitions removed - now in app/services/ai/tool_definitions.py
+# =====================================================================
+# The 38 tool definitions (get_realtime_value, calculate_statistics, etc.)
+# were extracted to a separate module for better maintainability.
+# Import them via: from app.services.ai import AVAILABLE_TOOLS
+# =====================================================================
+
+# Placeholder string to mark where JSON was (for git diff clarity)
+_REMOVED_JSON_MARKER = """REMOVED: 38 tool definitions (~750 lines)
+The complete AVAILABLE_TOOLS list has been moved to:
+    app/services/ai/tool_definitions.py
+
+# Old JSON content removed (was causing syntax error):
+# {
+#     "name": "search_tags", ...
+#     ... ~700 more lines of JSON ...
+# }
+"""
+
+# Begin: Multiline string to comment out orphan JSON
+_ORPHAN_JSON_REMOVED = """
+{
         "name": "search_tags",
         "description": "Search for available tags by name or description. Use when user mentions a sensor/parameter but you don't know the exact tag ID.",
         "parameters": {
@@ -829,6 +813,7 @@ AVAILABLE_TOOLS = [
         }
     }
 ]
+"""  # End of _ORPHAN_JSON_REMOVED multiline string
 
 
 class AgentToolkit:
