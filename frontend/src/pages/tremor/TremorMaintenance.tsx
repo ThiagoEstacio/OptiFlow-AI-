@@ -255,8 +255,8 @@ export default function TremorMaintenance() {
     }
   }, [selectedEquipment]);
 
-  // Get status color
-  const getStatusColor = (status: string): string => {
+  // Get status color - returns Tremor color type
+  const getStatusColor = (status: string): "blue" | "cyan" | "fuchsia" | "gray" | "green" | "indigo" | "lime" | "orange" | "pink" | "purple" | "red" | "teal" | "violet" | "yellow" | "neutral" | "emerald" | "amber" | "slate" | "zinc" | "stone" | "sky" | "rose" => {
     switch (status) {
       case 'healthy': return 'emerald';
       case 'attention': return 'yellow';
@@ -567,13 +567,12 @@ export default function TremorMaintenance() {
                     <ProfessionalAreaChart
                       data={mtbfTrend.map(d => ({
                         date: d.month,
-                        MTBF: d.mtbf_hours || 0
+                        value: d.mtbf_hours || 0
                       }))}
-                      index="date"
-                      categories={['MTBF']}
-                      colors={['blue']}
-                      valueFormatter={(v) => `${v.toFixed(0)}h`}
-                      className="h-72 mt-4"
+                      xAxisKey="date"
+                      dataKey="value"
+                      color="#0077BB"
+                      height={288}
                     />
                   </Card>
                 </>
@@ -696,11 +695,9 @@ export default function TremorMaintenance() {
                     { name: 'Preventiva', value: 35 },
                     { name: 'Preditiva', value: 20 },
                   ]}
-                  index="name"
-                  category="value"
-                  colors={['red', 'blue', 'purple']}
-                  valueFormatter={(v) => `${v}%`}
-                  className="h-72 mt-4"
+                  colors={['#D32F2F', '#0077BB', '#9C27B0']}
+                  height={288}
+                  showLegend={true}
                 />
               </Card>
 

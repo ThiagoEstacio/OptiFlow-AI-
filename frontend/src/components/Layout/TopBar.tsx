@@ -4,7 +4,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppSelector } from '../../store';
-import { ThemeToggle } from '../professional/ThemeToggle';
 import apiClient from '../../api/client';
 
 export const TopBar: React.FC = () => {
@@ -70,8 +69,10 @@ export const TopBar: React.FC = () => {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
-          {/* Theme Toggle */}
-          <ThemeToggle />
+          {/* Theme Toggle - using simple button */}
+          <button className="p-2 text-gray-600 hover:text-gray-800 rounded-lg hover:bg-gray-100">
+            🌙
+          </button>
 
           {/* Alarms Badge */}
           {activeAlarms.length > 0 && (

@@ -59,7 +59,7 @@ describe('API Client', () => {
       window.localStorage.setItem('access_token', 'test_token')
 
       const axios = (await import('axios')).default
-      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)()
+      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)() as { interceptors: { request: { use: ReturnType<typeof vi.fn> }; response: { use: ReturnType<typeof vi.fn> } } }
 
       // Verify interceptors are being set up
       expect(mockInstance.interceptors.request.use).toBeDefined()
@@ -69,7 +69,7 @@ describe('API Client', () => {
   describe('Response Interceptors', () => {
     it('should handle successful responses', async () => {
       const axios = (await import('axios')).default
-      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)()
+      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)() as { interceptors: { request: { use: ReturnType<typeof vi.fn> }; response: { use: ReturnType<typeof vi.fn> } } }
 
       // Verify response interceptor setup
       expect(mockInstance.interceptors.response.use).toBeDefined()
@@ -80,7 +80,7 @@ describe('API Client', () => {
     it('should handle 401 errors', async () => {
       // This tests that the interceptor is set up to handle auth errors
       const axios = (await import('axios')).default
-      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)()
+      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)() as { interceptors: { request: { use: ReturnType<typeof vi.fn> }; response: { use: ReturnType<typeof vi.fn> } } }
 
       // Interceptor should be configured
       expect(mockInstance.interceptors.response.use).toBeDefined()
@@ -88,7 +88,7 @@ describe('API Client', () => {
 
     it('should handle network errors', async () => {
       const axios = (await import('axios')).default
-      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)()
+      const mockInstance = (axios.create as ReturnType<typeof vi.fn>)() as { interceptors: { request: { use: ReturnType<typeof vi.fn> }; response: { use: ReturnType<typeof vi.fn> } } }
 
       // Should have error handling
       expect(mockInstance.interceptors.response.use).toBeDefined()

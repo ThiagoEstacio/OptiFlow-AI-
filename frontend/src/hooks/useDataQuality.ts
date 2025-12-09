@@ -10,7 +10,9 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { DataQuality } from '../components/industrial/QualityIndicator';
+
+// Data quality types (moved from industrial/QualityIndicator)
+export type DataQuality = 'GOOD' | 'BAD' | 'UNCERTAIN' | 'STALE' | 'NOT_CONNECTED';
 
 // ========================================
 // Types

@@ -551,12 +551,10 @@ export const TremorExecutive: React.FC = () => {
             <>
               <ProfessionalAreaChart
                 data={energyChartData}
-                index="hora"
-                categories={['consumo']}
-                colors={['amber']}
-                valueFormatter={(value) => `${formatNumber(value, 0)} kWh`}
-                showLegend={false}
-                height="h-48"
+                xAxisKey="hora"
+                dataKey="consumo"
+                color="#F59E0B"
+                height={192}
               />
               <Grid numItemsSm={3} className="gap-4 mt-4">
                 <div className="text-center p-3 bg-slate-50 rounded-lg">

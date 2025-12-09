@@ -90,7 +90,7 @@ describe('useAuth Hook', () => {
       const { result } = renderHook(() => useAuth())
 
       await act(async () => {
-        await result.current.login('test@example.com', 'password123')
+        await result.current.login({ username: 'test@example.com', password: 'password123' })
       })
 
       // Should store the token
@@ -153,7 +153,7 @@ describe('useAuth Hook', () => {
 
       await expect(
         act(async () => {
-          await result.current.login('test@example.com', 'wrongpassword')
+          await result.current.login({ username: 'test@example.com', password: 'wrongpassword' })
         })
       ).rejects.toThrow()
     })
