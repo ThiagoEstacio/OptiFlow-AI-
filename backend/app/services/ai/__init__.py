@@ -7,6 +7,7 @@ Provides modular AI components for the OptiFlow platform:
 - tag_matching: Intelligent tag discovery
 - tool_definitions: JSON Schema definitions for LLM tools
 - tool_parsing: Tool call extraction and formatting
+- ollama_client: Async LLM client with streaming support
 """
 
 from .prompts import (
@@ -34,6 +35,16 @@ from .tool_parsing import (
     extract_tool_calls_from_response,
     format_tool_results_for_llm,
 )
+from .ollama_client import (
+    OllamaConfig,
+    OllamaError,
+    OllamaConnectionError,
+    OllamaAPIError,
+    call_ollama,
+    call_ollama_stream,
+    extract_json_from_response,
+    DEFAULT_CONFIG as OLLAMA_DEFAULT_CONFIG,
+)
 
 __all__ = [
     # Prompts
@@ -57,4 +68,13 @@ __all__ = [
     "extract_tool_calls_with_fallback",
     "extract_tool_calls_from_response",
     "format_tool_results_for_llm",
+    # Ollama client
+    "OllamaConfig",
+    "OllamaError",
+    "OllamaConnectionError",
+    "OllamaAPIError",
+    "call_ollama",
+    "call_ollama_stream",
+    "extract_json_from_response",
+    "OLLAMA_DEFAULT_CONFIG",
 ]
