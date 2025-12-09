@@ -104,23 +104,38 @@ const getTagCategory = (name: string, unit: string): string => {
 // Fetch available tags from API
 const fetchAvailableTags = async (): Promise<TagInfo[]> => {
   try {
-    const response = await apiClient.get('/api/v1/timeseries/tags/active', {
-      params: { lookback_hours: 24 }
-    });
+    // Try multiple endpoints for tag discovery
+    let tags: any[] = [];
 
-    const tags = response.data?.tags || [];
+    // First try: /api/v1/tags (PostgreSQL)
+    try {
+      const response = await apiClient.get('/api/v1/tags', {
+        params: { limit: 200 }
+      });
+      tags = response.data || [];
+    } catch {
+      // If fails, try demo/tags endpoint
+      try {
+        const demoResponse = await apiClient.get('/api/v1/demo/tags/realtime', {
+          params: { limit: 200 }
+        });
+        tags = demoResponse.data?.tags || [];
+      } catch {
+        console.warn('Could not fetch tags from primary endpoints');
+      }
+    }
 
     return tags.map((tag: any) => {
-      const name = tag.name || tag.id || 'Tag';
-      const unit = tag.unit || '';
-      const value = tag.last_value ?? 0;
+      const name = tag.name || tag.tag_name || tag.id || 'Tag';
+      const unit = tag.unit || tag.engineering_unit || '';
+      const value = tag.current_value ?? tag.last_value ?? tag.value ?? 0;
 
       return {
-        id: tag.id,
+        id: tag.id || tag.tag_id || name,
         name,
         unit,
         category: getTagCategory(name, unit),
-        currentValue: value,
+        currentValue: typeof value === 'number' ? value : parseFloat(value) || 0,
       };
     });
   } catch (error) {
@@ -143,10 +158,16 @@ const fetchHistoricalData = async (
     const minutes = hours * 60;
 
     // Fetch history for each selected tag in parallel
+    // Uses /api/v1/tags/timeseries/{tag_name} endpoint connected to InfluxDB
     const historyPromises = tagIds.map(tagId =>
-      apiClient.get(`/api/v1/demo/tags/${tagId}/history`, {
-        params: { minutes }
-      }).catch(() => ({ data: { data: [], tag_name: tagId } }))
+      apiClient.get(`/api/v1/tags/timeseries/${encodeURIComponent(tagId)}`, {
+        params: { start_minutes_ago: minutes }
+      }).catch(() => {
+        // Fallback to demo endpoint
+        return apiClient.get(`/api/v1/demo/tags/${tagId}/history`, {
+          params: { minutes }
+        }).catch(() => ({ data: { data: [], tag_name: tagId } }));
+      })
     );
 
     const historyResponses = await Promise.all(historyPromises);
@@ -160,7 +181,8 @@ const fetchHistoricalData = async (
       const tagInfo = availableTags.find(t => t.id === tagId);
       const tagName = tagInfo?.name || tagId;
       const tagUnit = tagInfo?.unit || '';
-      const historyData = response.data?.data || [];
+      // Support both /api/v1/tags/timeseries and /api/v1/demo/tags formats
+      const historyData = response.data?.data || response.data?.history || [];
 
       tagStats.set(tagId, { values: [], name: tagName, unit: tagUnit });
 
@@ -242,6 +264,8 @@ export default function TremorHistory() {
   const [timeRange, setTimeRange] = useState('1h');
   const [chartType, setChartType] = useState<'line' | 'area'>('line');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showDropdown, setShowDropdown] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Fetch available tags on mount
@@ -350,11 +374,13 @@ export default function TremorHistory() {
     URL.revokeObjectURL(url);
   };
 
-  // Filter tags by search
-  const filteredTags = availableTags.filter(tag =>
-    tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tag.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter tags by search and category
+  const filteredTags = availableTags.filter(tag => {
+    const matchesSearch = tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          tag.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || tag.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   // Group tags by category
   const tagsByCategory = filteredTags.reduce((acc, tag) => {
@@ -403,7 +429,7 @@ export default function TremorHistory() {
 
         {/* Selected Tags as Chips */}
         {selectedTags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4 relative z-10">
+          <div className="flex flex-wrap gap-2 mb-4">
             {selectedTags.map((tag, idx) => (
               <span
                 key={tag.id}
@@ -427,60 +453,103 @@ export default function TremorHistory() {
           </div>
         )}
 
-        {/* Search Input */}
-        <div className="relative mb-4 z-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
-          <TextInput
-            placeholder="Buscar tags por nome ou categoria..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+        {/* Compact Tag Selector with Dropdown */}
+        <div className="relative">
+          <div className="flex gap-3">
+            {/* Category Filter */}
+            <div className="w-48">
+              <Text className="text-xs font-medium text-gray-600 mb-1">Categoria</Text>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">Todas as categorias</option>
+                {Object.keys(tagsByCategory).map(cat => (
+                  <option key={cat} value={cat}>{cat} ({tagsByCategory[cat]?.length || 0})</option>
+                ))}
+              </select>
+            </div>
 
-        {/* Tags Grid by Category */}
-        <div className="max-h-72 overflow-y-auto border border-gray-300 rounded-xl p-4 bg-white shadow-inner relative z-0">
-          {Object.entries(tagsByCategory).map(([category, tags]) => (
-            <div key={category} className="mb-5 last:mb-0">
-              <Text className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                {category}
-              </Text>
-              <div className="flex flex-wrap gap-2">
-                {tags.map(tag => {
-                  const isSelected = selectedTags.some(t => t.id === tag.id);
-                  const selectedIndex = selectedTags.findIndex(t => t.id === tag.id);
-                  const isDisabled = !isSelected && selectedTags.length >= 8;
-                  return (
-                    <button
-                      type="button"
-                      key={tag.id}
-                      onClick={() => toggleTag(tag)}
-                      disabled={isDisabled}
-                      className={`
-                        px-3 py-2 rounded-lg text-sm font-medium transition-all border-2 cursor-pointer
-                        ${isSelected
-                          ? 'text-white shadow-lg border-transparent'
-                          : isDisabled
-                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                            : 'bg-white text-gray-800 border-gray-200 hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm'
-                        }
-                      `}
-                      style={isSelected ? { backgroundColor: CHART_COLORS[selectedIndex % CHART_COLORS.length] } : {}}
-                    >
-                      {isSelected && <CheckCircle className="w-4 h-4 inline mr-1.5" />}
-                      <span className="font-semibold">{tag.name}</span>
-                      {tag.unit && <span className={isSelected ? 'text-white/80 ml-1' : 'text-gray-500 ml-1'}>({tag.unit})</span>}
-                    </button>
-                  );
-                })}
+            {/* Search and Select */}
+            <div className="flex-1">
+              <Text className="text-xs font-medium text-gray-600 mb-1">Buscar e selecionar tag</Text>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Digite para buscar tags..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+
+                {/* Dropdown */}
+                {showDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {filteredTags.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500 text-center">
+                        Nenhuma tag encontrada
+                      </div>
+                    ) : (
+                      filteredTags.slice(0, 50).map(tag => {
+                        const isSelected = selectedTags.some(t => t.id === tag.id);
+                        const isDisabled = !isSelected && selectedTags.length >= 8;
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => {
+                              toggleTag(tag);
+                              setSearchTerm('');
+                            }}
+                            disabled={isDisabled}
+                            className={`
+                              w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 border-b border-gray-100 last:border-0
+                              ${isSelected ? 'bg-blue-50' : ''}
+                              ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                            `}
+                          >
+                            <div className="flex items-center gap-2">
+                              {isSelected && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                              <span className={isSelected ? 'font-medium text-blue-700' : 'text-gray-700'}>
+                                {tag.name}
+                              </span>
+                              {tag.unit && <span className="text-gray-400 text-xs">({tag.unit})</span>}
+                            </div>
+                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                              {tag.category}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                    {filteredTags.length > 50 && (
+                      <div className="p-2 text-xs text-gray-400 text-center bg-gray-50">
+                        Mostrando 50 de {filteredTags.length} resultados. Refine sua busca.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          ))}
+          </div>
+
+          {/* Click outside to close dropdown */}
+          {showDropdown && (
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowDropdown(false)}
+            />
+          )}
         </div>
 
-        <Text className="text-xs text-gray-400 mt-2">
-          {selectedTags.length}/8 tags selecionados • {availableTags.length} tags disponíveis
+        <Text className="text-xs text-gray-400 mt-3">
+          {selectedTags.length}/8 tags selecionadas • {availableTags.length} tags disponíveis
         </Text>
       </Card>
 

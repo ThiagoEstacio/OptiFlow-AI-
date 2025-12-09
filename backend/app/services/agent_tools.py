@@ -731,6 +731,102 @@ AVAILABLE_TOOLS = [
             },
             "required": ["element_id"]
         }
+    },
+    # ========================================
+    # DASHBOARD MANAGEMENT - Criação e Edição
+    # ========================================
+    {
+        "name": "create_dashboard",
+        "description": "Create a new custom dashboard with optional widgets. Use when user asks to create, build, or make a new dashboard. Returns the created dashboard ID and URL.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Dashboard name (required)"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Dashboard description (optional)"
+                },
+                "module": {
+                    "type": "string",
+                    "enum": ["operations", "quality", "maintenance", "energy", "executive", "custom"],
+                    "description": "Dashboard module/category (default: custom)"
+                },
+                "is_public": {
+                    "type": "boolean",
+                    "description": "Make dashboard public (default: false)"
+                }
+            },
+            "required": ["name"]
+        }
+    },
+    {
+        "name": "add_widget_to_dashboard",
+        "description": "Add a widget (chart, gauge, table, etc.) to an existing dashboard. Use when user asks to add a chart, graph, gauge, KPI card, or visualization to a dashboard.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {
+                    "type": "string",
+                    "description": "Dashboard ID to add widget to (required)"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Widget title (required)"
+                },
+                "widget_type": {
+                    "type": "string",
+                    "enum": ["line_chart", "bar_chart", "pie_chart", "gauge", "kpi_card", "table", "heatmap", "sparkline", "area_chart", "donut_chart", "scatter_plot", "histogram", "realtime_value", "alarm_list", "trend_chart"],
+                    "description": "Type of widget (required)"
+                },
+                "tag_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of tag IDs to display in the widget"
+                },
+                "position": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "integer", "description": "X position (0-11)"},
+                        "y": {"type": "integer", "description": "Y position"},
+                        "w": {"type": "integer", "description": "Width (1-12)"},
+                        "h": {"type": "integer", "description": "Height (1-12)"}
+                    },
+                    "description": "Widget grid position (optional, auto-positioned if not provided)"
+                }
+            },
+            "required": ["dashboard_id", "title", "widget_type"]
+        }
+    },
+    {
+        "name": "list_dashboards",
+        "description": "List all available dashboards. Use when user asks to see existing dashboards, available dashboards, or what dashboards exist.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "module": {
+                    "type": "string",
+                    "enum": ["operations", "quality", "maintenance", "energy", "executive", "custom"],
+                    "description": "Filter by module (optional)"
+                }
+            }
+        }
+    },
+    {
+        "name": "get_dashboard_details",
+        "description": "Get details of a specific dashboard including its widgets. Use when user asks about a specific dashboard or wants to see what's in a dashboard.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dashboard_id": {
+                    "type": "string",
+                    "description": "Dashboard ID to get details for"
+                }
+            },
+            "required": ["dashboard_id"]
+        }
     }
 ]
 
@@ -738,14 +834,18 @@ AVAILABLE_TOOLS = [
 class AgentToolkit:
     """Toolkit for executing agent tools"""
 
-    def __init__(self, data_service):
+    def __init__(self, data_service, auth_token: Optional[str] = None, user_id: Optional[str] = None):
         """
         Initialize the toolkit with a data service
 
         Args:
             data_service: DataService instance for data access
+            auth_token: Optional JWT token for authenticated API calls
+            user_id: Optional user ID for context
         """
         self.data_service = data_service
+        self.auth_token = auth_token
+        self.user_id = user_id
         # Gateway client for Asset Tree access
         from app.services.gateway_client import get_gateway_client
         self.gateway_client = get_gateway_client()
@@ -789,6 +889,11 @@ class AgentToolkit:
             "get_asset_statistics": self._get_asset_statistics,
             "get_element_attributes": self._get_element_attributes,
             "get_tags_by_asset": self._get_tags_by_asset,
+            # Dashboard Management
+            "create_dashboard": self._create_dashboard,
+            "add_widget_to_dashboard": self._add_widget_to_dashboard,
+            "list_dashboards": self._list_dashboards,
+            "get_dashboard_details": self._get_dashboard_details,
         }
     
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
@@ -3813,6 +3918,345 @@ class AgentToolkit:
 
         except Exception as e:
             logger.error(f"Error getting tags by asset: {e}")
+            return {"error": str(e), "success": False}
+
+    # ========================================
+    # DASHBOARD MANAGEMENT - Implementações
+    # ========================================
+
+    async def _create_dashboard(
+        self,
+        name: str,
+        description: str = "",
+        module: str = "custom",
+        is_public: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Create a new dashboard via the API.
+
+        Args:
+            name: Dashboard name
+            description: Optional description
+            module: Module category (operations, quality, maintenance, energy, executive, custom)
+            is_public: Whether dashboard is public
+
+        Returns:
+            Dashboard creation result with ID and URL
+        """
+        import httpx
+
+        try:
+            # Map module string to valid enum value
+            module_map = {
+                "operations": "operations",
+                "quality": "quality",
+                "maintenance": "maintenance",
+                "energy": "energy",
+                "executive": "executive",
+                "custom": "custom"
+            }
+            module_value = module_map.get(module.lower(), "custom")
+
+            # Build headers with auth token if available
+            headers = {"Content-Type": "application/json"}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            # Get base URL from environment
+            base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+            # Create dashboard via API
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/api/v1/dashboards",
+                    json={
+                        "name": name,
+                        "description": description or "",
+                        "module": module_value,
+                        "is_public": is_public,
+                        "is_template": False,
+                        "layout_config": {},
+                        "default_filters": {},
+                        "refresh_interval": 30,
+                        "auto_refresh": True,
+                        "theme": "light",
+                        "show_legend": True,
+                        "show_grid": True
+                    },
+                    headers=headers
+                )
+
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    dashboard_id = data.get("id")
+
+                    return {
+                        "success": True,
+                        "dashboard_id": dashboard_id,
+                        "name": name,
+                        "module": module_value,
+                        "url": f"/dashboards/{dashboard_id}",
+                        "builder_url": f"/dashboards/builder/{dashboard_id}",
+                        "message": f"Dashboard '{name}' criado com sucesso!",
+                        "summary": f"Dashboard criado: {name}\n  ID: {dashboard_id}\n  Módulo: {module_value}\n  URL: /dashboards/{dashboard_id}\n\nPróximos passos: Use add_widget_to_dashboard para adicionar widgets ao dashboard."
+                    }
+                else:
+                    error_detail = response.text
+                    logger.error(f"Failed to create dashboard: {response.status_code} - {error_detail}")
+                    return {
+                        "success": False,
+                        "error": f"Erro ao criar dashboard: {error_detail}",
+                        "status_code": response.status_code
+                    }
+
+        except Exception as e:
+            logger.error(f"Error creating dashboard: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _add_widget_to_dashboard(
+        self,
+        dashboard_id: str,
+        title: str,
+        widget_type: str,
+        tag_ids: Optional[List[str]] = None,
+        position: Optional[Dict[str, int]] = None
+    ) -> Dict[str, Any]:
+        """
+        Add a widget to an existing dashboard.
+
+        Args:
+            dashboard_id: Dashboard ID
+            title: Widget title
+            widget_type: Type of widget (line_chart, gauge, kpi_card, etc.)
+            tag_ids: Optional list of tag IDs for data
+            position: Optional grid position {x, y, w, h}
+
+        Returns:
+            Widget creation result
+        """
+        import httpx
+
+        try:
+            # Map widget type to valid enum
+            widget_type_map = {
+                "line_chart": "line_chart",
+                "bar_chart": "bar_chart",
+                "pie_chart": "pie_chart",
+                "gauge": "gauge",
+                "kpi_card": "kpi_card",
+                "table": "table",
+                "heatmap": "heatmap",
+                "sparkline": "sparkline",
+                "area_chart": "area_chart",
+                "donut_chart": "donut_chart",
+                "scatter_plot": "scatter_plot",
+                "histogram": "histogram",
+                "realtime_value": "realtime_value",
+                "alarm_list": "alarm_list",
+                "trend_chart": "trend_chart"
+            }
+            widget_type_value = widget_type_map.get(widget_type.lower(), "line_chart")
+
+            # Default position if not provided
+            if position is None:
+                position = {"x": 0, "y": 0, "w": 6, "h": 4}
+
+            # Build data config based on tags
+            data_config = {}
+            if tag_ids:
+                data_config = {
+                    "tag_ids": tag_ids,
+                    "time_range": "1h"
+                }
+
+            # Build headers with auth token if available
+            headers = {"Content-Type": "application/json"}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            # Get base URL from environment
+            base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+            # Create widget via API
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/api/v1/dashboards/{dashboard_id}/widgets",
+                    json={
+                        "title": title,
+                        "description": "",
+                        "type": widget_type_value,
+                        "position": 0,
+                        "grid_position": {
+                            "x": position.get("x", 0),
+                            "y": position.get("y", 0),
+                            "w": position.get("w", 6),
+                            "h": position.get("h", 4)
+                        },
+                        "config": {},
+                        "data_config": data_config,
+                        "display_config": {
+                            "showLegend": True,
+                            "showGrid": True
+                        },
+                        "refresh_interval": 30
+                    },
+                    headers=headers
+                )
+
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    widget_id = data.get("id")
+
+                    return {
+                        "success": True,
+                        "widget_id": widget_id,
+                        "dashboard_id": dashboard_id,
+                        "title": title,
+                        "type": widget_type_value,
+                        "message": f"Widget '{title}' adicionado ao dashboard!",
+                        "summary": f"Widget adicionado:\n  Título: {title}\n  Tipo: {widget_type_value}\n  Tags: {len(tag_ids) if tag_ids else 0}\n  Posição: x={position.get('x', 0)}, y={position.get('y', 0)}, w={position.get('w', 6)}, h={position.get('h', 4)}"
+                    }
+                else:
+                    error_detail = response.text
+                    logger.error(f"Failed to add widget: {response.status_code} - {error_detail}")
+                    return {
+                        "success": False,
+                        "error": f"Erro ao adicionar widget: {error_detail}",
+                        "status_code": response.status_code
+                    }
+
+        except Exception as e:
+            logger.error(f"Error adding widget: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _list_dashboards(
+        self,
+        module: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        List all available dashboards.
+
+        Args:
+            module: Optional filter by module
+
+        Returns:
+            List of dashboards
+        """
+        import httpx
+
+        try:
+            params = {}
+            if module:
+                params["module"] = module
+
+            # Build headers with auth token if available
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            # Get base URL from environment
+            base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{base_url}/api/v1/dashboards",
+                    params=params,
+                    headers=headers
+                )
+
+                if response.status_code == 200:
+                    dashboards = response.json()
+
+                    # Build summary
+                    summary = f"Dashboards encontrados: {len(dashboards)}\n\n"
+                    for dash in dashboards[:10]:
+                        summary += f"  - {dash.get('name', 'Sem nome')}\n"
+                        summary += f"    ID: {dash.get('id')}\n"
+                        summary += f"    Módulo: {dash.get('module', 'custom')}\n"
+                        summary += f"    Widgets: {dash.get('widget_count', 0)}\n\n"
+
+                    if len(dashboards) > 10:
+                        summary += f"  ... e mais {len(dashboards) - 10} dashboards\n"
+
+                    return {
+                        "success": True,
+                        "dashboards": dashboards,
+                        "total": len(dashboards),
+                        "summary": summary
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Erro ao listar dashboards: {response.text}",
+                        "status_code": response.status_code
+                    }
+
+        except Exception as e:
+            logger.error(f"Error listing dashboards: {e}")
+            return {"error": str(e), "success": False}
+
+    async def _get_dashboard_details(
+        self,
+        dashboard_id: str
+    ) -> Dict[str, Any]:
+        """
+        Get details of a specific dashboard.
+
+        Args:
+            dashboard_id: Dashboard ID
+
+        Returns:
+            Dashboard details with widgets
+        """
+        import httpx
+
+        try:
+            # Build headers with auth token if available
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            # Get base URL from environment
+            base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{base_url}/api/v1/dashboards/{dashboard_id}",
+                    headers=headers
+                )
+
+                if response.status_code == 200:
+                    dashboard = response.json()
+                    widgets = dashboard.get("widgets", [])
+
+                    # Build summary
+                    summary = f"Dashboard: {dashboard.get('name', 'Sem nome')}\n"
+                    summary += f"  ID: {dashboard_id}\n"
+                    summary += f"  Módulo: {dashboard.get('module', 'custom')}\n"
+                    summary += f"  Público: {'Sim' if dashboard.get('is_public') else 'Não'}\n"
+                    summary += f"  Widgets: {len(widgets)}\n\n"
+
+                    if widgets:
+                        summary += "Widgets:\n"
+                        for w in widgets:
+                            summary += f"  - {w.get('title', 'Sem título')} ({w.get('type', 'unknown')})\n"
+
+                    return {
+                        "success": True,
+                        "dashboard": dashboard,
+                        "widgets": widgets,
+                        "widget_count": len(widgets),
+                        "summary": summary
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Dashboard não encontrado: {dashboard_id}",
+                        "status_code": response.status_code
+                    }
+
+        except Exception as e:
+            logger.error(f"Error getting dashboard details: {e}")
             return {"error": str(e), "success": False}
 
 

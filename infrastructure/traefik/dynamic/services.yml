@@ -1,0 +1,230 @@
+# Traefik Dynamic Configuration - Services & Routes
+# ==================================================
+# Service definitions and routing rules for OptiFlow
+
+http:
+  # ==========================================
+  # ROUTERS - Define how traffic is routed
+  # ==========================================
+  routers:
+    # Frontend Application
+    frontend:
+      rule: "Host(`optiflow.com`) || Host(`app.optiflow.com`) || Host(`localhost`)"
+      entryPoints:
+        - websecure
+        - web
+      service: frontend
+      middlewares:
+        - security-headers
+        - compress
+      tls:
+        certResolver: letsencrypt
+
+    # Backend API
+    api:
+      rule: "(Host(`optiflow.com`) || Host(`api.optiflow.com`) || Host(`localhost`)) && PathPrefix(`/api`)"
+      entryPoints:
+        - websecure
+        - web
+      service: backend
+      middlewares:
+        - cors
+        - api-rate-limit
+        - security-headers
+        - compress
+        - retry
+        - circuit-breaker
+      tls:
+        certResolver: letsencrypt
+
+    # WebSocket connections
+    websocket:
+      rule: "(Host(`optiflow.com`) || Host(`localhost`)) && PathPrefix(`/ws`)"
+      entryPoints:
+        - websecure
+        - ws
+      service: backend
+      middlewares:
+        - cors
+      tls:
+        certResolver: letsencrypt
+
+    # GraphQL endpoint
+    graphql:
+      rule: "(Host(`optiflow.com`) || Host(`localhost`)) && PathPrefix(`/graphql`)"
+      entryPoints:
+        - websecure
+        - web
+      service: backend
+      middlewares:
+        - cors
+        - api-rate-limit
+        - compress
+      tls:
+        certResolver: letsencrypt
+
+    # Health checks
+    health:
+      rule: "PathPrefix(`/health`) || PathPrefix(`/ready`) || PathPrefix(`/live`)"
+      entryPoints:
+        - web
+      service: backend
+      priority: 100
+
+    # Metrics endpoint (internal only)
+    metrics:
+      rule: "PathPrefix(`/metrics`)"
+      entryPoints:
+        - metrics
+      service: backend
+      middlewares:
+        - admin-whitelist
+
+    # API Documentation
+    docs:
+      rule: "(Host(`optiflow.com`) || Host(`localhost`)) && (PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))"
+      entryPoints:
+        - websecure
+        - web
+      service: backend
+      middlewares:
+        - security-headers
+
+    # Grafana Dashboard
+    grafana:
+      rule: "(Host(`monitoring.optiflow.com`) || Host(`localhost`)) && PathPrefix(`/grafana`)"
+      entryPoints:
+        - websecure
+        - web
+      service: grafana
+      middlewares:
+        - admin-whitelist
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # Prometheus
+    prometheus:
+      rule: "(Host(`monitoring.optiflow.com`) || Host(`localhost`)) && PathPrefix(`/prometheus`)"
+      entryPoints:
+        - websecure
+      service: prometheus
+      middlewares:
+        - admin-whitelist
+      tls:
+        certResolver: letsencrypt
+
+    # MLflow
+    mlflow:
+      rule: "(Host(`ml.optiflow.com`) || Host(`localhost`)) && PathPrefix(`/mlflow`)"
+      entryPoints:
+        - websecure
+      service: mlflow
+      middlewares:
+        - admin-whitelist
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+  # ==========================================
+  # SERVICES - Define backend services
+  # ==========================================
+  services:
+    # Frontend service with load balancing
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:80"
+        healthCheck:
+          path: /
+          interval: 30s
+          timeout: 5s
+        sticky:
+          cookie:
+            name: optiflow_frontend
+            secure: true
+            httpOnly: true
+
+    # Backend API service with load balancing
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8000"
+        healthCheck:
+          path: /api/health
+          interval: 10s
+          timeout: 5s
+          scheme: http
+        passHostHeader: true
+        responseForwarding:
+          flushInterval: 100ms
+
+    # Grafana
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+        healthCheck:
+          path: /api/health
+          interval: 30s
+
+    # Prometheus
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: "http://prometheus:9090"
+        healthCheck:
+          path: /-/healthy
+          interval: 30s
+
+    # MLflow
+    mlflow:
+      loadBalancer:
+        servers:
+          - url: "http://mlflow:5000"
+        healthCheck:
+          path: /health
+          interval: 30s
+
+  # ==========================================
+  # WEIGHTED SERVICES - For canary deployments
+  # ==========================================
+  # Uncomment for canary deployment
+  # services:
+  #   backend-weighted:
+  #     weighted:
+  #       services:
+  #         - name: backend-stable
+  #           weight: 90
+  #         - name: backend-canary
+  #           weight: 10
+
+# ==========================================
+# TCP ROUTERS - For database connections
+# ==========================================
+tcp:
+  routers:
+    # PostgreSQL (internal only)
+    postgres:
+      rule: "HostSNI(`*`)"
+      entryPoints:
+        - postgres
+      service: postgres
+
+    # Redis (internal only)
+    redis:
+      rule: "HostSNI(`*`)"
+      entryPoints:
+        - redis
+      service: redis
+
+  services:
+    postgres:
+      loadBalancer:
+        servers:
+          - address: "postgres:5432"
+
+    redis:
+      loadBalancer:
+        servers:
+          - address: "redis:6379"

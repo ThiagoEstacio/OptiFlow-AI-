@@ -1,0 +1,94 @@
+# Traefik Static Configuration for OptiFlow AI Platform
+# =====================================================
+# This configuration enables load balancing, SSL termination,
+# and routing for all microservices.
+
+api:
+  dashboard: true
+  insecure: true  # Set to false in production with proper auth
+
+entryPoints:
+  # HTTP entrypoint (redirects to HTTPS in production)
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  # HTTPS entrypoint
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+  # WebSocket entrypoint for real-time connections
+  ws:
+    address: ":8443"
+
+  # Metrics entrypoint for Prometheus
+  metrics:
+    address: ":8082"
+
+# Providers
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: optiflow-network
+    watch: true
+
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# Certificate Resolvers
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@optiflow.com
+      storage: /etc/traefik/acme.json
+      httpChallenge:
+        entryPoint: web
+
+# Logging
+log:
+  level: INFO
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  bufferingSize: 100
+  filters:
+    statusCodes:
+      - "400-599"
+    retryAttempts: true
+    minDuration: "10ms"
+
+# Metrics
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+# Health Check
+ping:
+  entryPoint: web
+
+# Tracing (optional - for distributed tracing)
+# tracing:
+#   jaeger:
+#     samplingServerURL: http://jaeger:5778/sampling
+#     localAgentHostPort: jaeger:6831

@@ -1,0 +1,121 @@
+# Traefik Dynamic Configuration - Middlewares
+# ============================================
+# Reusable middleware configurations for OptiFlow
+
+http:
+  middlewares:
+    # Rate Limiting - Prevents abuse
+    rate-limit:
+      rateLimit:
+        average: 100  # requests per second
+        burst: 50
+        period: 1s
+
+    # Rate Limiting for API endpoints
+    api-rate-limit:
+      rateLimit:
+        average: 1000
+        burst: 200
+        period: 1s
+
+    # Security Headers
+    security-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+        referrerPolicy: "strict-origin-when-cross-origin"
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss: ws:;"
+
+    # CORS for API
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - PATCH
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+          - X-Request-ID
+        accessControlAllowOriginList:
+          - "https://optiflow.com"
+          - "https://app.optiflow.com"
+          - "http://localhost:3000"
+          - "http://localhost:5173"
+        accessControlMaxAge: 7200
+        addVaryHeader: true
+        accessControlAllowCredentials: true
+
+    # Compression
+    compress:
+      compress:
+        excludedContentTypes:
+          - text/event-stream
+
+    # Retry on failure
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: 100ms
+
+    # Circuit Breaker
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.30 || ResponseCodeRatio(500, 600, 0, 600) > 0.25"
+        checkPeriod: 10s
+        fallbackDuration: 30s
+        recoveryDuration: 60s
+
+    # Buffering for large uploads
+    buffering:
+      buffering:
+        maxRequestBodyBytes: 104857600  # 100MB
+        memRequestBodyBytes: 10485760   # 10MB
+        retryExpression: "IsNetworkError() && Attempts() < 2"
+
+    # Strip prefix for API versioning
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+
+    # Add request ID for tracing
+    request-id:
+      headers:
+        customRequestHeaders:
+          X-Request-ID: "{{ uuid }}"
+
+    # IP Whitelist (for admin endpoints)
+    admin-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+
+    # Basic Auth (for dashboard in production)
+    dashboard-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$xyz123$hashedpassword"  # Change in production
+
+    # Forward Auth (for OAuth/JWT validation)
+    jwt-auth:
+      forwardAuth:
+        address: "http://backend:8000/api/v1/auth/validate"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-User-ID
+          - X-User-Email
+          - X-User-Role

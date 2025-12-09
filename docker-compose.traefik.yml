@@ -1,0 +1,296 @@
+# Docker Compose with Traefik Load Balancer
+# ==========================================
+# Production-ready configuration with Traefik for:
+# - Load balancing
+# - SSL termination
+# - Health checks
+# - Circuit breakers
+# - Rate limiting
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # TRAEFIK - Reverse Proxy & Load Balancer
+  # ==========================================
+  traefik:
+    image: traefik:v3.0
+    container_name: optiflow-traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS
+      - "8080:8080"   # Dashboard
+      - "8082:8082"   # Metrics
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-certs:/etc/traefik/acme
+      - traefik-logs:/var/log/traefik
+    networks:
+      - optiflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.routers.traefik.service=api@internal"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================
+  # BACKEND API - Scalable
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: optiflow/backend:latest
+    container_name: optiflow-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://optiflow:${DB_PASSWORD:-optiflow_password}@postgres:5432/optiflow
+      - REDIS_URL=redis://redis:6379/0
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=optiflow
+      - INFLUXDB_BUCKET=timeseries
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ENVIRONMENT=production
+      - BACKEND_URL=http://backend:8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - VAULT_ADDR=http://vault:8200
+    volumes:
+      - backend-data:/app/data
+    networks:
+      - optiflow-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`) || PathPrefix(`/graphql`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`)"
+      - "traefik.http.routers.backend.entrypoints=web,websecure"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/api/health"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.routers.backend.middlewares=cors@file,api-rate-limit@file,compress@file"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # ==========================================
+  # FRONTEND - Scalable
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-/api}
+    image: optiflow/frontend:latest
+    container_name: optiflow-frontend
+    restart: unless-stopped
+    networks:
+      - optiflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web,websecure"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend.middlewares=security-headers@file,compress@file"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ==========================================
+  # DATABASE - PostgreSQL with Replication Ready
+  # ==========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: optiflow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=optiflow
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-optiflow_password}
+      - POSTGRES_DB=optiflow
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U optiflow -d optiflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # ==========================================
+  # CACHE - Redis with Sentinel Ready
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: optiflow-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+
+  # ==========================================
+  # TIME-SERIES - InfluxDB
+  # ==========================================
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: optiflow-influxdb
+    restart: unless-stopped
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=optiflow
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-optiflow_password}
+      - DOCKER_INFLUXDB_INIT_ORG=optiflow
+      - DOCKER_INFLUXDB_INIT_BUCKET=timeseries
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    networks:
+      - optiflow-network
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================
+  # AI/ML - Ollama
+  # ==========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: optiflow-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - optiflow-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ==========================================
+  # MONITORING - Prometheus
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: optiflow-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - optiflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=PathPrefix(`/prometheus`)"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # ==========================================
+  # MONITORING - Grafana
+  # ==========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: optiflow-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./infrastructure/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - optiflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=PathPrefix(`/grafana`)"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+# ==========================================
+# NETWORKS
+# ==========================================
+networks:
+  optiflow-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ==========================================
+# VOLUMES
+# ==========================================
+volumes:
+  postgres-data:
+  redis-data:
+  influxdb-data:
+  ollama-data:
+  prometheus-data:
+  grafana-data:
+  traefik-certs:
+  traefik-logs:
+  backend-data:
