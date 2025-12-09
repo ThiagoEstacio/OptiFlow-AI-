@@ -163,8 +163,8 @@ export const TremorDashboard: React.FC = () => {
           setChartData(generateFallbackTimeSeriesData());
         }
 
-        // Fetch equipment status from OEE predictions
-        const equipResponse = await apiClient.get('/api/v1/oee/predictions/all/warnings')
+        // Fetch equipment status from OEE predictions (fixed endpoint)
+        const equipResponse = await apiClient.get('/api/v1/oee/predictions/warnings/active')
           .catch(() => ({ data: { warnings: [] } }));
 
         if (equipResponse.data?.warnings?.length > 0) {
@@ -183,26 +183,30 @@ export const TremorDashboard: React.FC = () => {
           })));
         }
 
-        // Fetch alarms summary
-        const alarmsResponse = await apiClient.get('/api/v1/alarms/summary', {
-          params: { time_range: '24h' }
-        }).catch(() => ({ data: null }));
+        // Fetch alarms statistics (fixed endpoint - was /alarms/summary)
+        const alarmsResponse = await apiClient.get('/api/v1/alarms/statistics')
+          .catch(() => ({ data: null }));
 
-        if (alarmsResponse.data?.by_type) {
+        if (alarmsResponse.data?.by_severity) {
+          setAlarmsByType(Object.entries(alarmsResponse.data.by_severity).map(([name, value]) => ({
+            name,
+            value: value as number,
+          })));
+        } else if (alarmsResponse.data?.by_type) {
           setAlarmsByType(Object.entries(alarmsResponse.data.by_type).map(([name, value]) => ({
             name,
             value: value as number,
           })));
         } else {
-          // Fetch alarm events as fallback
-          const eventsResponse = await apiClient.get('/api/v1/alarms/events', {
-            params: { limit: 50, state: 'ACTIVE' }
-          }).catch(() => ({ data: { items: [] } }));
+          // Fetch active alarms as fallback
+          const eventsResponse = await apiClient.get('/api/v1/alarms/active', {
+            params: { limit: 50 }
+          }).catch(() => ({ data: [] }));
 
-          const events = eventsResponse.data?.items || [];
+          const events = Array.isArray(eventsResponse.data) ? eventsResponse.data : eventsResponse.data?.alarms || [];
           const alarmTypes: Record<string, number> = {};
           events.forEach((e: any) => {
-            const type = e.alarm_type || 'Outro';
+            const type = e.severity || e.alarm_type || 'Outro';
             alarmTypes[type] = (alarmTypes[type] || 0) + 1;
           });
 
@@ -212,14 +216,19 @@ export const TremorDashboard: React.FC = () => {
           })));
         }
 
-        // Fetch OEE by equipment for production data
-        const oeeResponse = await apiClient.get('/api/v1/oee/metrics/all')
+        // Fetch OEE by equipment for production data (fixed endpoint - was /oee/metrics/all)
+        const oeeResponse = await apiClient.get('/api/v1/oee/equipment')
           .catch(() => ({ data: null }));
 
-        if (oeeResponse.data?.metrics) {
-          setProductionData(oeeResponse.data.metrics.slice(0, 4).map((m: any, idx: number) => ({
-            category: m.equipment_name || `Linha ${String.fromCharCode(65 + idx)}`,
-            value: Math.round(m.oee_percentage || 75),
+        if (oeeResponse.data?.equipment?.length > 0) {
+          setProductionData(oeeResponse.data.equipment.slice(0, 4).map((m: any, idx: number) => ({
+            category: m.name || m.equipment_name || `Linha ${String.fromCharCode(65 + idx)}`,
+            value: Math.round(m.oee || m.oee_percentage || 75),
+          })));
+        } else if (Array.isArray(oeeResponse.data) && oeeResponse.data.length > 0) {
+          setProductionData(oeeResponse.data.slice(0, 4).map((m: any, idx: number) => ({
+            category: m.name || m.equipment_name || `Linha ${String.fromCharCode(65 + idx)}`,
+            value: Math.round(m.oee || m.oee_percentage || 75),
           })));
         } else {
           setProductionData([

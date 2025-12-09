@@ -127,23 +127,25 @@ const fetchRealOEEData = async (timeRange: string) => {
   // Parse time range
   const hours = timeRange === '1h' ? 1 : timeRange === '8h' ? 8 : timeRange === '24h' ? 24 : 168;
 
-  // Fetch OEE metrics from API
-  const oeeResponse = await apiClient.get('/api/v1/oee/metrics/all', {
+  // Fetch OEE metrics from API (fixed endpoint - was /oee/metrics/all)
+  const oeeResponse = await apiClient.get('/api/v1/oee/equipment', {
     params: { time_range: timeRange }
   }).catch(() => ({ data: null }));
 
-  // Fetch OEE predictions
-  const predictionsResponse = await apiClient.get('/api/v1/oee/predictions/all/warnings')
+  // Fetch OEE predictions (fixed endpoint - was /oee/predictions/all/warnings)
+  const predictionsResponse = await apiClient.get('/api/v1/oee/predictions/warnings/active')
     .catch(() => ({ data: { warnings: [] } }));
 
-  // Fetch production data
-  const productionResponse = await apiClient.get('/api/v1/production/summary', {
+  // Fetch production data (fixed endpoint - was /production/summary)
+  const productionResponse = await apiClient.get('/api/v1/executive-summary/production', {
     params: { time_range: timeRange }
   }).catch(() => ({ data: null }));
 
-  // Build data from API responses
-  const metrics = oeeResponse.data?.metrics || [];
-  const warnings = predictionsResponse.data?.warnings || [];
+  // Build data from API responses (handle different response formats)
+  const metrics = oeeResponse.data?.equipment || oeeResponse.data?.metrics ||
+                  (Array.isArray(oeeResponse.data) ? oeeResponse.data : []);
+  const warnings = predictionsResponse.data?.warnings ||
+                   (Array.isArray(predictionsResponse.data) ? predictionsResponse.data : []);
 
   // Calculate aggregated OEE from equipment metrics
   let totalOee = 0, totalAvail = 0, totalPerf = 0, totalQual = 0;

@@ -93,8 +93,8 @@ export const TremorAnalytics: React.FC = () => {
           })));
         }
 
-        // Fetch OEE predictions for maintenance insights
-        const oeeResponse = await apiClient.get('/api/v1/oee/predictions/all/warnings')
+        // Fetch OEE predictions for maintenance insights (fixed endpoint)
+        const oeeResponse = await apiClient.get('/api/v1/oee/predictions/warnings/active')
           .catch(() => ({ data: { warnings: [] } }));
 
         if (oeeResponse.data?.warnings || oeeResponse.data) {

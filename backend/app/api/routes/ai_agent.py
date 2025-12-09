@@ -97,6 +97,144 @@ class DashboardAgentResponse(BaseModel):
 # SYSTEM PROMPTS - Analista Sênior PCO/PCM/Qualidade (Indústria 4.0)
 # =============================================================================
 
+# =============================================================================
+# PERSONA-SPECIFIC PROMPTS - Specialized context for each user type
+# =============================================================================
+
+PERSONA_PROMPTS = {
+    "pco": """## 🎯 MODO PCO (Planejamento e Controle de Operações)
+Você é especialista em PCO com foco em:
+- **OEE**: Disponibilidade × Performance × Qualidade
+- **Gargalos**: Identificar e priorizar restrições
+- **Ritmo de produção**: Taxa real vs planejada
+- **Turnos**: Comparar A, B, C, identificar melhores práticas
+
+### SUA ANÁLISE PCO:
+1. 📊 **OEE Atual** → Meta vs Real, tendência
+2. ⚡ **Gargalo Principal** → Onde está a restrição?
+3. 📈 **Comparativo de Turnos** → Quem está melhor? Por quê?
+4. 💡 **Ação Imediata** → O que fazer AGORA para melhorar?
+
+Use linguagem de SALA DE CONTROLE: prática, direta, orientada à ação.""",
+
+    "pcm": """## 🔧 MODO PCM (Planejamento e Controle de Manutenção)
+Você é especialista em PCM com foco em:
+- **MTBF/MTTR**: Tempo médio entre falhas / reparo
+- **Manutenção Preditiva**: Quando vai falhar?
+- **Criticidade**: ABC de equipamentos
+- **Spare Parts**: Peças críticas em estoque
+
+### SUA ANÁLISE PCM:
+1. 🚨 **Alarmes Ativos** → Criticidade e tempo ativo
+2. ⚠️ **Equipamentos em Risco** → Quem precisa de atenção?
+3. 📅 **Próximas Manutenções** → O que programar?
+4. 🔧 **Ação Imediata** → Inspeção, lubrificação, troca?
+
+Pense como quem programa ORDENS DE SERVIÇO: priorize por criticidade.""",
+
+    "da": """## 📊 MODO DATA ANALYST (Analista de Dados)
+Você é especialista em análise de dados industriais:
+- **Tendências**: Padrões temporais, sazonalidade
+- **Correlações**: Relações entre variáveis
+- **Anomalias**: Outliers, desvios, eventos
+- **Visualização**: Gráficos, dashboards, relatórios
+
+### SUA ANÁLISE DA:
+1. 📈 **Tendência Principal** → O que os dados mostram?
+2. 🔗 **Correlações** → Quais variáveis se relacionam?
+3. ⚠️ **Anomalias Detectadas** → O que está fora do padrão?
+4. 📊 **Visualização Sugerida** → Qual gráfico usar?
+
+Seja OBJETIVO com números, intervalos de confiança, estatísticas.""",
+
+    "ml": """## 🤖 MODO ML ENGINEER (Machine Learning)
+Você é especialista em ML industrial:
+- **Modelos**: Performance, drift, retreino
+- **Features**: Importância, engenharia
+- **Predições**: Intervalos, incerteza
+- **Explicabilidade**: Por que o modelo decidiu assim?
+
+### SUA ANÁLISE ML:
+1. 🎯 **Performance do Modelo** → RMSE, MAE, R², accuracy
+2. 📊 **Feature Importance** → Top 5 variáveis importantes
+3. ⚠️ **Drift Detectado?** → Dados mudaram?
+4. 🔄 **Recomendação** → Retreinar? Ajustar threshold?
+
+Use linguagem técnica de Data Science, com métricas quantitativas.""",
+
+    "general": """## 🏭 MODO GERAL (Indústria 4.0)
+Você é um Analista Sênior multidisciplinar, combinando visões de:
+- **PCO**: Eficiência operacional, OEE, gargalos
+- **PCM**: Manutenção preditiva, confiabilidade
+- **Qualidade**: CEP, Pareto, defeitos
+- **Dados**: Tendências, correlações, anomalias"""
+}
+
+
+def detect_persona(query: str) -> str:
+    """
+    Detect the most appropriate persona based on query keywords.
+    Returns: "pco", "pcm", "da", "ml", or "general"
+    """
+    query_lower = query.lower()
+
+    # PCM patterns (maintenance-focused)
+    pcm_patterns = [
+        'manutenção', 'manutencao', 'maintenance', 'mtbf', 'mttr',
+        'falha', 'failure', 'quebra', 'broke', 'trocar', 'troca',
+        'vida útil', 'vida util', 'desgaste', 'wear',
+        'spare', 'peça', 'peca', 'reposição', 'reposicao',
+        'lubrificação', 'lubrificacao', 'vibração', 'vibracao',
+        'ordem de serviço', 'ordem de servico', 'os',
+        'preventiva', 'corretiva', 'preditiva'
+    ]
+    if any(p in query_lower for p in pcm_patterns):
+        return "pcm"
+
+    # PCO patterns (operations-focused)
+    pco_patterns = [
+        'oee', 'produção', 'producao', 'production',
+        'gargalo', 'bottleneck', 'restrição', 'restricao',
+        'turno', 'shift', 'capacidade', 'capacity',
+        'ritmo', 'rate', 'meta', 'target', 'planejado',
+        'disponibilidade', 'availability',
+        'performance', 'desempenho', 'eficiência', 'eficiencia',
+        'parada', 'downtime', 'setup', 'ciclo'
+    ]
+    if any(p in query_lower for p in pco_patterns):
+        return "pco"
+
+    # ML patterns (machine learning focused)
+    ml_patterns = [
+        'modelo', 'model', 'predição', 'predicao', 'prediction',
+        'treinar', 'train', 'treinamento', 'training',
+        'acurácia', 'acuracia', 'accuracy', 'precisão', 'precisao',
+        'feature', 'variável', 'variavel',
+        'rmse', 'mae', 'r2', 'r²', 'mse',
+        'machine learning', 'deep learning', 'neural',
+        'ensemble', 'random forest', 'xgboost',
+        'drift', 'retreino', 'retrain'
+    ]
+    if any(p in query_lower for p in ml_patterns):
+        return "ml"
+
+    # DA patterns (data analysis focused)
+    da_patterns = [
+        'gráfico', 'grafico', 'chart', 'plot',
+        'dashboard', 'painel', 'relatório', 'relatorio', 'report',
+        'correlação', 'correlacao', 'correlation',
+        'tendência', 'tendencia', 'trend',
+        'análise', 'analise', 'analysis', 'analisar',
+        'export', 'exportar', 'excel', 'pdf', 'csv',
+        'histograma', 'histogram', 'distribuição', 'distribuicao',
+        'média', 'media', 'desvio', 'std', 'percentil'
+    ]
+    if any(p in query_lower for p in da_patterns):
+        return "da"
+
+    return "general"
+
+
 # System prompt for DATA-DRIVEN analysis (with pre-fetched data)
 SYSTEM_PROMPT_WITH_DATA = """Você é um ANALISTA SÊNIOR de PCO (Planejamento e Controle de Operações), PCM (Planejamento e Controle da Manutenção) e QUALIDADE, atuando 24h em uma PLATAFORMA DE INDÚSTRIA 4.0.
 
@@ -1424,7 +1562,7 @@ async def call_ollama(messages: List[Dict[str, str]], max_iterations: int = 3) -
                         "temperature": 0.05,  # Even more deterministic = faster
                         "top_p": 0.8,        # More focused sampling
                         "top_k": 20,         # Limit token choices = faster
-                        "num_predict": 800,  # Increased for complete responses (was 500)
+                        "num_predict": 1000, # Increased for COMPLETE persona responses (was 800)
                         "num_ctx": 4096,     # Increased context for system prompt + data + response
                         "num_gpu": 99,       # Force full GPU usage
                         "num_thread": 4,     # Optimize CPU threads
@@ -1475,7 +1613,7 @@ async def call_ollama_stream(messages: List[Dict[str, str]]) -> AsyncGenerator[s
                         "temperature": 0.05,
                         "top_p": 0.8,
                         "top_k": 20,
-                        "num_predict": 600,  # Increased for complete streaming responses (was 300)
+                        "num_predict": 800,  # Increased for complete streaming responses (was 600)
                         "num_ctx": 4096,     # Match non-streaming context (was 1536)
                         "num_gpu": 99,
                         "num_thread": 4,
@@ -2217,11 +2355,17 @@ async def chat_with_agent(
 
     # If we have pre-fetched data, use DATA-DRIVEN prompt
     if pre_fetched_data:
-        logger.info("✅ Data pre-fetched successfully, using DATA-DRIVEN analysis mode")
-        system_prompt = SYSTEM_PROMPT_WITH_DATA.format(
+        # Detect persona for specialized context
+        detected_persona = detect_persona(chat_request.message)
+        persona_context = PERSONA_PROMPTS.get(detected_persona, PERSONA_PROMPTS["general"])
+        logger.info(f"✅ Data pre-fetched successfully, PERSONA={detected_persona.upper()}, using DATA-DRIVEN analysis mode")
+
+        system_prompt = f"""{persona_context}
+
+{SYSTEM_PROMPT_WITH_DATA.format(
             data_context=pre_fetched_data,
             user_query=chat_request.message
-        )
+        )}"""
 
         messages = [
             {"role": "system", "content": system_prompt},
