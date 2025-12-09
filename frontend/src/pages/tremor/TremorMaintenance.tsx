@@ -496,7 +496,7 @@ export default function TremorMaintenance() {
             <Grid numItemsMd={2} className="gap-6">
               {selectedEquipment && kpis ? (
                 <>
-                  {/* KPI Cards */}
+                  {/* KPI Cards for Selected Equipment */}
                   <Card decoration="top" decorationColor="blue">
                     <Flex alignItems="center" className="gap-2">
                       <Timer className="h-5 w-5 text-blue-600" />
@@ -577,11 +577,88 @@ export default function TremorMaintenance() {
                   </Card>
                 </>
               ) : (
-                <Card className="col-span-2">
-                  <Callout title="Selecione um equipamento" color="blue" icon={Settings}>
-                    Escolha um equipamento acima para visualizar seus indicadores de manutenção.
-                  </Callout>
-                </Card>
+                <>
+                  {/* Overview KPIs for All Equipment (default view) */}
+                  <Card decoration="top" decorationColor="blue" className="col-span-2">
+                    <Title className="mb-4">Visão Geral - Todos os Equipamentos</Title>
+                    <Grid numItemsMd={4} className="gap-4">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <Text className="text-blue-600 font-medium">MTBF Médio</Text>
+                        <Metric className="text-blue-700">
+                          {equipmentHealth.length > 0
+                            ? (equipmentHealth.reduce((sum, eq) => sum + (eq.mtbf_hours || 0), 0) / equipmentHealth.length).toFixed(0)
+                            : 'N/A'} h
+                        </Metric>
+                      </div>
+                      <div className="text-center p-4 bg-amber-50 rounded-lg">
+                        <Text className="text-amber-600 font-medium">MTTR Médio</Text>
+                        <Metric className="text-amber-700">
+                          {equipmentHealth.length > 0
+                            ? (equipmentHealth.reduce((sum, eq) => sum + (eq.mttr_hours || 0), 0) / equipmentHealth.length).toFixed(1)
+                            : 'N/A'} h
+                        </Metric>
+                      </div>
+                      <div className="text-center p-4 bg-emerald-50 rounded-lg">
+                        <Text className="text-emerald-600 font-medium">Disponibilidade Média</Text>
+                        <Metric className="text-emerald-700">
+                          {equipmentHealth.length > 0
+                            ? (equipmentHealth.reduce((sum, eq) => sum + (eq.availability_percent || 0), 0) / equipmentHealth.length).toFixed(1)
+                            : 'N/A'}%
+                        </Metric>
+                      </div>
+                      <div className="text-center p-4 bg-violet-50 rounded-lg">
+                        <Text className="text-violet-600 font-medium">Score Saúde Médio</Text>
+                        <Metric className="text-violet-700">
+                          {equipmentHealth.length > 0
+                            ? (equipmentHealth.reduce((sum, eq) => sum + (eq.health_score || 0), 0) / equipmentHealth.length).toFixed(0)
+                            : 'N/A'}%
+                        </Metric>
+                      </div>
+                    </Grid>
+                  </Card>
+
+                  {/* Equipment KPI Table */}
+                  <Card className="col-span-2">
+                    <Title>KPIs por Equipamento</Title>
+                    <Text className="text-gray-500 mb-4">Selecione um equipamento no dropdown acima para ver detalhes</Text>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableHeaderCell>Equipamento</TableHeaderCell>
+                          <TableHeaderCell className="text-right">MTBF (h)</TableHeaderCell>
+                          <TableHeaderCell className="text-right">MTTR (h)</TableHeaderCell>
+                          <TableHeaderCell className="text-right">Disponibilidade</TableHeaderCell>
+                          <TableHeaderCell className="text-right">Score Saúde</TableHeaderCell>
+                          <TableHeaderCell>Status</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {equipmentHealth.map((eq) => (
+                          <TableRow
+                            key={eq.equipment_id}
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => setSelectedEquipment(eq.equipment_id)}
+                          >
+                            <TableCell className="font-medium">{eq.equipment_name}</TableCell>
+                            <TableCell className="text-right">{eq.mtbf_hours?.toFixed(0) || 'N/A'}</TableCell>
+                            <TableCell className="text-right">{eq.mttr_hours?.toFixed(1) || 'N/A'}</TableCell>
+                            <TableCell className="text-right">{eq.availability_percent?.toFixed(1) || 'N/A'}%</TableCell>
+                            <TableCell className="text-right">
+                              <ProgressBar value={eq.health_score || 0} color={getStatusColor(eq.status)} className="w-20" />
+                            </TableCell>
+                            <TableCell>
+                              <Badge color={getStatusColor(eq.status)}>
+                                {eq.status === 'healthy' ? 'Saudável' :
+                                 eq.status === 'attention' ? 'Atenção' :
+                                 eq.status === 'warning' ? 'Alerta' : 'Crítico'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Card>
+                </>
               )}
             </Grid>
           </TabPanel>

@@ -54,17 +54,7 @@ const TremorDashboardsList = lazy(() => import('./pages/tremor/TremorDashboardsL
 const TremorDashboardBuilder = lazy(() => import('./pages/tremor/TremorDashboardBuilder'));
 const TremorDashboardView = lazy(() => import('./pages/tremor/TremorDashboardView'));
 const TremorTagDetails = lazy(() => import('./pages/tremor/TremorTagDetails'));
-
-// Placeholder for pages that need to be migrated
-function ComingSoonPage({ title }: { title: string }) {
-  return (
-    <div className="p-8 text-center bg-white rounded-lg shadow-sm">
-      <h2 className="text-xl font-bold text-gray-700">🚧 {title}</h2>
-      <p className="text-gray-500 mt-2">Esta funcionalidade está sendo migrada para a nova versão.</p>
-      <p className="text-sm text-gray-400 mt-4">Em breve disponível com novos recursos.</p>
-    </div>
-  );
-}
+const TremorAIChat = lazy(() => import('./pages/tremor/TremorAIChat'));
 
 function AppContent() {
   const { currentAlarm, acknowledgeAlarm, dismissAlarm } = useCriticalAlarms();
@@ -122,7 +112,7 @@ function AppContent() {
 
             {/* Analytics - Tremor Professional */}
             <Route path="analytics" element={<Suspense fallback={<PageLoading />}><TremorAnalytics /></Suspense>} />
-            <Route path="analytics/chat" element={<ComingSoonPage title="AI Chat" />} />
+            <Route path="analytics/chat" element={<Suspense fallback={<PageLoading />}><TremorAIChat /></Suspense>} />
 
             {/* Settings - Tremor Professional */}
             <Route path="settings" element={<Suspense fallback={<PageLoading />}><TremorSettings /></Suspense>} />
@@ -166,7 +156,7 @@ function AppContent() {
             <Route path="config/*" element={<Navigate to="/settings" replace />} />
             <Route path="tags" element={<Navigate to="/realtime" replace />} />
             <Route path="tags/:id" element={<Suspense fallback={<PageLoading />}><TremorTagDetails /></Suspense>} />
-            <Route path="chat" element={<ComingSoonPage title="AI Chat" />} />
+            <Route path="chat" element={<Suspense fallback={<PageLoading />}><TremorAIChat /></Suspense>} />
           </Route>
 
           {/* 404 */}

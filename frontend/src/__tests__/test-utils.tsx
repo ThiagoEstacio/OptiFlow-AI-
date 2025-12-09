@@ -9,7 +9,7 @@ import React, { ReactElement, ReactNode } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { BrowserRouter } from 'react-router-dom'
-import { configureStore, PreloadedState } from '@reduxjs/toolkit'
+import { configureStore } from '@reduxjs/toolkit'
 
 // Import reducers
 import authReducer from '../store/slices/authSlice'
@@ -22,19 +22,22 @@ import organizationsReducer from '../store/slices/organizationsSlice'
 
 import type { RootState } from '../store'
 
+// Type for the test store reducers
+const rootReducer = {
+  auth: authReducer,
+  alarms: alarmsReducer,
+  ui: uiReducer,
+  tags: tagsReducer,
+  devices: devicesReducer,
+  sites: sitesReducer,
+  organizations: organizationsReducer,
+}
+
 // Create a test store with optional preloaded state
-export function createTestStore(preloadedState?: PreloadedState<RootState>) {
+export function createTestStore(preloadedState?: Partial<RootState>) {
   return configureStore({
-    reducer: {
-      auth: authReducer,
-      alarms: alarmsReducer,
-      ui: uiReducer,
-      tags: tagsReducer,
-      devices: devicesReducer,
-      sites: sitesReducer,
-      organizations: organizationsReducer,
-    },
-    preloadedState,
+    reducer: rootReducer,
+    preloadedState: preloadedState as RootState,
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         serializableCheck: false,
@@ -72,7 +75,7 @@ interface WrapperProps {
 // All Providers wrapper
 interface AllProvidersProps {
   children: ReactNode
-  preloadedState?: PreloadedState<RootState>
+  preloadedState?: Partial<RootState>
   store?: ReturnType<typeof createTestStore>
 }
 
@@ -92,7 +95,7 @@ export function AllProviders({
 
 // Custom render function with all providers
 interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  preloadedState?: PreloadedState<RootState>
+  preloadedState?: Partial<RootState>
   store?: ReturnType<typeof createTestStore>
 }
 
@@ -130,7 +133,11 @@ export const mockAuthenticatedUser = {
   id: 'test-user-id',
   email: 'admin@optiflow.com',
   full_name: 'Admin User',
-  role: 'admin',
+  role: 'admin' as const,
+  is_active: true,
+  is_superuser: false,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
 }
 
 // Mock state for authenticated user
