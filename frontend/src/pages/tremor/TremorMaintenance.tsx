@@ -117,13 +117,6 @@ interface FailureAnalysis {
   percentage: number;
 }
 
-interface MLPrediction {
-  equipment_id: string;
-  equipment_name: string;
-  probability: number;
-  predicted_issue: string;
-  recommendation: string;
-}
 
 // Component
 export default function TremorMaintenance() {
@@ -162,7 +155,6 @@ export default function TremorMaintenance() {
   const [kpis, setKpis] = useState<MaintenanceKPI | null>(null);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [failureAnalysis, setFailureAnalysis] = useState<FailureAnalysis[]>([]);
-  const [mlPredictions, setMLPredictions] = useState<MLPrediction[]>([]);
   const [mtbfTrend, setMtbfTrend] = useState<{ month: string; mtbf_hours: number }[]>([]);
 
   // Fetch data
@@ -204,16 +196,12 @@ export default function TremorMaintenance() {
       // Set sample work orders (would come from OS system)
       setWorkOrders(generateSampleWorkOrders());
 
-      // Set sample ML predictions
-      setMLPredictions(generateSamplePredictions());
-
     } catch (error) {
       console.error('Error fetching maintenance data:', error);
       // Use fallback data
       setEquipmentHealth(generateFallbackEquipment());
       setFailureAnalysis(generateFallbackFailures());
       setWorkOrders(generateSampleWorkOrders());
-      setMLPredictions(generateSamplePredictions());
     } finally {
       setLoading(false);
     }
@@ -424,36 +412,20 @@ export default function TremorMaintenance() {
               </Grid>
             </Card>
 
-            {/* ML Predictions */}
-            <Card className="mt-6">
+            {/* Link to ML Analytics */}
+            <Card className="mt-6" decoration="left" decorationColor="purple">
               <Flex justifyContent="between" alignItems="center">
-                <Title>Previsões ML (Próximos 7 dias)</Title>
-                <Badge color="purple" icon={Zap}>AI Powered</Badge>
+                <Flex alignItems="center" className="gap-3">
+                  <Zap className="h-6 w-6 text-purple-600" />
+                  <div>
+                    <Title>Previsões de Manutenção (ML)</Title>
+                    <Text className="text-gray-500">Análise preditiva e detecção de anomalias</Text>
+                  </div>
+                </Flex>
+                <Button variant="secondary" onClick={() => navigate('/analytics')}>
+                  Ver Analytics
+                </Button>
               </Flex>
-              <Table className="mt-4">
-                <TableHead>
-                  <TableRow>
-                    <TableHeaderCell>Equipamento</TableHeaderCell>
-                    <TableHeaderCell>Probabilidade</TableHeaderCell>
-                    <TableHeaderCell>Problema Previsto</TableHeaderCell>
-                    <TableHeaderCell>Recomendação</TableHeaderCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {mlPredictions.map((prediction, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{prediction.equipment_name}</TableCell>
-                      <TableCell>
-                        <Badge color={prediction.probability > 70 ? 'red' : prediction.probability > 50 ? 'orange' : 'yellow'}>
-                          {prediction.probability}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{prediction.predicted_issue}</TableCell>
-                      <TableCell className="text-sm text-gray-600">{prediction.recommendation}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </Card>
           </TabPanel>
 
@@ -878,10 +850,3 @@ function generateSampleWorkOrders(): WorkOrder[] {
   ];
 }
 
-function generateSamplePredictions(): MLPrediction[] {
-  return [
-    { equipment_id: 'CORR01', equipment_name: 'Correia 01', probability: 78, predicted_issue: 'Vibração alta - falha de rolamento', recommendation: 'Programar troca de rolamento nos próximos 3 dias' },
-    { equipment_id: 'SILO02', equipment_name: 'Silo 02', probability: 65, predicted_issue: 'Sensor de nível degradando', recommendation: 'Calibrar ou substituir sensor' },
-    { equipment_id: 'PUMP01', equipment_name: 'Bomba 01', probability: 52, predicted_issue: 'Aumento de temperatura', recommendation: 'Verificar sistema de resfriamento' },
-  ];
-}

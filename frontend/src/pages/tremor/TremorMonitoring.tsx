@@ -31,11 +31,8 @@ import {
   Metric,
   Flex,
   ProgressBar,
-  DateRangePicker,
-  DateRangePickerValue,
 } from '@tremor/react';
 import {
-  ProfessionalAreaChart,
   ProfessionalLineChart,
 } from '../../components/charts/ProfessionalCharts';
 import {
@@ -73,7 +70,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
-import { selectStyles } from '../../components/common/StyledSelect';
 
 // Type definitions
 interface ProcessVariable {
@@ -460,13 +456,8 @@ export default function TremorMonitoring() {
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
-  const [timeRange, setTimeRange] = useState('24h');
   const [searchTerm, setSearchTerm] = useState('');
   const [showVariableDropdown, setShowVariableDropdown] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRangePickerValue>({
-    from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    to: new Date(),
-  });
 
   // Fetch all real data from APIs
   const fetchAllData = useCallback(async () => {
@@ -639,7 +630,6 @@ export default function TremorMonitoring() {
       <TabGroup>
         <TabList className="mt-4">
           <Tab icon={Eye}>Supervisão</Tab>
-          <Tab icon={TrendingUp}>Tendências</Tab>
           <Tab icon={Server}>Equipamentos</Tab>
           <Tab icon={Cpu}>Sistema</Tab>
         </TabList>
@@ -837,94 +827,6 @@ export default function TremorMonitoring() {
                   </div>
                 </Grid>
               </Card>
-            </div>
-          </TabPanel>
-
-          {/* Trends Tab */}
-          <TabPanel>
-            <div className="space-y-6 mt-4">
-              {/* Trend Controls */}
-              <Card>
-                <Flex justifyContent="between" alignItems="center" className="flex-wrap gap-4">
-                  <div>
-                    <Title>Análise de Tendências</Title>
-                    <Text className="text-gray-500">Configure o período e variáveis para análise</Text>
-                  </div>
-                  <Flex className="gap-2">
-                    <select
-                      value={timeRange}
-                      onChange={(e) => setTimeRange(e.target.value)}
-                      className="px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
-                      style={{ ...selectStyles, minWidth: '150px' }}
-                    >
-                      <option value="1h">1 hora</option>
-                      <option value="6h">6 horas</option>
-                      <option value="24h">24 horas</option>
-                      <option value="7d">7 dias</option>
-                      <option value="30d">30 dias</option>
-                      <option value="custom">Personalizado</option>
-                    </select>
-                    {timeRange === 'custom' && (
-                      <DateRangePicker
-                        value={dateRange}
-                        onValueChange={setDateRange}
-                        enableSelect={false}
-                      />
-                    )}
-                    <Button icon={Download} variant="secondary">
-                      Exportar
-                    </Button>
-                  </Flex>
-                </Flex>
-
-                <div className="mt-4">
-                  <Button variant="secondary" size="xs" onClick={() => navigate('/monitoring/history')}>
-                    Abrir Histórico Avançado
-                    <ExternalLink className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Multiple Trend Charts */}
-              <Grid numItems={1} numItemsMd={2} className="gap-4">
-                {selectedVariables.slice(0, 4).map((varName, idx) => (
-                  <Card key={varName}>
-                    <Title>{varName}</Title>
-                    <div className="mt-4">
-                      <ProfessionalAreaChart
-                        data={trendData}
-                        xAxisKey="time"
-                        dataKey={varName}
-                        color={CHART_COLORS[idx]}
-                        height={192}
-                        showGrid={true}
-                      />
-                    </div>
-                  </Card>
-                ))}
-              </Grid>
-
-              {/* Correlation Analysis */}
-              {selectedVariables.length >= 2 && (
-                <Card>
-                  <Title>Análise de Correlação</Title>
-                  <Text className="text-gray-500">Comparação entre variáveis selecionadas</Text>
-                  <div className="mt-4">
-                    <ProfessionalLineChart
-                      data={trendData}
-                      xAxisKey="time"
-                      lines={selectedVariables.map((v, i) => ({
-                        dataKey: v,
-                        name: v,
-                        color: CHART_COLORS[i],
-                      }))}
-                      height={288}
-                      showGrid={true}
-                      showLegend={true}
-                    />
-                  </div>
-                </Card>
-              )}
             </div>
           </TabPanel>
 

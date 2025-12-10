@@ -253,6 +253,32 @@ async def delete_gateway_config(
 
 
 # ============================================================================
+# Gateway Service Proxy for Tags (must be before {gateway_id} routes)
+# ============================================================================
+
+GATEWAY_SERVICE_URL_TAGS = "http://gateway:8080"
+
+
+@router.get("/proxy/tags")
+async def proxy_gateway_all_tags():
+    """
+    Proxy endpoint to get all tags managed by the gateway service.
+    Returns all 235+ tags with their current values and metadata.
+    Must be defined before /{gateway_id}/tags to avoid route conflict.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(f"{GATEWAY_SERVICE_URL_TAGS}/api/tags/")
+            if response.status_code == 200:
+                return response.json()
+            return []
+    except httpx.RequestError as e:
+        return {"error": str(e), "tags": []}
+    except Exception as e:
+        return {"error": str(e), "tags": []}
+
+
+# ============================================================================
 # Gateway Tags CRUD
 # ============================================================================
 
@@ -605,3 +631,5 @@ async def proxy_gateway_adapters():
         return {"error": str(e), "adapters": []}
     except Exception as e:
         return {"error": str(e), "adapters": []}
+
+

@@ -27,7 +27,6 @@ import {
   Ruler,
   FileText,
   Activity,
-  LineChart,
   History,
   Bell,
   ExternalLink,
@@ -138,7 +137,6 @@ export const SimplifiedSidebar: React.FC = () => {
       icon: <Activity className="w-5 h-5" />,
       children: [
         { path: '/monitoring', label: 'Supervisão', icon: <Factory className="w-4 h-4" /> },
-        { path: '/monitoring/trends', label: 'Tendências', icon: <LineChart className="w-4 h-4" /> },
         { path: '/monitoring/history', label: 'Histórico', icon: <History className="w-4 h-4" /> },
       ],
     },

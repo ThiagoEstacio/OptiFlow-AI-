@@ -2,9 +2,9 @@
  * 🚨 Professional Alarms Page with Tremor
  * ========================================
  *
- * Alarm management and event history
+ * Real-time alarm management with backend integration
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Title,
@@ -30,10 +30,11 @@ import {
   SearchSelectItem,
   Button,
 } from '@tremor/react';
-import { AlertTriangle, AlertCircle, Info, CheckCircle, Bell, Clock } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, CheckCircle, Bell, Clock, RefreshCw } from 'lucide-react';
 import { ProfessionalDonutChart, ProfessionalBarChart } from '../../components/charts/ProfessionalCharts';
+import { alarmsApi, AlarmEvent, AlarmStatistics, formatDuration } from '../../services/alarms.api';
 
-interface Alarm {
+interface DisplayAlarm {
   id: string;
   tagId: string;
   tagName: string;
@@ -44,50 +45,106 @@ interface Alarm {
   acknowledgedAt?: Date;
   resolvedAt?: Date;
   acknowledgedBy?: string;
+  triggerValue?: number;
 }
 
-// Mock alarms data
-const generateAlarms = (): Alarm[] => {
-  const severities: Alarm['severity'][] = ['critical', 'high', 'medium', 'low'];
-  const statuses: Alarm['status'][] = ['active', 'acknowledged', 'resolved'];
-  const messages = [
-    'Alta temperatura detectada',
-    'Pressão acima do limite',
-    'Vibração excessiva',
-    'Nível crítico atingido',
-    'Falha de comunicação',
-    'Vazão abaixo do esperado',
-    'Tensão fora do range',
-    'Corrente anormal',
-  ];
-
-  return Array.from({ length: 50 }, (_, i) => {
-    const timestamp = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000);
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-
-    return {
-      id: `ALM_${String(i + 1).padStart(4, '0')}`,
-      tagId: `TAG_${String(Math.floor(Math.random() * 100)).padStart(3, '0')}`,
-      tagName: `Equipamento ${Math.floor(Math.random() * 20) + 1}`,
-      message: messages[Math.floor(Math.random() * messages.length)],
-      severity: severities[Math.floor(Math.random() * severities.length)],
-      status,
-      timestamp,
-      acknowledgedAt: status !== 'active' ? new Date(timestamp.getTime() + Math.random() * 60 * 60 * 1000) : undefined,
-      resolvedAt: status === 'resolved' ? new Date(timestamp.getTime() + Math.random() * 2 * 60 * 60 * 1000) : undefined,
-      acknowledgedBy: status !== 'active' ? 'Operador' : undefined,
-    };
-  }).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-};
+// Convert API alarm to display format
+const mapAlarmToDisplay = (alarm: AlarmEvent): DisplayAlarm => ({
+  id: alarm.id,
+  tagId: alarm.tag_id,
+  tagName: alarm.alarm_name || alarm.tag_id,
+  message: alarm.message || alarm.description || 'Alarme',
+  severity: (alarm.severity?.toLowerCase() || 'medium') as DisplayAlarm['severity'],
+  status: alarm.state === 'cleared' ? 'resolved' : alarm.state as DisplayAlarm['status'],
+  timestamp: new Date(alarm.trigger_timestamp),
+  acknowledgedAt: alarm.acknowledged_at ? new Date(alarm.acknowledged_at) : undefined,
+  resolvedAt: alarm.cleared_at ? new Date(alarm.cleared_at) : undefined,
+  acknowledgedBy: alarm.acknowledged_by,
+  triggerValue: alarm.trigger_value,
+});
 
 export const TremorAlarms: React.FC = () => {
-  const [alarms] = useState<Alarm[]>(generateAlarms());
+  const [alarms, setAlarms] = useState<DisplayAlarm[]>([]);
+  const [statistics, setStatistics] = useState<AlarmStatistics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [dateRange, setDateRange] = useState<DateRangePickerValue>({
     from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
     to: new Date(),
   });
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Fetch alarms from API
+  const fetchAlarms = useCallback(async () => {
+    try {
+      const [activeAlarms, historyAlarms, stats] = await Promise.all([
+        alarmsApi.getActiveAlarms({ limit: 100 }),
+        alarmsApi.getHistory({
+          start_date: dateRange.from?.toISOString(),
+          end_date: dateRange.to?.toISOString(),
+          limit: 200,
+        }),
+        alarmsApi.getStatistics(),
+      ]);
+
+      // Combine active and history, removing duplicates
+      const allAlarms = [...activeAlarms, ...historyAlarms];
+      const uniqueAlarms = allAlarms.reduce((acc, alarm) => {
+        if (!acc.find(a => a.id === alarm.id)) {
+          acc.push(alarm);
+        }
+        return acc;
+      }, [] as AlarmEvent[]);
+
+      const displayAlarms = uniqueAlarms
+        .map(mapAlarmToDisplay)
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      setAlarms(displayAlarms);
+      setStatistics(stats);
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error('Error fetching alarms:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [dateRange]);
+
+  // Initial fetch and auto-refresh
+  useEffect(() => {
+    fetchAlarms();
+    const interval = setInterval(fetchAlarms, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, [fetchAlarms]);
+
+  // Manual refresh
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchAlarms();
+  };
+
+  // Acknowledge alarm
+  const handleAcknowledge = async (alarmId: string) => {
+    try {
+      await alarmsApi.acknowledgeAlarm(alarmId);
+      fetchAlarms();
+    } catch (error) {
+      console.error('Error acknowledging alarm:', error);
+    }
+  };
+
+  // Clear alarm
+  const handleClear = async (alarmId: string) => {
+    try {
+      await alarmsApi.clearAlarm(alarmId);
+      fetchAlarms();
+    } catch (error) {
+      console.error('Error clearing alarm:', error);
+    }
+  };
 
   const activeAlarms = alarms.filter(a => a.status === 'active');
   const acknowledgedAlarms = alarms.filter(a => a.status === 'acknowledged');
@@ -127,8 +184,13 @@ export const TremorAlarms: React.FC = () => {
     }
   };
 
-  // Chart data
-  const severityDistribution = [
+  // Chart data from statistics or calculated from alarms
+  const severityDistribution = statistics ? [
+    { name: 'Crítico', value: statistics.by_severity.critical },
+    { name: 'Alto', value: statistics.by_severity.high },
+    { name: 'Médio', value: statistics.by_severity.medium },
+    { name: 'Baixo', value: statistics.by_severity.low },
+  ] : [
     { name: 'Crítico', value: alarms.filter(a => a.severity === 'critical').length },
     { name: 'Alto', value: alarms.filter(a => a.severity === 'high').length },
     { name: 'Médio', value: alarms.filter(a => a.severity === 'medium').length },
@@ -149,6 +211,15 @@ export const TremorAlarms: React.FC = () => {
     };
   });
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+        <Text className="ml-2">Carregando alarmes...</Text>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -156,10 +227,24 @@ export const TremorAlarms: React.FC = () => {
         <div>
           <Title>Central de Alarmes</Title>
           <Text>Gerenciamento de alarmes e histórico de eventos</Text>
+          <Text className="text-xs text-gray-400 mt-1">
+            Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
+          </Text>
         </div>
-        <div className="flex items-center gap-2">
-          <Bell className="w-5 h-5 text-rose-500 animate-pulse" />
-          <Badge color="rose" size="xl">{activeAlarms.length} ativos</Badge>
+        <div className="flex items-center gap-3">
+          <Button
+            icon={RefreshCw}
+            variant="secondary"
+            size="xs"
+            onClick={handleRefresh}
+            loading={refreshing}
+          >
+            Atualizar
+          </Button>
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-rose-500 animate-pulse" />
+            <Badge color="rose" size="xl">{activeAlarms.length} ativos</Badge>
+          </div>
         </div>
       </div>
 
@@ -169,12 +254,12 @@ export const TremorAlarms: React.FC = () => {
           <Flex justifyContent="between" alignItems="center">
             <div>
               <Text>Ativos</Text>
-              <Metric>{activeAlarms.length}</Metric>
+              <Metric>{statistics?.active ?? activeAlarms.length}</Metric>
             </div>
             <AlertCircle className="w-10 h-10 text-rose-500" />
           </Flex>
           <Text className="mt-2 text-sm text-gray-500">
-            {activeAlarms.filter(a => a.severity === 'critical').length} críticos
+            {statistics?.by_severity.critical ?? activeAlarms.filter(a => a.severity === 'critical').length} críticos
           </Text>
         </Card>
 
@@ -182,7 +267,7 @@ export const TremorAlarms: React.FC = () => {
           <Flex justifyContent="between" alignItems="center">
             <div>
               <Text>Reconhecidos</Text>
-              <Metric>{acknowledgedAlarms.length}</Metric>
+              <Metric>{statistics?.acknowledged ?? acknowledgedAlarms.length}</Metric>
             </div>
             <Bell className="w-10 h-10 text-amber-500" />
           </Flex>
@@ -212,7 +297,11 @@ export const TremorAlarms: React.FC = () => {
           <Flex justifyContent="between" alignItems="center">
             <div>
               <Text>MTTR Médio</Text>
-              <Metric>23 min</Metric>
+              <Metric>
+                {statistics?.average_duration_minutes
+                  ? formatDuration(statistics.average_duration_minutes * 60)
+                  : '-- min'}
+              </Metric>
             </div>
             <Clock className="w-10 h-10 text-blue-500" />
           </Flex>
@@ -293,9 +382,10 @@ export const TremorAlarms: React.FC = () => {
           <TabList>
             <Tab>Todos ({filteredAlarms.length})</Tab>
             <Tab>Ativos ({activeAlarms.length})</Tab>
-            <Tab>Histórico</Tab>
+            <Tab>Histórico ({resolvedAlarms.length})</Tab>
           </TabList>
           <TabPanels>
+            {/* All Alarms */}
             <TabPanel>
               <Table className="mt-4">
                 <TableHead>
@@ -303,6 +393,7 @@ export const TremorAlarms: React.FC = () => {
                     <TableHeaderCell>ID</TableHeaderCell>
                     <TableHeaderCell>Tag</TableHeaderCell>
                     <TableHeaderCell>Mensagem</TableHeaderCell>
+                    <TableHeaderCell>Valor</TableHeaderCell>
                     <TableHeaderCell>Severidade</TableHeaderCell>
                     <TableHeaderCell>Status</TableHeaderCell>
                     <TableHeaderCell>Data/Hora</TableHeaderCell>
@@ -313,7 +404,7 @@ export const TremorAlarms: React.FC = () => {
                   {filteredAlarms.slice(0, 20).map((alarm) => (
                     <TableRow key={alarm.id} className="hover:bg-gray-50">
                       <TableCell>
-                        <Text className="font-mono">{alarm.id}</Text>
+                        <Text className="font-mono text-xs">{alarm.id.slice(0, 8)}</Text>
                       </TableCell>
                       <TableCell>
                         <div>
@@ -323,6 +414,11 @@ export const TremorAlarms: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Text>{alarm.message}</Text>
+                      </TableCell>
+                      <TableCell>
+                        <Text className="font-mono">
+                          {alarm.triggerValue?.toFixed(2) ?? '-'}
+                        </Text>
                       </TableCell>
                       <TableCell>
                         <Badge color={getSeverityColor(alarm.severity)} icon={() => getSeverityIcon(alarm.severity)}>
@@ -345,12 +441,12 @@ export const TremorAlarms: React.FC = () => {
                       <TableCell>
                         <Flex justifyContent="start" className="gap-2">
                           {alarm.status === 'active' && (
-                            <Button size="xs" variant="secondary">
+                            <Button size="xs" variant="secondary" onClick={() => handleAcknowledge(alarm.id)}>
                               Reconhecer
                             </Button>
                           )}
                           {alarm.status === 'acknowledged' && (
-                            <Button size="xs" color="emerald">
+                            <Button size="xs" color="emerald" onClick={() => handleClear(alarm.id)}>
                               Resolver
                             </Button>
                           )}
@@ -360,16 +456,133 @@ export const TremorAlarms: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
+              {filteredAlarms.length === 0 && (
+                <Text className="text-center text-gray-500 py-8">
+                  Nenhum alarme encontrado com os filtros selecionados
+                </Text>
+              )}
             </TabPanel>
+
+            {/* Active Alarms */}
             <TabPanel>
-              <Text className="mt-4 text-center text-gray-500">
-                Visualização de alarmes ativos
-              </Text>
+              <Table className="mt-4">
+                <TableHead>
+                  <TableRow>
+                    <TableHeaderCell>Tag</TableHeaderCell>
+                    <TableHeaderCell>Mensagem</TableHeaderCell>
+                    <TableHeaderCell>Valor</TableHeaderCell>
+                    <TableHeaderCell>Severidade</TableHeaderCell>
+                    <TableHeaderCell>Desde</TableHeaderCell>
+                    <TableHeaderCell>Ação</TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {activeAlarms.map((alarm) => (
+                    <TableRow key={alarm.id} className="hover:bg-gray-50">
+                      <TableCell>
+                        <div>
+                          <Text className="font-medium">{alarm.tagId}</Text>
+                          <Text className="text-xs text-gray-500">{alarm.tagName}</Text>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Text>{alarm.message}</Text>
+                      </TableCell>
+                      <TableCell>
+                        <Text className="font-mono text-rose-600 font-bold">
+                          {alarm.triggerValue?.toFixed(2) ?? '-'}
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        <Badge color={getSeverityColor(alarm.severity)} icon={() => getSeverityIcon(alarm.severity)}>
+                          {alarm.severity === 'critical' ? 'Crítico' :
+                           alarm.severity === 'high' ? 'Alto' :
+                           alarm.severity === 'medium' ? 'Médio' : 'Baixo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Text className="text-sm">
+                          {alarm.timestamp.toLocaleTimeString('pt-BR')}
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="xs" variant="secondary" onClick={() => handleAcknowledge(alarm.id)}>
+                          Reconhecer
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {activeAlarms.length === 0 && (
+                <div className="text-center py-12">
+                  <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                  <Text className="text-gray-500">Nenhum alarme ativo</Text>
+                </div>
+              )}
             </TabPanel>
+
+            {/* History */}
             <TabPanel>
-              <Text className="mt-4 text-center text-gray-500">
-                Histórico completo de alarmes
-              </Text>
+              <Table className="mt-4">
+                <TableHead>
+                  <TableRow>
+                    <TableHeaderCell>Tag</TableHeaderCell>
+                    <TableHeaderCell>Mensagem</TableHeaderCell>
+                    <TableHeaderCell>Severidade</TableHeaderCell>
+                    <TableHeaderCell>Início</TableHeaderCell>
+                    <TableHeaderCell>Resolução</TableHeaderCell>
+                    <TableHeaderCell>Duração</TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {resolvedAlarms.slice(0, 20).map((alarm) => {
+                    const duration = alarm.resolvedAt
+                      ? Math.round((alarm.resolvedAt.getTime() - alarm.timestamp.getTime()) / 1000)
+                      : null;
+                    return (
+                      <TableRow key={alarm.id} className="hover:bg-gray-50">
+                        <TableCell>
+                          <div>
+                            <Text className="font-medium">{alarm.tagId}</Text>
+                            <Text className="text-xs text-gray-500">{alarm.tagName}</Text>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Text>{alarm.message}</Text>
+                        </TableCell>
+                        <TableCell>
+                          <Badge color={getSeverityColor(alarm.severity)}>
+                            {alarm.severity === 'critical' ? 'Crítico' :
+                             alarm.severity === 'high' ? 'Alto' :
+                             alarm.severity === 'medium' ? 'Médio' : 'Baixo'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Text className="text-sm">
+                            {alarm.timestamp.toLocaleDateString('pt-BR')} {alarm.timestamp.toLocaleTimeString('pt-BR')}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Text className="text-sm">
+                            {alarm.resolvedAt?.toLocaleTimeString('pt-BR') ?? '-'}
+                          </Text>
+                        </TableCell>
+                        <TableCell>
+                          <Text className="text-sm text-emerald-600">
+                            {duration ? formatDuration(duration) : '-'}
+                          </Text>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              {resolvedAlarms.length === 0 && (
+                <Text className="text-center text-gray-500 py-8">
+                  Nenhum alarme resolvido no período selecionado
+                </Text>
+              )}
             </TabPanel>
           </TabPanels>
         </TabGroup>

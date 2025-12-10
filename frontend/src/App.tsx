@@ -133,7 +133,7 @@ function AppContent() {
             {/* Monitoring routes - Tremor Professional */}
             <Route path="monitoring" element={<Suspense fallback={<PageLoading />}><TremorMonitoring /></Suspense>} />
             <Route path="monitoring/supervision" element={<Suspense fallback={<PageLoading />}><TremorMonitoring /></Suspense>} />
-            <Route path="monitoring/trends" element={<Suspense fallback={<PageLoading />}><TremorMonitoring /></Suspense>} />
+            <Route path="monitoring/trends" element={<Navigate to="/monitoring/history" replace />} />
             <Route path="monitoring/history" element={<Suspense fallback={<PageLoading />}><TremorHistory /></Suspense>} />
             <Route path="history" element={<Suspense fallback={<PageLoading />}><TremorHistory /></Suspense>} />
 
