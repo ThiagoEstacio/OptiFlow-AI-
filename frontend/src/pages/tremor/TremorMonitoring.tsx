@@ -332,11 +332,18 @@ const fetchSystemHealth = async (): Promise<{ health: SystemHealthItem[], connec
     // Fetch backend health
     const backendHealth = await apiClient.get('/api/health').catch(() => ({ data: { status: 'unknown' } }));
 
-    // Fetch gateway health
-    const gatewayHealth = await fetch('http://localhost:8080/api/health').then(r => r.json()).catch(() => ({ status: 'unknown' }));
+    // Fetch gateway health via backend proxy (avoids CORS and Docker networking issues)
+    const gatewayHealth = await apiClient.get('/api/v1/gateway-config/proxy/health').catch(() => ({ data: { status: 'unknown' } }));
 
-    // Fetch adapter statistics
-    const adapterStats = await fetch('http://localhost:8080/api/adapters').then(r => r.json()).catch(() => []);
+    // Fetch adapter statistics via backend proxy
+    const adapterStats = await apiClient.get('/api/v1/gateway-config/proxy/adapters').catch(() => ({ data: [] }));
+    const adapters = Array.isArray(adapterStats.data) ? adapterStats.data : [];
+
+    // Count connected adapters
+    const connectedAdapters = Array.isArray(adapters)
+      ? adapters.filter((a: any) => a.connected || a.running).length
+      : 0;
+    const totalAdapters = Array.isArray(adapters) ? adapters.length : 0;
 
     const connectivity: ConnectivityItem[] = [
       {
@@ -347,28 +354,32 @@ const fetchSystemHealth = async (): Promise<{ health: SystemHealthItem[], connec
       },
       {
         name: 'Gateway OPC-UA',
-        status: gatewayHealth?.status === 'healthy' ? 'connected' : gatewayHealth?.status ? 'degraded' : 'disconnected',
+        status: gatewayHealth.data?.status === 'healthy' ? 'connected' :
+                totalAdapters > 0 ? 'connected' : 'degraded',
         latency: '< 5ms',
-        details: `${gatewayHealth?.adapters_count || 0} adapters`
+        details: `${connectedAdapters}/${totalAdapters} adapters`
       },
       {
         name: 'InfluxDB',
-        status: backendHealth.data?.influxdb === 'connected' ? 'connected' : 'degraded',
+        status: backendHealth.data?.influxdb === 'connected' ? 'connected' :
+                backendHealth.data?.status === 'healthy' ? 'connected' : 'degraded',
         latency: '< 3ms',
       },
       {
         name: 'Kafka',
-        status: backendHealth.data?.kafka === 'connected' ? 'connected' : 'degraded',
+        status: backendHealth.data?.kafka === 'connected' ? 'connected' :
+                backendHealth.data?.status === 'healthy' ? 'connected' : 'degraded',
         latency: '< 15ms',
       },
     ];
 
     // Add adapter-specific connectivity
-    if (Array.isArray(adapterStats)) {
-      adapterStats.forEach((adapter: any) => {
+    if (Array.isArray(adapters)) {
+      adapters.forEach((adapter: any) => {
+        const isConnected = adapter.connected === true || adapter.running === true;
         connectivity.push({
-          name: `Adapter: ${adapter.adapter_id || adapter.name}`,
-          status: adapter.status === 'running' || adapter.status === 'connected' ? 'connected' : 'disconnected',
+          name: `Adapter: ${adapter.adapter_id || adapter.adapter_name || adapter.name}`,
+          status: isConnected ? 'connected' : 'disconnected',
           latency: adapter.latency_ms ? `${adapter.latency_ms}ms` : '-',
           details: `${adapter.tags_count || 0} tags`
         });
@@ -385,6 +396,7 @@ const fetchSystemHealth = async (): Promise<{ health: SystemHealthItem[], connec
       connectivity
     };
   } catch (error) {
+    console.error('Error fetching system health:', error);
     return {
       health: [
         { name: 'CPU', value: 45, status: 'normal' },

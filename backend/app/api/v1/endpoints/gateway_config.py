@@ -564,3 +564,44 @@ async def bulk_import_gateways(
         failed_count=failed_count,
         errors=errors
     )
+
+
+# ============================================================================
+# Gateway Service Proxy (for frontend connectivity status)
+# ============================================================================
+
+GATEWAY_SERVICE_URL = "http://gateway:8080"
+
+
+@router.get("/proxy/health")
+async def proxy_gateway_health():
+    """
+    Proxy endpoint to get gateway service health status.
+    This allows the frontend to check gateway health without CORS issues.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{GATEWAY_SERVICE_URL}/health")
+            return response.json()
+    except httpx.RequestError as e:
+        return {"status": "disconnected", "error": str(e)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@router.get("/proxy/adapters")
+async def proxy_gateway_adapters():
+    """
+    Proxy endpoint to get list of adapters from the gateway service.
+    Returns adapter status, connection info, and tag counts.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{GATEWAY_SERVICE_URL}/api/adapters/")
+            if response.status_code == 200:
+                return response.json()
+            return []
+    except httpx.RequestError as e:
+        return {"error": str(e), "adapters": []}
+    except Exception as e:
+        return {"error": str(e), "adapters": []}
