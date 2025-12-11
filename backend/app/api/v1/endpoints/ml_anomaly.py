@@ -30,6 +30,13 @@ try:
 except ImportError:
     ANOMALY_SERVICE_AVAILABLE = False
 
+# Import feature engineering service
+try:
+    from app.services.ml.feature_engineering import get_feature_engineering_service
+    FEATURE_SERVICE_AVAILABLE = True
+except ImportError:
+    FEATURE_SERVICE_AVAILABLE = False
+
 # Import InfluxDB for historical data
 try:
     from app.services.influxdb import influxdb_service
@@ -587,3 +594,331 @@ def _generate_simulated_history(
 
     logger.info(f"Generated {len(data)} simulated samples")
     return data
+
+
+# =============================================================================
+# Feature Engineering Endpoints
+# =============================================================================
+
+@router.get("/features/{equipment_id}")
+async def get_equipment_features(
+    equipment_id: str,
+    include_calculated: bool = Query(default=True, description="Include calculated features"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Extract ML features from Asset Framework for an equipment.
+
+    Uses AssetAttributes to get:
+    - Tag reference values (from live readings or simulated)
+    - Static configuration values
+    - Calculated/derived features (formulas)
+
+    Args:
+        equipment_id: Equipment ID or name
+        include_calculated: Whether to evaluate formula-based features
+
+    Returns:
+        FeatureResult with all extracted features
+    """
+    if not FEATURE_SERVICE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Feature engineering service not available"
+        )
+
+    try:
+        # Get live readings for the equipment
+        live_readings = await _fetch_live_readings(equipment_id)
+
+        # Extract features using Asset Framework
+        feature_service = get_feature_engineering_service()
+        result = await feature_service.extract_features(
+            db=db,
+            equipment_id=equipment_id,
+            live_readings=live_readings
+        )
+
+        response = result.to_dict()
+
+        # Add ML feature columns recommendation
+        if include_calculated:
+            response["ml_feature_columns"] = feature_service.get_ml_feature_columns(result)
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error extracting features: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to extract features: {str(e)}"
+        )
+
+
+@router.get("/features/{equipment_id}/correlated")
+async def get_correlated_features(
+    equipment_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get features for equipment and its correlated equipment.
+
+    Uses process_flow metadata from Asset Framework to identify
+    upstream and downstream equipment for cross-correlation analysis.
+
+    Args:
+        equipment_id: Primary equipment ID
+
+    Returns:
+        Dict of equipment features including correlated equipment
+    """
+    if not FEATURE_SERVICE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Feature engineering service not available"
+        )
+
+    try:
+        # Get primary equipment features first to find correlated equipment
+        feature_service = get_feature_engineering_service()
+        primary_result = await feature_service.extract_features(
+            db=db,
+            equipment_id=equipment_id,
+            live_readings=await _fetch_live_readings(equipment_id)
+        )
+
+        # Get correlated equipment IDs from process context
+        process_flow = primary_result.process_context.get("process_flow", {})
+        upstream = process_flow.get("upstream", [])
+        downstream = process_flow.get("downstream", [])
+
+        # Build readings dict for all equipment
+        all_readings = {equipment_id: await _fetch_live_readings(equipment_id)}
+
+        for eq_id in upstream + downstream:
+            all_readings[eq_id] = await _fetch_live_readings(eq_id)
+
+        # Get correlated features
+        results = await feature_service.get_correlated_features(
+            db=db,
+            equipment_id=equipment_id,
+            live_readings=all_readings
+        )
+
+        return {
+            "primary_equipment": equipment_id,
+            "upstream_equipment": upstream,
+            "downstream_equipment": downstream,
+            "equipment_features": {
+                eq_id: result.to_dict()
+                for eq_id, result in results.items()
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting correlated features: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get correlated features: {str(e)}"
+        )
+
+
+@router.post("/train-with-features/{equipment_id}")
+async def train_with_asset_features(
+    equipment_id: str,
+    days: int = Query(default=30, ge=7, le=365, description="Days of historical data"),
+    contamination: float = Query(default=0.05, ge=0.01, le=0.3, description="Expected anomaly proportion"),
+    use_calculated: bool = Query(default=True, description="Use calculated features from Asset"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Train anomaly model using Asset Framework features.
+
+    Enhanced training that:
+    1. Uses AssetAttribute definitions to determine feature columns
+    2. Applies calculated features (efficiency, ratios, etc.)
+    3. Considers static values (rated values) for normalization
+
+    Args:
+        equipment_id: Equipment ID
+        days: Days of historical data
+        contamination: Expected anomaly proportion
+        use_calculated: Whether to use calculated features
+
+    Returns:
+        Training results with asset-based feature info
+    """
+    if not ANOMALY_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Anomaly service not available")
+
+    if not FEATURE_SERVICE_AVAILABLE:
+        # Fall back to standard training
+        logger.warning("Feature service not available, using standard training")
+        return await train_anomaly_model(
+            equipment_id=equipment_id,
+            days=days,
+            contamination=contamination,
+            current_user=current_user,
+            db=db
+        )
+
+    try:
+        # Get historical data
+        historical_data = await _fetch_equipment_history(equipment_id, days)
+
+        if not historical_data:
+            return {
+                "status": "no_data",
+                "message": f"No historical data for '{equipment_id}'",
+                "equipment_id": equipment_id
+            }
+
+        # Prepare training data with calculated features
+        feature_service = get_feature_engineering_service()
+
+        if use_calculated:
+            # Add calculated features to each historical record
+            prepared_data = await feature_service.prepare_training_data(
+                db=db,
+                equipment_id=equipment_id,
+                historical_readings=historical_data
+            )
+        else:
+            prepared_data = historical_data
+
+        # Train model
+        service = get_anomaly_service()
+        result = await service.train_model(
+            equipment_id=equipment_id,
+            historical_data=prepared_data,
+            contamination=contamination
+        )
+
+        # Add feature info
+        if use_calculated:
+            result["feature_source"] = "asset_framework"
+            result["calculated_features_used"] = True
+
+            # Get feature columns from a sample extraction
+            sample_result = await feature_service.extract_features(
+                db=db,
+                equipment_id=equipment_id,
+                live_readings=historical_data[0] if historical_data else {}
+            )
+            result["asset_features"] = list(sample_result.get_all_features().keys())
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error training with features: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to train: {str(e)}"
+        )
+
+
+@router.get("/predict-with-features/{equipment_id}")
+async def predict_with_asset_features(
+    equipment_id: str,
+    use_live: bool = Query(default=True, description="Use live data"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Predict anomaly using Asset Framework features.
+
+    Enhanced prediction that:
+    1. Extracts all features from AssetAttributes
+    2. Applies calculated features
+    3. Uses process context for correlation analysis
+
+    Args:
+        equipment_id: Equipment ID
+        use_live: Whether to use live readings
+
+    Returns:
+        Anomaly prediction with asset-based features
+    """
+    if not ANOMALY_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Anomaly service not available")
+
+    try:
+        # Get live readings
+        live_readings = await _fetch_live_readings(equipment_id) if use_live else {}
+
+        # Extract features using Asset Framework if available
+        if FEATURE_SERVICE_AVAILABLE:
+            feature_service = get_feature_engineering_service()
+            feature_result = await feature_service.extract_features(
+                db=db,
+                equipment_id=equipment_id,
+                live_readings=live_readings
+            )
+
+            # Use all features for prediction
+            readings = feature_result.get_all_features()
+
+            # Add feature metadata to response
+            feature_info = {
+                "asset_name": feature_result.asset_name,
+                "equipment_type": feature_result.equipment_type,
+                "features_extracted": list(feature_result.features.keys()),
+                "calculated_features": list(feature_result.calculated_features.keys()),
+                "process_context": feature_result.process_context,
+                "warnings": feature_result.warnings
+            }
+        else:
+            readings = live_readings
+            feature_info = None
+
+        if not readings:
+            return {
+                "status": "no_data",
+                "message": f"No readings for '{equipment_id}'",
+                "equipment_id": equipment_id
+            }
+
+        # Get prediction
+        service = get_anomaly_service()
+        prediction = await service.predict(equipment_id, readings)
+
+        response = prediction.to_dict()
+        response["input_readings"] = readings
+
+        if feature_info:
+            response["feature_info"] = feature_info
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error predicting with features: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to predict: {str(e)}"
+        )
+
+
+@router.get("/features/stats")
+async def get_feature_service_stats(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Get Feature Engineering service statistics.
+
+    Returns:
+        Service stats including features extracted, formulas evaluated
+    """
+    if not FEATURE_SERVICE_AVAILABLE:
+        return {
+            "available": False,
+            "message": "Feature engineering service not available"
+        }
+
+    feature_service = get_feature_engineering_service()
+    stats = feature_service.get_statistics()
+    stats["available"] = True
+
+    return stats
