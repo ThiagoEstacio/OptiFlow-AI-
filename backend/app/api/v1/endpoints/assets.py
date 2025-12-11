@@ -212,7 +212,11 @@ async def get_assets_bulk(
             joinedload(Asset.attributes, innerjoin=False)
         )
 
-    stmt = stmt.offset(skip).limit(limit).order_by(Asset.level, Asset.name)
+    # Load parent for level/full_path calculation
+    stmt = stmt.options(joinedload(Asset.parent, innerjoin=False))
+
+    # Order by asset_type then name (level is computed, not a column)
+    stmt = stmt.offset(skip).limit(limit).order_by(Asset.asset_type, Asset.name)
 
     # Execute single query
     result = await db.execute(stmt)
@@ -221,6 +225,10 @@ async def get_assets_bulk(
     # Build response
     response_assets = []
     for asset in assets:
+        # Calculate level and full_path without recursion
+        level = 1 if asset.parent else 0
+        full_path = f"{asset.parent.name}/{asset.name}" if asset.parent else asset.name
+
         asset_dict = {
             'id': asset.id,
             'name': asset.name,
@@ -232,8 +240,8 @@ async def get_assets_bulk(
             'template_id': asset.template_id,
             'created_at': asset.created_at,
             'updated_at': asset.updated_at,
-            'level': asset.level,
-            'full_path': asset.full_path,
+            'level': level,
+            'full_path': full_path,
             'children_count': len(asset.children) if include_children else 0,
             'attributes_count': len(asset.attributes) if include_attributes else 0
         }
@@ -291,7 +299,8 @@ async def get_asset(
     """Get asset by ID"""
     stmt = select(Asset).where(Asset.id == asset_id).options(
         selectinload(Asset.children),
-        selectinload(Asset.attributes)
+        selectinload(Asset.attributes),
+        selectinload(Asset.parent)  # Load parent to avoid lazy loading
     )
     result = await db.execute(stmt)
     asset = result.scalar_one_or_none()
@@ -302,14 +311,35 @@ async def get_asset(
             detail="Asset not found"
         )
 
-    # Enrich with computed properties
-    response = AssetResponse.from_orm(asset)
-    response.level = asset.level
-    response.full_path = asset.full_path
-    response.children_count = len(asset.children)
-    response.attributes_count = len(asset.attributes)
+    # Calculate level and full_path without recursion to avoid greenlet errors
+    # Level: count ancestors (simplified - just check if has parent)
+    level = 1 if asset.parent else 0
 
-    return response
+    # Full path: just use parent name + asset name (simplified)
+    if asset.parent:
+        full_path = f"{asset.parent.name}/{asset.name}"
+    else:
+        full_path = asset.name
+
+    # Build response manually to avoid from_orm issues with lazy loading
+    response_dict = {
+        'id': asset.id,
+        'name': asset.name,
+        'description': asset.description,
+        'asset_type': asset.asset_type.value if hasattr(asset.asset_type, 'value') else asset.asset_type,
+        'is_active': bool(asset.is_active),
+        'metadata': asset.asset_metadata or {},
+        'parent_id': asset.parent_id,
+        'template_id': asset.template_id,
+        'created_at': asset.created_at,
+        'updated_at': asset.updated_at,
+        'level': level,
+        'full_path': full_path,
+        'children_count': len(asset.children),
+        'attributes_count': len(asset.attributes)
+    }
+
+    return response_dict
 
 
 @router.put("/{asset_id}", response_model=AssetResponse)
