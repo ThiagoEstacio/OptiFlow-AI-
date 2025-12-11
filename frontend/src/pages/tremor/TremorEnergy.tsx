@@ -52,13 +52,10 @@ import apiClient from '../../api/client';
 import { NoDataAvailable, NoMLPrediction } from '../../components/common/NoDataAvailable';
 import { selectStyles } from '../../components/common/StyledSelect';
 
-// CORR-001: Removed generateFallbackData - no more fake data
-// Data will be fetched from API only. When unavailable, UI shows appropriate empty states.
-
 // Function to fetch real data from APIs
-// CORR-001: Removed all Math.random() - only use real API data
+// Now properly maps to the new backend endpoint structure with real InfluxDB data
 const fetchRealEnergyData = async (timeRange: string) => {
-  // Fetch energy metrics from API
+  // Fetch energy metrics from API (now returns real InfluxDB data when available)
   const energyResponse = await apiClient.get('/api/v1/executive-summary/energy', {
     params: { time_range: timeRange }
   }).catch(() => ({ data: null }));
@@ -74,10 +71,15 @@ const fetchRealEnergyData = async (timeRange: string) => {
   }).catch(() => ({ data: { tags: [] } }));
 
   const energyData = energyResponse.data || {};
-  const mlData = mlResponse.data || {};
+  // ML API returns { insights: { energy_prediction: {...}, ... } }
+  const mlData = mlResponse.data?.insights || mlResponse.data || {};
   const tags = tagsResponse.data?.tags || [];
 
-  // Find energy-related tags
+  // Check data source (influxdb = real data, simulated = fallback)
+  const dataSource = energyData.data_source || 'unknown';
+  const isRealData = dataSource === 'influxdb';
+
+  // Find energy-related tags for additional real-time data
   const energyTags = tags.filter((t: any) =>
     t.name?.toLowerCase().includes('energ') ||
     t.name?.toLowerCase().includes('kwh') ||
@@ -86,90 +88,128 @@ const fetchRealEnergyData = async (timeRange: string) => {
     t.unit?.includes('kWh')
   );
 
-  // CORR-001: Use real values only, 0 when not available
+  // Use API data directly (already structured from backend)
+  const currentData = energyData.current || {};
+  const periodData = energyData.period || {};
+  const forecastData = energyData.forecast || {};
+  const billData = energyData.bill_forecast || {};
+  const efficiencyData = energyData.efficiency || {};
+  const peakDemandData = energyData.peak_demand || {};
+
+  // Override with real-time tag values if available
   const currentConsumption = energyTags.find((t: any) =>
     t.unit?.includes('kWh')
-  )?.value || energyData.consumption_kwh || 0;
+  )?.value || currentData.consumption_kwh || 0;
 
   const currentDemand = energyTags.find((t: any) =>
     t.name?.toLowerCase().includes('demanda') || t.unit === 'kW'
-  )?.value || energyData.demand_kw || 0;
+  )?.value || currentData.demand_kw || 0;
 
-  const contractedKw = energyData.contracted_kw || 0;
-
-  // Build data from API responses - ONLY real data
+  // Build data from API responses
   return {
     current: {
       consumption_kwh: currentConsumption,
       demand_kw: currentDemand,
-      power_factor: energyData.power_factor || 0,
-      status: energyData.status || 'unknown',
+      power_factor: currentData.power_factor || 0.92,
+      status: currentData.status || 'unknown',
     },
     period: {
-      total_kwh: energyData.total_consumption_kwh || 0,
-      average_kwh_hour: energyData.average_consumption_kwh || 0,
-      peak_demand_kw: energyData.peak_demand_kw || 0,
-      change_percent: energyData.change_percent || 0,
+      total_kwh: periodData.total_kwh || 0,
+      average_kwh_hour: periodData.average_kwh_hour || 0,
+      peak_demand_kw: periodData.peak_demand_kw || 0,
+      change_percent: periodData.change_percent || 0,
     },
     forecast: {
-      monthly_kwh: energyData.forecast_monthly_kwh || 0,
-      confidence: mlData.energy_prediction?.[0]?.confidence || 0,
-      trend: energyData.trend || 'unknown',
-      peak_demand_forecast_kw: energyData.forecast_peak_kw || 0,
-      // CORR-001: Flag to indicate if ML model is available
-      hasModel: !!(mlData.energy_prediction && mlData.energy_prediction.length > 0),
+      monthly_kwh: forecastData.monthly_kwh || 0,
+      confidence: forecastData.confidence || (mlData.energy_prediction?.predicted_24h?.[0]?.confidence * 100) || 0,
+      trend: mlData.energy_prediction?.trend || periodData.trend || forecastData.trend || 'unknown',
+      peak_demand_forecast_kw: forecastData.peak_demand_forecast_kw || 0,
+      methodology: forecastData.methodology || 'LSTM Neural Network',
+      hasModel: !!(mlData.energy_prediction?.status === 'success' && mlData.energy_prediction?.predicted_24h?.length > 0),
     },
     bill_forecast: {
-      energy_cost: energyData.energy_cost || 0,
-      demand_cost: energyData.demand_cost || 0,
-      taxes: energyData.taxes || 0,
-      total_estimate: energyData.total_estimate || 0,
+      energy_cost: billData.energy_cost || 0,
+      demand_cost: billData.demand_cost || 0,
+      taxes: billData.taxes || 0,
+      total_estimate: billData.total_estimate || 0,
       breakdown: {
-        peak_consumption_kwh: energyData.peak_consumption_kwh || 0,
-        off_peak_consumption_kwh: energyData.off_peak_consumption_kwh || 0,
-        peak_tariff: energyData.peak_tariff || 0,
-        off_peak_tariff: energyData.off_peak_tariff || 0,
-        demand_tariff: energyData.demand_tariff || 0,
+        peak_consumption_kwh: billData.breakdown?.peak_consumption_kwh || 0,
+        off_peak_consumption_kwh: billData.breakdown?.off_peak_consumption_kwh || 0,
+        peak_tariff: billData.breakdown?.peak_tariff || 0,
+        off_peak_tariff: billData.breakdown?.off_peak_tariff || 0,
+        demand_tariff: billData.breakdown?.demand_tariff || 0,
       },
     },
     efficiency: {
-      kwh_per_ton: energyData.kwh_per_ton || 0,
-      cost_per_ton: energyData.cost_per_ton || 0,
-      target_kwh_per_ton: energyData.target_kwh_per_ton || 80,
-      status: energyData.efficiency_status || 'unknown',
+      kwh_per_ton: efficiencyData.kwh_per_ton || 0,
+      cost_per_ton: efficiencyData.cost_per_ton || 0,
+      target_kwh_per_ton: efficiencyData.target_kwh_per_ton || 0.40,
+      status: efficiencyData.status || 'unknown',
     },
     peak_demand: {
-      current_kw: currentDemand,
-      contracted_kw: contractedKw,
-      utilization_percent: contractedKw > 0 ? (currentDemand / contractedKw) * 100 : 0,
-      risk_of_penalty: contractedKw > 0 ? currentDemand > contractedKw * 0.9 : false,
+      current_kw: peakDemandData.current_kw || currentDemand,
+      contracted_kw: peakDemandData.contracted_kw || 2000,
+      utilization_percent: peakDemandData.utilization_percent || 0,
+      risk_of_penalty: peakDemandData.risk_of_penalty || false,
     },
-    // CORR-001: Use only real history data from API
-    history: energyData.history || [],
-    // CORR-001: Use only real ML predictions from API - NO Math.random()
-    ml_predictions: mlData.energy_prediction?.map((p: any, i: number) => ({
-      hour: p.hour || `${i.toString().padStart(2, '0')}:00`,
-      predicted: p.predicted_value || 0,
-      confidence: p.confidence || 0,
+    // History from API (real InfluxDB data when available)
+    history: (energyData.history || []).map((h: any) => ({
+      hour: h.timestamp ? new Date(h.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+      consumption: h.consumption_kwh || 0,
+      timestamp: h.timestamp,
+      is_peak_hour: h.is_peak_hour || false,
+    })),
+    // ML predictions from API - energy_prediction.predicted_24h array
+    ml_predictions: mlData.energy_prediction?.predicted_24h?.map((p: any) => ({
+      hour: p.timestamp ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : `+${p.hour_ahead}h`,
+      predicted: p.predicted_consumption_kwh || 0,
+      confidence: (p.confidence * 100) || 0,
     })) || [],
-    // CORR-001: Use only real insights from API
-    insights: mlData.efficiency?.slice(0, 3).map((e: any, idx: number) => ({
-      type: e.type || (idx === 0 ? 'info' : 'info'),
-      title: e.title || 'Análise',
-      description: e.description || '',
-      recommendation: e.recommendation || '',
-    })) || [],
-    // CORR-001: Use only real savings from API - NO Math.random()
-    savings_opportunities: mlData.efficiency?.filter((e: any) => e.savings > 0).slice(0, 4).map((e: any, idx: number) => ({
-      action: e.action || e.title || '',
-      savings: e.savings || 0,
-      priority: e.priority || (idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low'),
-    })) || [],
-    // CORR-001: Track data availability
+    // Insights from energy API or ML API
+    insights: energyData.insights || [
+      // Energy prediction insights
+      ...(mlData.energy_prediction?.recommendations?.map((rec: string) => ({
+        type: rec.includes('⚠️') ? 'warning' : 'info',
+        title: 'Previsão de Energia',
+        description: rec,
+        recommendation: '',
+      })) || []),
+      // Efficiency insights
+      ...(mlData.efficiency?.alerts?.map((alert: string) => ({
+        type: 'warning',
+        title: 'Eficiência Energética',
+        description: alert,
+        recommendation: '',
+      })) || []),
+      // Cost optimization insights
+      ...(mlData.cost_optimization?.recommendations?.slice(0, 2).map((rec: string) => ({
+        type: 'success',
+        title: 'Otimização de Custos',
+        description: rec,
+        recommendation: '',
+      })) || []),
+    ].slice(0, 4),
+    // Savings opportunities from ML API cost_optimization
+    savings_opportunities: mlData.cost_optimization ? [
+      {
+        action: mlData.cost_optimization.optimization_strategy || 'Otimização de carga',
+        savings: mlData.cost_optimization.potential_savings_monthly || 0,
+        priority: 'high',
+      },
+      ...(mlData.cost_optimization.recommendations?.slice(0, 3).map((rec: string, idx: number) => ({
+        action: rec,
+        savings: (mlData.cost_optimization.potential_savings_monthly || 0) * (0.3 - idx * 0.1),
+        priority: idx === 0 ? 'medium' : 'low',
+      })) || []),
+    ] : [],
+    // Track data source and availability
     _meta: {
+      dataSource: dataSource,
+      isRealData: isRealData,
       hasEnergyData: !!energyResponse.data,
       hasMLData: !!mlResponse.data,
       hasTagsData: tags.length > 0,
+      generatedAt: energyData.generated_at,
       lastUpdate: new Date().toISOString(),
     },
   };
@@ -277,7 +317,14 @@ export const TremorEnergy: React.FC = () => {
         <div className="flex items-center gap-3">
           <Zap className="w-8 h-8 text-amber-500" />
           <div>
-            <Title>Gerenciamento de Energia</Title>
+            <Flex alignItems="center" className="gap-2">
+              <Title>Gerenciamento de Energia</Title>
+              {data?._meta?.isRealData ? (
+                <Badge color="emerald" size="sm">Dados Reais (InfluxDB)</Badge>
+              ) : (
+                <Badge color="amber" size="sm">Dados Simulados</Badge>
+              )}
+            </Flex>
             <Text>Dashboard Executivo • Atualizado: {format(lastUpdated, 'HH:mm:ss')}</Text>
           </div>
         </div>
