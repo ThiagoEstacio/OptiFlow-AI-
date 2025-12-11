@@ -271,7 +271,7 @@ export default function TremorMaintenance() {
     setPredictiveLoading(true);
     try {
       for (const eq of equipmentHealth) {
-        if (modelStatus?.models[eq.equipment_id]) {
+        if (modelStatus?.models?.[eq.equipment_id]) {
           await runPrediction(eq.equipment_id);
         }
       }
@@ -709,8 +709,8 @@ export default function TremorMaintenance() {
             {/* Equipment Predictions */}
             <Grid numItemsMd={2} className="gap-4">
               {equipmentHealth.map((eq) => {
-                const hasModel = modelStatus?.models[eq.equipment_id];
-                const prediction = anomalyPredictions[eq.equipment_id];
+                const hasModel = modelStatus?.models?.[eq.equipment_id];
+                const prediction = anomalyPredictions?.[eq.equipment_id];
                 const isTraining = trainingEquipment === eq.equipment_id;
 
                 return (
