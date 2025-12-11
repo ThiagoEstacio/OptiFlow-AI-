@@ -554,17 +554,36 @@ class AnomalyDetectionService:
                     "loaded_in_memory": equipment_id in self._models
                 }
 
-        # Return all models
+        # Return all models - include both in-memory and disk models
+        models_dict = {}
+
+        # First, add models from _model_info (fully loaded with metadata)
+        for eq_id, info in self._model_info.items():
+            models_dict[eq_id] = {
+                "trained_at": info.trained_at.isoformat(),
+                "samples_used": info.samples_used,
+                "in_memory": True
+            }
+
+        # Then, add models from disk that aren't in _model_info
+        for model_file in self.model_path.glob("*_model.joblib"):
+            eq_id = model_file.stem.replace("_model", "")
+            # Skip test models
+            if eq_id.startswith("TEST"):
+                continue
+            if eq_id not in models_dict:
+                # Get file modification time as trained_at proxy
+                mtime = datetime.fromtimestamp(model_file.stat().st_mtime)
+                models_dict[eq_id] = {
+                    "trained_at": mtime.isoformat(),
+                    "samples_used": 0,  # Unknown - not in memory
+                    "in_memory": eq_id in self._models
+                }
+
         return {
             "total_models": len(self._models),
             "models_on_disk": len(list(self.model_path.glob("*_model.joblib"))),
-            "models": {
-                eq_id: {
-                    "trained_at": info.trained_at.isoformat(),
-                    "samples_used": info.samples_used
-                }
-                for eq_id, info in self._model_info.items()
-            },
+            "models": models_dict,
             "statistics": self._stats
         }
 
