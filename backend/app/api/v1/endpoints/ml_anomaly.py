@@ -600,6 +600,29 @@ def _generate_simulated_history(
 # Feature Engineering Endpoints
 # =============================================================================
 
+@router.get("/features/stats")
+async def get_feature_service_stats(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Get Feature Engineering service statistics.
+
+    Returns:
+        Service stats including features extracted, formulas evaluated
+    """
+    if not FEATURE_SERVICE_AVAILABLE:
+        return {
+            "available": False,
+            "message": "Feature engineering service not available"
+        }
+
+    feature_service = get_feature_engineering_service()
+    stats = feature_service.get_statistics()
+    stats["available"] = True
+
+    return stats
+
+
 @router.get("/features/{equipment_id}")
 async def get_equipment_features(
     equipment_id: str,
@@ -899,26 +922,3 @@ async def predict_with_asset_features(
             status_code=500,
             detail=f"Failed to predict: {str(e)}"
         )
-
-
-@router.get("/features/stats")
-async def get_feature_service_stats(
-    current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """
-    Get Feature Engineering service statistics.
-
-    Returns:
-        Service stats including features extracted, formulas evaluated
-    """
-    if not FEATURE_SERVICE_AVAILABLE:
-        return {
-            "available": False,
-            "message": "Feature engineering service not available"
-        }
-
-    feature_service = get_feature_engineering_service()
-    stats = feature_service.get_statistics()
-    stats["available"] = True
-
-    return stats
