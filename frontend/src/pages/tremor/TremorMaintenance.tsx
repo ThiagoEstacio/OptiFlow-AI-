@@ -7,7 +7,7 @@
  * - Indicadores KPI (MTBF/MTTR/Disponibilidade)
  * - Manutenção Preditiva (ML: detecção de anomalias)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -54,6 +54,7 @@ import {
   BatteryCharging,
   Cpu,
   PlayCircle,
+  Clock,
 } from 'lucide-react';
 import apiClient from '../../api/client';
 
@@ -93,11 +94,12 @@ interface MaintenanceKPI {
 
 interface AnomalyPrediction {
   equipment_id: string;
-  status: 'normal' | 'anomaly' | 'no_model' | 'error';
-  score: number;
-  confidence: number;
-  is_anomaly: boolean;
-  contributing_features: {
+  status: 'normal' | 'anomaly' | 'no_model' | 'error' | 'no_data';
+  message?: string;
+  score?: number;
+  confidence?: number;
+  is_anomaly?: boolean;
+  contributing_features?: {
     feature: string;
     current_value: number;
     expected_mean: number;
@@ -105,8 +107,8 @@ interface AnomalyPrediction {
     deviation: 'high' | 'low';
     severity: 'high' | 'medium';
   }[];
-  recommendation: string;
-  timestamp: string;
+  recommendation?: string;
+  timestamp?: string;
 }
 
 interface ModelStatus {
@@ -144,6 +146,13 @@ export default function TremorMaintenance() {
   const [anomalyPredictions, setAnomalyPredictions] = useState<Record<string, AnomalyPrediction>>({});
   const [predictiveLoading, setPredictiveLoading] = useState(false);
   const [trainingEquipment, setTrainingEquipment] = useState<string | null>(null);
+
+  // Auto-prediction State
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(6); // hours
+  const [lastPredictionTime, setLastPredictionTime] = useState<Date | null>(null);
+  const [nextPredictionTime, setNextPredictionTime] = useState<Date | null>(null);
+  const [isAutoRefreshEnabled, setIsAutoRefreshEnabled] = useState(true);
+  const hasRunInitialPrediction = useRef(false);
 
   // Update tab when URL changes
   useEffect(() => {
@@ -266,19 +275,56 @@ export default function TremorMaintenance() {
     }
   };
 
-  // Run predictions for all equipment with models
-  const runAllPredictions = async () => {
+  // Refs to track state across effects without causing re-renders
+  const equipmentHealthRef = useRef<EquipmentHealth[]>([]);
+  const modelStatusRef = useRef<ModelStatus | null>(null);
+  const autoRefreshIntervalRef = useRef(autoRefreshInterval);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    equipmentHealthRef.current = equipmentHealth;
+  }, [equipmentHealth]);
+
+  useEffect(() => {
+    modelStatusRef.current = modelStatus;
+  }, [modelStatus]);
+
+  useEffect(() => {
+    autoRefreshIntervalRef.current = autoRefreshInterval;
+  }, [autoRefreshInterval]);
+
+  // Run predictions for all equipment with models (using refs to avoid dependency issues)
+  const runAllPredictions = useCallback(async () => {
+    const currentEquipment = equipmentHealthRef.current;
+    const currentModelStatus = modelStatusRef.current;
+
+    if (!currentEquipment.length || !currentModelStatus?.models) {
+      console.log('[Auto-Prediction] No equipment or models available');
+      return;
+    }
+
     setPredictiveLoading(true);
+    console.log('[Auto-Prediction] Starting predictions for', currentEquipment.length, 'equipment');
+
     try {
-      for (const eq of equipmentHealth) {
-        if (modelStatus?.models?.[eq.equipment_id]) {
+      for (const eq of currentEquipment) {
+        if (currentModelStatus.models[eq.equipment_id]) {
+          console.log('[Auto-Prediction] Running prediction for:', eq.equipment_id);
           await runPrediction(eq.equipment_id);
         }
       }
+      // Update timestamps after successful run
+      const now = new Date();
+      setLastPredictionTime(now);
+      const next = new Date(now.getTime() + autoRefreshIntervalRef.current * 60 * 60 * 1000);
+      setNextPredictionTime(next);
+      console.log('[Auto-Prediction] Completed successfully');
+    } catch (error) {
+      console.error('[Auto-Prediction] Error:', error);
     } finally {
       setPredictiveLoading(false);
     }
-  };
+  }, []); // No dependencies - uses refs
 
   useEffect(() => {
     fetchData();
@@ -290,11 +336,65 @@ export default function TremorMaintenance() {
     }
   }, [selectedEquipment]);
 
+  // Always load model status on mount (not just when tab is selected)
+  useEffect(() => {
+    fetchModelStatus();
+  }, []);
+
+  // Also refresh model status when tab is selected
   useEffect(() => {
     if (selectedTab === 2) {
       fetchModelStatus();
     }
   }, [selectedTab]);
+
+  // Auto-run predictions when models and equipment are available
+  useEffect(() => {
+    if (modelStatus?.total_models && modelStatus.total_models > 0 && equipmentHealth.length > 0) {
+      // Run predictions automatically on first load (only once)
+      if (!hasRunInitialPrediction.current && !predictiveLoading) {
+        hasRunInitialPrediction.current = true;
+        console.log('[Auto-Prediction] Running initial predictions on page load...');
+        // Small delay to ensure refs are updated
+        setTimeout(() => {
+          runAllPredictions();
+        }, 100);
+      }
+    }
+  }, [modelStatus, equipmentHealth.length, predictiveLoading, runAllPredictions]);
+
+  // Auto-refresh predictions at configured interval
+  useEffect(() => {
+    if (!isAutoRefreshEnabled || selectedTab !== 2) return;
+
+    const intervalMs = autoRefreshInterval * 60 * 60 * 1000; // Convert hours to ms
+
+    const interval = setInterval(() => {
+      if (modelStatus?.total_models && modelStatus.total_models > 0 && equipmentHealth.length > 0) {
+        console.log(`[Auto-Prediction] Running scheduled predictions (interval: ${autoRefreshInterval}h)`);
+        runAllPredictions();
+      }
+    }, intervalMs);
+
+    // Set initial next prediction time
+    if (!nextPredictionTime) {
+      setNextPredictionTime(new Date(Date.now() + intervalMs));
+    }
+
+    return () => clearInterval(interval);
+  }, [isAutoRefreshEnabled, autoRefreshInterval, selectedTab, modelStatus, equipmentHealth.length]);
+
+  // Update countdown timer every minute
+  useEffect(() => {
+    if (!isAutoRefreshEnabled || !nextPredictionTime) return;
+
+    const timer = setInterval(() => {
+      // Force re-render to update countdown display
+      setNextPredictionTime(prev => prev ? new Date(prev.getTime()) : null);
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, [isAutoRefreshEnabled, nextPredictionTime]);
 
   // Helper functions
   const getStatusColor = (status: string): "emerald" | "yellow" | "orange" | "red" | "gray" => {
@@ -686,23 +786,70 @@ export default function TremorMaintenance() {
               </Card>
             </Grid>
 
-            {/* Actions */}
+            {/* Actions & Auto-Refresh Controls */}
             <Card className="mb-6">
-              <Flex justifyContent="between" alignItems="center">
+              <Flex justifyContent="between" alignItems="start" className="flex-wrap gap-4">
                 <div>
                   <Title>Detecção de Anomalias por Equipamento</Title>
                   <Text className="text-gray-500">
                     Algoritmo: Isolation Forest | Features: Vibração, Temperatura, Corrente, Potência, Carga
                   </Text>
                 </div>
-                <Button
-                  icon={PlayCircle}
-                  onClick={runAllPredictions}
-                  loading={predictiveLoading}
-                  disabled={!modelStatus?.total_models}
-                >
-                  Executar Predições
-                </Button>
+
+                <div className="flex flex-col gap-3">
+                  {/* Auto-Refresh Controls */}
+                  <Flex alignItems="center" className="gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isAutoRefreshEnabled}
+                        onChange={(e) => setIsAutoRefreshEnabled(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <Text className="text-sm">Auto-refresh</Text>
+                    </label>
+
+                    <select
+                      value={autoRefreshInterval}
+                      onChange={(e) => setAutoRefreshInterval(Number(e.target.value))}
+                      disabled={!isAutoRefreshEnabled}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                    >
+                      <option value={1}>1 hora</option>
+                      <option value={6}>6 horas</option>
+                      <option value={12}>12 horas</option>
+                      <option value={24}>24 horas</option>
+                    </select>
+                  </Flex>
+
+                  {/* Status Info */}
+                  {isAutoRefreshEnabled && (
+                    <div className="text-xs text-gray-500 space-y-1">
+                      {lastPredictionTime && (
+                        <div className="flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-emerald-500" />
+                          <span>Última: {lastPredictionTime.toLocaleString('pt-BR')}</span>
+                        </div>
+                      )}
+                      {nextPredictionTime && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-blue-500" />
+                          <span>Próxima: {nextPredictionTime.toLocaleString('pt-BR')}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <Button
+                    icon={PlayCircle}
+                    onClick={runAllPredictions}
+                    loading={predictiveLoading}
+                    disabled={!modelStatus?.total_models}
+                    size="sm"
+                  >
+                    Executar Agora
+                  </Button>
+                </div>
               </Flex>
             </Card>
 
@@ -712,24 +859,50 @@ export default function TremorMaintenance() {
                 const hasModel = modelStatus?.models?.[eq.equipment_id];
                 const prediction = anomalyPredictions?.[eq.equipment_id];
                 const isTraining = trainingEquipment === eq.equipment_id;
+                const isLoadingPrediction = predictiveLoading && hasModel && !prediction;
 
                 return (
-                  <Card key={eq.equipment_id} className="relative">
+                  <Card
+                    key={eq.equipment_id}
+                    className={`relative ${prediction?.is_anomaly ? 'border-l-4 border-red-500' : hasModel && prediction ? 'border-l-4 border-emerald-500' : ''}`}
+                  >
+                    {/* Header com Status da Predição */}
                     <Flex justifyContent="between" alignItems="start">
                       <div>
-                        <Flex alignItems="center" className="gap-2">
-                          {getHealthIcon(eq.status)}
-                          <Title>{eq.equipment_name}</Title>
-                        </Flex>
+                        <Title className="flex items-center gap-2">
+                          {prediction?.is_anomaly ? (
+                            <AlertTriangle className="h-5 w-5 text-red-500" />
+                          ) : hasModel && prediction ? (
+                            <CheckCircle className="h-5 w-5 text-emerald-500" />
+                          ) : (
+                            getHealthIcon(eq.status)
+                          )}
+                          {eq.equipment_name}
+                        </Title>
                         <Text className="text-gray-500">{eq.equipment_id}</Text>
                       </div>
 
-                      {hasModel ? (
-                        <Badge color="emerald" icon={CheckCircle}>Modelo Treinado</Badge>
+                      {/* Badge de Status Principal */}
+                      {prediction?.is_anomaly ? (
+                        <Badge color="red" icon={AlertTriangle} size="lg">ANOMALIA</Badge>
+                      ) : hasModel && prediction && prediction.status !== 'no_data' ? (
+                        <Badge color="emerald" icon={CheckCircle} size="lg">NORMAL</Badge>
+                      ) : hasModel ? (
+                        <Badge color="blue" icon={Brain}>ML Ativo</Badge>
                       ) : (
                         <Badge color="gray">Sem Modelo</Badge>
                       )}
                     </Flex>
+
+                    {/* Loading State */}
+                    {isLoadingPrediction && (
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg animate-pulse">
+                        <Flex alignItems="center" className="gap-2">
+                          <RefreshCw className="h-4 w-4 text-blue-600 animate-spin" />
+                          <Text className="text-blue-700">Executando análise preditiva...</Text>
+                        </Flex>
+                      </div>
+                    )}
 
                     {/* Model Training */}
                     {!hasModel && (
@@ -751,76 +924,87 @@ export default function TremorMaintenance() {
                       </Callout>
                     )}
 
-                    {/* Prediction Results */}
+                    {/* Prediction Results - Exibição Direta */}
                     {hasModel && prediction && (
                       <div className="mt-4">
-                        <Flex justifyContent="between" alignItems="center" className="mb-3">
-                          <Text className="font-medium">Resultado da Predição</Text>
-                          <Badge
-                            color={prediction.is_anomaly ? 'red' : 'emerald'}
-                            icon={prediction.is_anomaly ? AlertTriangle : CheckCircle}
-                          >
-                            {prediction.is_anomaly ? 'ANOMALIA' : 'NORMAL'}
-                          </Badge>
-                        </Flex>
-
-                        <Grid numItems={2} className="gap-3 mb-3">
-                          <div className="p-2 bg-gray-50 rounded">
-                            <Text className="text-xs text-gray-500">Score</Text>
-                            <Text className="font-medium">{prediction.score.toFixed(3)}</Text>
-                          </div>
-                          <div className="p-2 bg-gray-50 rounded">
-                            <Text className="text-xs text-gray-500">Confiança</Text>
-                            <Text className="font-medium">{prediction.confidence.toFixed(1)}%</Text>
-                          </div>
-                        </Grid>
-
-                        {/* Contributing Features */}
-                        {prediction.contributing_features.length > 0 && (
-                          <div className="mt-3">
-                            <Text className="text-sm font-medium text-gray-700 mb-2">
-                              Fatores Contribuintes:
-                            </Text>
-                            {prediction.contributing_features.slice(0, 3).map((f, idx) => (
-                              <Flex key={idx} className="gap-2 p-2 bg-red-50 rounded mb-1" alignItems="center">
-                                {getFeatureIcon(f.feature)}
-                                <div className="flex-1">
-                                  <Text className="text-sm font-medium">{getFeatureName(f.feature)}</Text>
-                                  <Text className="text-xs text-gray-500">
-                                    Atual: {f.current_value.toFixed(1)} | Esperado: {f.expected_mean.toFixed(1)} | Z-score: {f.z_score.toFixed(1)}
-                                  </Text>
-                                </div>
-                                <Badge color={f.severity === 'high' ? 'red' : 'orange'} size="xs">
-                                  {f.deviation === 'high' ? 'Alto' : 'Baixo'}
-                                </Badge>
-                              </Flex>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Recommendation */}
-                        {prediction.recommendation && (
-                          <Callout
-                            className="mt-3"
-                            title="Recomendação"
-                            color={prediction.is_anomaly ? 'red' : 'emerald'}
-                          >
-                            <Text>{prediction.recommendation}</Text>
+                        {/* No Data State */}
+                        {prediction.status === 'no_data' ? (
+                          <Callout color="amber" title="Sem Dados Live">
+                            <Text>{prediction.message || 'Nenhum dado em tempo real disponível.'}</Text>
                           </Callout>
+                        ) : (
+                          <>
+                            {/* Métricas em Destaque */}
+                            <Grid numItems={2} className="gap-3 mb-4">
+                              <div className={`p-3 rounded-lg ${prediction.is_anomaly ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                                <Text className="text-xs text-gray-500">Score de Anomalia</Text>
+                                <Metric className={`text-lg ${prediction.is_anomaly ? 'text-red-600' : 'text-emerald-600'}`}>
+                                  {prediction.score?.toFixed(3) ?? 'N/A'}
+                                </Metric>
+                              </div>
+                              <div className={`p-3 rounded-lg ${prediction.is_anomaly ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                                <Text className="text-xs text-gray-500">Confiança</Text>
+                                <Metric className={`text-lg ${prediction.is_anomaly ? 'text-red-600' : 'text-emerald-600'}`}>
+                                  {prediction.confidence?.toFixed(1) ?? 0}%
+                                </Metric>
+                              </div>
+                            </Grid>
+
+                            {/* Contributing Features - Fatores de Risco */}
+                            {prediction.contributing_features && prediction.contributing_features.length > 0 && (
+                              <div className="mb-3">
+                                <Text className="text-sm font-medium text-gray-700 mb-2">
+                                  ⚠️ Fatores de Risco Detectados:
+                                </Text>
+                                {prediction.contributing_features.slice(0, 3).map((f, idx) => (
+                                  <div key={idx} className="p-2 bg-red-50 rounded mb-1 border-l-2 border-red-400">
+                                    <Flex justifyContent="between" alignItems="center">
+                                      <Flex alignItems="center" className="gap-2">
+                                        {getFeatureIcon(f.feature)}
+                                        <Text className="text-sm font-medium">{getFeatureName(f.feature)}</Text>
+                                      </Flex>
+                                      <Badge color={f.severity === 'high' ? 'red' : 'orange'} size="xs">
+                                        {f.severity === 'high' ? 'CRÍTICO' : 'ATENÇÃO'}
+                                      </Badge>
+                                    </Flex>
+                                    <Text className="text-xs text-gray-600 mt-1">
+                                      Valor: <strong>{f.current_value?.toFixed(1) ?? 'N/A'}</strong> |
+                                      Normal: {f.expected_mean?.toFixed(1) ?? 'N/A'} |
+                                      Desvio: {f.z_score?.toFixed(1) ?? 'N/A'}σ
+                                    </Text>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Recommendation */}
+                            {prediction.recommendation && (
+                              <div className={`p-3 rounded-lg ${prediction.is_anomaly ? 'bg-red-100 border border-red-200' : 'bg-emerald-100 border border-emerald-200'}`}>
+                                <Text className={`text-sm font-medium ${prediction.is_anomaly ? 'text-red-800' : 'text-emerald-800'}`}>
+                                  💡 {prediction.recommendation}
+                                </Text>
+                              </div>
+                            )}
+                          </>
                         )}
 
-                        <Text className="text-xs text-gray-400 mt-2">
-                          Última análise: {new Date(prediction.timestamp).toLocaleString('pt-BR')}
-                        </Text>
+                        {/* Timestamp */}
+                        {prediction.timestamp && (
+                          <Text className="text-xs text-gray-400 mt-3 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Última análise: {new Date(prediction.timestamp).toLocaleString('pt-BR')}
+                          </Text>
+                        )}
                       </div>
                     )}
 
-                    {/* Run prediction button if model exists but no prediction yet */}
-                    {hasModel && !prediction && (
+                    {/* Run prediction button if model exists but no prediction yet and not loading */}
+                    {hasModel && !prediction && !isLoadingPrediction && (
                       <div className="mt-4">
                         <Button
                           size="xs"
                           variant="secondary"
+                          icon={PlayCircle}
                           onClick={() => runPrediction(eq.equipment_id)}
                         >
                           Executar Predição
