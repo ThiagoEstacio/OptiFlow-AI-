@@ -662,7 +662,7 @@ export default function TremorMaintenance() {
                   <Activity className="h-5 w-5 text-blue-600" />
                   <Text>Predições Realizadas</Text>
                 </Flex>
-                <Metric>{modelStatus?.statistics.total_predictions || 0}</Metric>
+                <Metric>{modelStatus?.statistics?.total_predictions || 0}</Metric>
               </Card>
 
               <Card decoration="top" decorationColor="red">
@@ -670,7 +670,7 @@ export default function TremorMaintenance() {
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                   <Text>Anomalias Detectadas</Text>
                 </Flex>
-                <Metric>{modelStatus?.statistics.anomalies_detected || 0}</Metric>
+                <Metric>{modelStatus?.statistics?.anomalies_detected || 0}</Metric>
               </Card>
 
               <Card decoration="top" decorationColor="emerald">
@@ -679,7 +679,7 @@ export default function TremorMaintenance() {
                   <Text>Taxa de Detecção</Text>
                 </Flex>
                 <Metric>
-                  {modelStatus?.statistics.total_predictions
+                  {modelStatus?.statistics?.total_predictions
                     ? ((modelStatus.statistics.anomalies_detected / modelStatus.statistics.total_predictions) * 100).toFixed(1)
                     : 0}%
                 </Metric>
