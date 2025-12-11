@@ -1,15 +1,15 @@
 """
-MELH-003: Dynamic Ishikawa (Fishbone) Diagram Analysis
+MELH-003: Diagrama de Ishikawa (Espinha de Peixe) Dinâmico
 
-Generates root cause analysis using the 6M methodology:
-- Man (Personnel)
-- Machine (Equipment)
-- Method (Process)
-- Material (Materials/Inputs)
-- Measurement (Instrumentation)
-- Mother Nature (Environment)
+Gera análise de causa raiz usando a metodologia 6M:
+- Mão de Obra (Pessoal)
+- Máquina (Equipamento)
+- Método (Processo)
+- Material (Insumos)
+- Medição (Instrumentação)
+- Meio Ambiente (Ambiente)
 
-This replaces static diagrams with dynamic, data-driven analysis.
+Substitui diagramas estáticos por análise dinâmica baseada em dados.
 """
 
 import logging
@@ -21,571 +21,606 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 
-class IshikawaCategory(str, Enum):
-    """6M Categories for Ishikawa Diagram"""
-    MAN = "man"  # Personnel/Human factors
-    MACHINE = "machine"  # Equipment issues
-    METHOD = "method"  # Process/procedures
-    MATERIAL = "material"  # Raw materials/inputs
-    MEASUREMENT = "measurement"  # Instrumentation/sensors
-    MOTHER_NATURE = "mother_nature"  # Environmental factors
+class CategoriaIshikawa(str, Enum):
+    """Categorias 6M para Diagrama de Ishikawa"""
+    MAO_DE_OBRA = "mao_de_obra"      # Fatores humanos/pessoal
+    MAQUINA = "maquina"              # Problemas de equipamento
+    METODO = "metodo"                # Processo/procedimentos
+    MATERIAL = "material"            # Matérias-primas/insumos
+    MEDICAO = "medicao"              # Instrumentação/sensores
+    MEIO_AMBIENTE = "meio_ambiente"  # Fatores ambientais
 
 
-class CauseSeverity(str, Enum):
-    """Severity levels for root causes"""
-    CRITICAL = "critical"  # Immediate action required
-    HIGH = "high"  # Address within 24h
-    MEDIUM = "medium"  # Address within 1 week
-    LOW = "low"  # Monitor and plan
-
-
-@dataclass
-class RootCause:
-    """Individual root cause identified"""
-    category: IshikawaCategory
-    cause: str
-    description: str
-    severity: CauseSeverity
-    confidence: float  # 0.0 - 1.0
-    evidence: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    related_tags: List[str] = field(default_factory=list)
-    frequency: int = 1  # How often this cause appears
+class SeveridadeCausa(str, Enum):
+    """Níveis de severidade das causas raiz"""
+    CRITICA = "critica"      # Ação imediata necessária
+    ALTA = "alta"            # Resolver em 24h
+    MEDIA = "media"          # Resolver em 1 semana
+    BAIXA = "baixa"          # Monitorar e planejar
 
 
 @dataclass
-class IshikawaDiagram:
-    """Complete Ishikawa analysis result"""
-    problem_statement: str
-    generated_at: datetime
-    analysis_period_hours: int
-    categories: Dict[str, List[RootCause]]
-    primary_cause: Optional[RootCause]
-    total_causes_identified: int
-    data_quality_score: float
-    recommendations: List[str]
+class CausaRaiz:
+    """Causa raiz individual identificada"""
+    categoria: CategoriaIshikawa
+    causa: str
+    descricao: str
+    severidade: SeveridadeCausa
+    confianca: float  # 0.0 - 1.0
+    evidencias: List[str] = field(default_factory=list)
+    recomendacoes: List[str] = field(default_factory=list)
+    tags_relacionadas: List[str] = field(default_factory=list)
+    frequencia: int = 1  # Quantas vezes esta causa aparece
 
 
-class IshikawaAnalysisService:
+@dataclass
+class DiagramaIshikawa:
+    """Resultado completo da análise Ishikawa"""
+    declaracao_problema: str
+    gerado_em: datetime
+    periodo_analise_horas: int
+    categorias: Dict[str, List[CausaRaiz]]
+    causa_primaria: Optional[CausaRaiz]
+    total_causas_identificadas: int
+    score_qualidade_dados: float
+    recomendacoes: List[str]
+
+
+class ServicoAnaliseIshikawa:
     """
-    Dynamic Ishikawa Diagram Generator
+    Gerador Dinâmico de Diagrama de Ishikawa
 
-    Uses real-time data to identify root causes of quality issues,
-    equipment failures, or production problems.
+    Usa dados em tempo real para identificar causas raiz de problemas
+    de qualidade, falhas de equipamento ou problemas de produção.
     """
 
-    # Cause patterns mapped to categories
-    CAUSE_PATTERNS = {
-        IshikawaCategory.MAN: {
-            "patterns": [
-                "operator_error", "training_gap", "fatigue", "communication",
-                "shift_change", "human_error", "supervision"
+    # Padrões de causa mapeados para categorias
+    PADROES_CAUSA = {
+        CategoriaIshikawa.MAO_DE_OBRA: {
+            "padroes": [
+                "erro_operador", "falta_treinamento", "fadiga", "comunicacao",
+                "troca_turno", "erro_humano", "supervisao"
             ],
-            "tag_keywords": ["operator", "manual", "human", "user"],
-            "alarm_keywords": ["operator", "manual", "interlock_bypass", "override"]
+            "palavras_tag": ["operador", "manual", "humano", "usuario"],
+            "palavras_alarme": ["operador", "manual", "bypass", "override", "interlock"]
         },
-        IshikawaCategory.MACHINE: {
-            "patterns": [
-                "equipment_failure", "wear", "calibration", "maintenance",
-                "breakdown", "mechanical", "electrical"
+        CategoriaIshikawa.MAQUINA: {
+            "padroes": [
+                "falha_equipamento", "desgaste", "calibracao", "manutencao",
+                "quebra", "mecanico", "eletrico"
             ],
-            "tag_keywords": ["motor", "pump", "valve", "conveyor", "crusher", "feeder"],
-            "alarm_keywords": ["fault", "failure", "trip", "overload", "breakdown"]
+            "palavras_tag": ["motor", "bomba", "valvula", "correia", "britador", "alimentador", "elevador", "transportador"],
+            "palavras_alarme": ["falha", "trip", "sobrecarga", "quebra", "fault", "failure", "overload"]
         },
-        IshikawaCategory.METHOD: {
-            "patterns": [
-                "procedure_violation", "wrong_sequence", "timing", "sop",
-                "process_deviation", "recipe", "batch"
+        CategoriaIshikawa.METODO: {
+            "padroes": [
+                "violacao_procedimento", "sequencia_errada", "timing", "pop",
+                "desvio_processo", "receita", "batelada"
             ],
-            "tag_keywords": ["setpoint", "recipe", "batch", "sequence", "step"],
-            "alarm_keywords": ["sequence", "step", "procedure", "deviation", "limit"]
+            "palavras_tag": ["setpoint", "receita", "batelada", "sequencia", "etapa"],
+            "palavras_alarme": ["sequencia", "etapa", "procedimento", "desvio", "limite"]
         },
-        IshikawaCategory.MATERIAL: {
-            "patterns": [
-                "contamination", "moisture", "grade_change", "supplier",
-                "specification", "quality", "variation"
+        CategoriaIshikawa.MATERIAL: {
+            "padroes": [
+                "contaminacao", "umidade", "mudanca_grade", "fornecedor",
+                "especificacao", "qualidade", "variacao"
             ],
-            "tag_keywords": ["material", "feed", "input", "grade", "moisture", "iron"],
-            "alarm_keywords": ["quality", "contamination", "specification", "grade"]
+            "palavras_tag": ["material", "alimentacao", "entrada", "grade", "umidade", "ferro", "granulometria"],
+            "palavras_alarme": ["qualidade", "contaminacao", "especificacao", "grade", "teor"]
         },
-        IshikawaCategory.MEASUREMENT: {
-            "patterns": [
-                "sensor_drift", "calibration_error", "instrument_failure",
-                "accuracy", "precision", "range"
+        CategoriaIshikawa.MEDICAO: {
+            "padroes": [
+                "deriva_sensor", "erro_calibracao", "falha_instrumento",
+                "precisao", "exatidao", "range"
             ],
-            "tag_keywords": ["sensor", "transmitter", "analyzer", "scale", "flowmeter"],
-            "alarm_keywords": ["sensor", "signal", "communication", "offline", "bad_quality"]
+            "palavras_tag": ["sensor", "transmissor", "analisador", "balanca", "medidor", "vazao", "nivel", "pressao", "temperatura"],
+            "palavras_alarme": ["sensor", "sinal", "comunicacao", "offline", "bad_quality", "comm_loss"]
         },
-        IshikawaCategory.MOTHER_NATURE: {
-            "patterns": [
-                "temperature_ambient", "humidity", "weather", "seasonal",
-                "dust", "wind", "rain"
+        CategoriaIshikawa.MEIO_AMBIENTE: {
+            "padroes": [
+                "temperatura_ambiente", "umidade", "clima", "sazonal",
+                "poeira", "vento", "chuva"
             ],
-            "tag_keywords": ["ambient", "weather", "environment", "temperature_ext", "humidity"],
-            "alarm_keywords": ["weather", "ambient", "environmental", "extreme"]
+            "palavras_tag": ["ambiente", "clima", "externo", "temperatura_ext", "umidade_ar"],
+            "palavras_alarme": ["clima", "ambiente", "ambiental", "extremo", "chuva", "vento"]
         }
     }
 
-    def __init__(self):
-        """Initialize Ishikawa analysis service"""
-        self.analysis_cache: Dict[str, IshikawaDiagram] = {}
-        logger.info("IshikawaAnalysisService initialized")
+    # Nomes em português das categorias
+    NOMES_CATEGORIAS = {
+        CategoriaIshikawa.MAO_DE_OBRA: "Mão de Obra",
+        CategoriaIshikawa.MAQUINA: "Máquina",
+        CategoriaIshikawa.METODO: "Método",
+        CategoriaIshikawa.MATERIAL: "Material",
+        CategoriaIshikawa.MEDICAO: "Medição",
+        CategoriaIshikawa.MEIO_AMBIENTE: "Meio Ambiente"
+    }
 
-    async def analyze(
+    ICONES_CATEGORIAS = {
+        CategoriaIshikawa.MAO_DE_OBRA: "👤",
+        CategoriaIshikawa.MAQUINA: "⚙️",
+        CategoriaIshikawa.METODO: "📋",
+        CategoriaIshikawa.MATERIAL: "📦",
+        CategoriaIshikawa.MEDICAO: "📏",
+        CategoriaIshikawa.MEIO_AMBIENTE: "🌡️"
+    }
+
+    def __init__(self):
+        """Inicializa o serviço de análise Ishikawa"""
+        self.cache_analise: Dict[str, DiagramaIshikawa] = {}
+        logger.info("ServicoAnaliseIshikawa inicializado")
+
+    async def analisar(
         self,
-        problem_statement: str,
-        alarms: List[Dict[str, Any]],
-        tag_data: List[Dict[str, Any]],
-        events: Optional[List[Dict[str, Any]]] = None,
-        hours: int = 24
-    ) -> IshikawaDiagram:
+        declaracao_problema: str,
+        alarmes: List[Dict[str, Any]],
+        dados_tags: List[Dict[str, Any]],
+        eventos: Optional[List[Dict[str, Any]]] = None,
+        horas: int = 24
+    ) -> DiagramaIshikawa:
         """
-        Generate dynamic Ishikawa diagram from operational data.
+        Gera diagrama de Ishikawa dinâmico a partir de dados operacionais.
 
         Args:
-            problem_statement: Description of the problem to analyze
-            alarms: Recent alarm events
-            tag_data: Tag value snapshots with anomalies
-            events: Optional additional events (shift changes, maintenance, etc.)
-            hours: Analysis period in hours
+            declaracao_problema: Descrição do problema a analisar
+            alarmes: Eventos de alarme recentes
+            dados_tags: Snapshots de valores de tags com anomalias
+            eventos: Eventos adicionais opcionais (trocas de turno, manutenção, etc.)
+            horas: Período de análise em horas
 
         Returns:
-            IshikawaDiagram with categorized root causes
+            DiagramaIshikawa com causas raiz categorizadas
         """
-        logger.info(f"Generating Ishikawa analysis for: {problem_statement}")
+        logger.info(f"Gerando análise Ishikawa para: {declaracao_problema}")
 
-        categories: Dict[str, List[RootCause]] = {
-            cat.value: [] for cat in IshikawaCategory
+        categorias: Dict[str, List[CausaRaiz]] = {
+            cat.value: [] for cat in CategoriaIshikawa
         }
 
-        # Analyze alarms for root causes
-        alarm_causes = self._analyze_alarms(alarms, hours)
-        for cause in alarm_causes:
-            categories[cause.category.value].append(cause)
+        # Analisar alarmes para causas raiz
+        causas_alarme = self._analisar_alarmes(alarmes, horas)
+        for causa in causas_alarme:
+            categorias[causa.categoria.value].append(causa)
 
-        # Analyze tag data for patterns
-        tag_causes = self._analyze_tags(tag_data, hours)
-        for cause in tag_causes:
-            categories[cause.category.value].append(cause)
+        # Analisar dados de tags para padrões
+        causas_tags = self._analisar_tags(dados_tags, horas)
+        for causa in causas_tags:
+            categorias[causa.categoria.value].append(causa)
 
-        # Analyze events if provided
-        if events:
-            event_causes = self._analyze_events(events, hours)
-            for cause in event_causes:
-                categories[cause.category.value].append(cause)
+        # Analisar eventos se fornecidos
+        if eventos:
+            causas_eventos = self._analisar_eventos(eventos, horas)
+            for causa in causas_eventos:
+                categorias[causa.categoria.value].append(causa)
 
-        # Deduplicate and rank causes within each category
-        for cat_name in categories:
-            categories[cat_name] = self._deduplicate_causes(categories[cat_name])
-            categories[cat_name] = sorted(
-                categories[cat_name],
-                key=lambda c: (c.severity.value, -c.confidence),
-                reverse=False  # Critical first
+        # Deduplicar e rankear causas dentro de cada categoria
+        for nome_cat in categorias:
+            categorias[nome_cat] = self._deduplicar_causas(categorias[nome_cat])
+            categorias[nome_cat] = sorted(
+                categorias[nome_cat],
+                key=lambda c: (c.severidade.value, -c.confianca),
+                reverse=False  # Crítico primeiro
             )
 
-        # Find primary cause
-        all_causes = [c for causes in categories.values() for c in causes]
-        primary_cause = self._identify_primary_cause(all_causes)
+        # Encontrar causa primária
+        todas_causas = [c for causas in categorias.values() for c in causas]
+        causa_primaria = self._identificar_causa_primaria(todas_causas)
 
-        # Generate recommendations
-        recommendations = self._generate_recommendations(categories, primary_cause)
+        # Gerar recomendações
+        recomendacoes = self._gerar_recomendacoes(categorias, causa_primaria)
 
-        # Calculate data quality score
-        data_quality = self._calculate_data_quality(alarms, tag_data, events)
+        # Calcular score de qualidade dos dados
+        qualidade_dados = self._calcular_qualidade_dados(alarmes, dados_tags, eventos)
 
-        diagram = IshikawaDiagram(
-            problem_statement=problem_statement,
-            generated_at=datetime.utcnow(),
-            analysis_period_hours=hours,
-            categories=categories,
-            primary_cause=primary_cause,
-            total_causes_identified=len(all_causes),
-            data_quality_score=data_quality,
-            recommendations=recommendations
+        diagrama = DiagramaIshikawa(
+            declaracao_problema=declaracao_problema,
+            gerado_em=datetime.utcnow(),
+            periodo_analise_horas=horas,
+            categorias=categorias,
+            causa_primaria=causa_primaria,
+            total_causas_identificadas=len(todas_causas),
+            score_qualidade_dados=qualidade_dados,
+            recomendacoes=recomendacoes
         )
 
-        # Cache result
-        cache_key = f"{problem_statement[:50]}_{hours}h"
-        self.analysis_cache[cache_key] = diagram
+        # Cachear resultado
+        chave_cache = f"{declaracao_problema[:50]}_{horas}h"
+        self.cache_analise[chave_cache] = diagrama
 
-        logger.info(f"Ishikawa analysis complete: {len(all_causes)} causes identified")
-        return diagram
+        logger.info(f"Análise Ishikawa completa: {len(todas_causas)} causas identificadas")
+        return diagrama
 
-    def _analyze_alarms(self, alarms: List[Dict], hours: int) -> List[RootCause]:
-        """Extract root causes from alarm data"""
-        causes = []
+    def _analisar_alarmes(self, alarmes: List[Dict], horas: int) -> List[CausaRaiz]:
+        """Extrai causas raiz dos dados de alarme"""
+        causas = []
 
-        for alarm in alarms:
-            alarm_type = alarm.get("alarm_type", "").lower()
-            tag_id = alarm.get("tag_id", "")
-            message = alarm.get("message", "").lower()
-            count = alarm.get("count", 1)
+        for alarme in alarmes:
+            tipo_alarme = alarme.get("alarm_type", "").lower()
+            tag_id = alarme.get("tag_id", "")
+            mensagem = alarme.get("message", "").lower()
+            contagem = alarme.get("count", 1)
 
-            category = self._classify_alarm(alarm_type, tag_id, message)
-            severity = self._determine_severity(alarm)
+            categoria = self._classificar_alarme(tipo_alarme, tag_id, mensagem)
+            severidade = self._determinar_severidade(alarme)
 
-            cause = RootCause(
-                category=category,
-                cause=alarm.get("alarm_type", "Unknown Alarm"),
-                description=alarm.get("message", f"Alarm on {tag_id}"),
-                severity=severity,
-                confidence=min(0.5 + (count * 0.1), 0.95),  # Higher count = higher confidence
-                evidence=[f"Alarm occurred {count} times in {hours}h"],
-                recommendations=self._get_alarm_recommendations(category, alarm_type),
-                related_tags=[tag_id] if tag_id else [],
-                frequency=count
+            causa = CausaRaiz(
+                categoria=categoria,
+                causa=alarme.get("alarm_type", "Alarme Desconhecido"),
+                descricao=alarme.get("message", f"Alarme em {tag_id}"),
+                severidade=severidade,
+                confianca=min(0.5 + (contagem * 0.1), 0.95),  # Maior contagem = maior confiança
+                evidencias=[f"Alarme ocorreu {contagem} vezes em {horas}h"],
+                recomendacoes=self._obter_recomendacoes_alarme(categoria, tipo_alarme),
+                tags_relacionadas=[tag_id] if tag_id else [],
+                frequencia=contagem
             )
-            causes.append(cause)
+            causas.append(causa)
 
-        return causes
+        return causas
 
-    def _analyze_tags(self, tag_data: List[Dict], hours: int) -> List[RootCause]:
-        """Extract root causes from tag value anomalies"""
-        causes = []
+    def _analisar_tags(self, dados_tags: List[Dict], horas: int) -> List[CausaRaiz]:
+        """Extrai causas raiz de anomalias nos valores de tags"""
+        causas = []
 
-        for tag in tag_data:
+        for tag in dados_tags:
             tag_id = tag.get("tag_id", "")
-            tag_name = tag.get("name", tag_id).lower()
-            value = tag.get("value")
-            quality = tag.get("quality", "GOOD")
-            has_anomaly = tag.get("is_anomaly", False)
+            nome_tag = tag.get("name", tag_id).lower()
+            valor = tag.get("value")
+            qualidade = tag.get("quality", "GOOD")
+            tem_anomalia = tag.get("is_anomaly", False)
             cv = tag.get("coefficient_of_variation", 0)
 
-            # Skip good quality, stable tags
-            if quality == "GOOD" and not has_anomaly and cv < 15:
+            # Pular tags com boa qualidade e estáveis
+            if qualidade == "GOOD" and not tem_anomalia and cv < 15:
                 continue
 
-            category = self._classify_tag(tag_id, tag_name)
+            categoria = self._classificar_tag(tag_id, nome_tag)
 
-            # Bad quality indicates measurement issues
-            if quality in ["BAD", "UNCERTAIN", "COMM_LOSS"]:
-                cause = RootCause(
-                    category=IshikawaCategory.MEASUREMENT,
-                    cause=f"Signal Quality Issue: {quality}",
-                    description=f"Tag {tag_name} showing {quality} quality",
-                    severity=CauseSeverity.HIGH if quality == "COMM_LOSS" else CauseSeverity.MEDIUM,
-                    confidence=0.85,
-                    evidence=[f"Quality status: {quality}"],
-                    recommendations=[
-                        "Check sensor wiring and connections",
-                        "Verify transmitter power supply",
-                        "Check for electromagnetic interference"
+            # Qualidade ruim indica problemas de medição
+            if qualidade in ["BAD", "UNCERTAIN", "COMM_LOSS"]:
+                causa = CausaRaiz(
+                    categoria=CategoriaIshikawa.MEDICAO,
+                    causa=f"Problema de Qualidade do Sinal: {qualidade}",
+                    descricao=f"Tag {nome_tag} mostrando qualidade {qualidade}",
+                    severidade=SeveridadeCausa.ALTA if qualidade == "COMM_LOSS" else SeveridadeCausa.MEDIA,
+                    confianca=0.85,
+                    evidencias=[f"Status de qualidade: {qualidade}"],
+                    recomendacoes=[
+                        "Verificar fiação e conexões do sensor",
+                        "Verificar alimentação do transmissor",
+                        "Checar interferência eletromagnética"
                     ],
-                    related_tags=[tag_id]
+                    tags_relacionadas=[tag_id]
                 )
-                causes.append(cause)
+                causas.append(causa)
 
-            # High variability indicates process instability
+            # Alta variabilidade indica instabilidade do processo
             if cv > 25:
-                cause = RootCause(
-                    category=category,
-                    cause=f"High Process Variability",
-                    description=f"Tag {tag_name} showing {cv:.1f}% CV (threshold: 25%)",
-                    severity=CauseSeverity.MEDIUM if cv < 50 else CauseSeverity.HIGH,
-                    confidence=0.7,
-                    evidence=[f"Coefficient of Variation: {cv:.1f}%"],
-                    recommendations=[
-                        "Review control loop tuning",
-                        "Check for upstream disturbances",
-                        "Verify setpoint stability"
+                causa = CausaRaiz(
+                    categoria=categoria,
+                    causa=f"Alta Variabilidade do Processo",
+                    descricao=f"Tag {nome_tag} mostrando {cv:.1f}% de CV (limite: 25%)",
+                    severidade=SeveridadeCausa.MEDIA if cv < 50 else SeveridadeCausa.ALTA,
+                    confianca=0.7,
+                    evidencias=[f"Coeficiente de Variação: {cv:.1f}%"],
+                    recomendacoes=[
+                        "Revisar sintonia da malha de controle",
+                        "Verificar perturbações a montante",
+                        "Verificar estabilidade do setpoint"
                     ],
-                    related_tags=[tag_id]
+                    tags_relacionadas=[tag_id]
                 )
-                causes.append(cause)
+                causas.append(causa)
 
-            # Anomaly detected
-            if has_anomaly:
-                cause = RootCause(
-                    category=category,
-                    cause=f"Anomaly Detected",
-                    description=f"ML model detected anomaly in {tag_name}",
-                    severity=CauseSeverity.HIGH,
-                    confidence=tag.get("anomaly_confidence", 0.75),
-                    evidence=[
-                        f"Current value: {value}",
-                        f"Expected range: {tag.get('expected_min')} - {tag.get('expected_max')}"
+            # Anomalia detectada
+            if tem_anomalia:
+                causa = CausaRaiz(
+                    categoria=categoria,
+                    causa=f"Anomalia Detectada",
+                    descricao=f"Modelo detectou anomalia em {nome_tag}",
+                    severidade=SeveridadeCausa.ALTA,
+                    confianca=tag.get("anomaly_confidence", 0.75),
+                    evidencias=[
+                        f"Valor atual: {valor}",
+                        f"Faixa esperada: {tag.get('expected_min')} - {tag.get('expected_max')}"
                     ],
-                    recommendations=[
-                        "Investigate recent changes",
-                        "Check related equipment",
-                        "Review maintenance history"
+                    recomendacoes=[
+                        "Investigar mudanças recentes",
+                        "Verificar equipamentos relacionados",
+                        "Revisar histórico de manutenção"
                     ],
-                    related_tags=[tag_id]
+                    tags_relacionadas=[tag_id]
                 )
-                causes.append(cause)
+                causas.append(causa)
 
-        return causes
+        return causas
 
-    def _analyze_events(self, events: List[Dict], hours: int) -> List[RootCause]:
-        """Extract root causes from operational events"""
-        causes = []
+    def _analisar_eventos(self, eventos: List[Dict], horas: int) -> List[CausaRaiz]:
+        """Extrai causas raiz de eventos operacionais"""
+        causas = []
 
-        for event in events:
-            event_type = event.get("type", "").lower()
-            description = event.get("description", "")
+        for evento in eventos:
+            tipo_evento = evento.get("type", "").lower()
+            descricao = evento.get("description", "")
 
-            if "shift" in event_type or "handover" in event_type:
-                cause = RootCause(
-                    category=IshikawaCategory.MAN,
-                    cause="Shift Change",
-                    description=f"Shift change occurred: {description}",
-                    severity=CauseSeverity.LOW,
-                    confidence=0.4,
-                    evidence=[f"Event: {description}"],
-                    recommendations=[
-                        "Review shift handover procedures",
-                        "Check for incomplete tasks at shift change"
+            if "turno" in tipo_evento or "handover" in tipo_evento:
+                causa = CausaRaiz(
+                    categoria=CategoriaIshikawa.MAO_DE_OBRA,
+                    causa="Troca de Turno",
+                    descricao=f"Troca de turno ocorreu: {descricao}",
+                    severidade=SeveridadeCausa.BAIXA,
+                    confianca=0.4,
+                    evidencias=[f"Evento: {descricao}"],
+                    recomendacoes=[
+                        "Revisar procedimentos de passagem de turno",
+                        "Verificar tarefas incompletas na troca de turno"
                     ]
                 )
-                causes.append(cause)
+                causas.append(causa)
 
-            elif "maintenance" in event_type:
-                cause = RootCause(
-                    category=IshikawaCategory.MACHINE,
-                    cause="Recent Maintenance",
-                    description=f"Maintenance activity: {description}",
-                    severity=CauseSeverity.MEDIUM,
-                    confidence=0.6,
-                    evidence=[f"Maintenance event: {description}"],
-                    recommendations=[
-                        "Verify maintenance was completed correctly",
-                        "Check post-maintenance test results"
+            elif "manutencao" in tipo_evento or "maintenance" in tipo_evento:
+                causa = CausaRaiz(
+                    categoria=CategoriaIshikawa.MAQUINA,
+                    causa="Manutenção Recente",
+                    descricao=f"Atividade de manutenção: {descricao}",
+                    severidade=SeveridadeCausa.MEDIA,
+                    confianca=0.6,
+                    evidencias=[f"Evento de manutenção: {descricao}"],
+                    recomendacoes=[
+                        "Verificar se manutenção foi concluída corretamente",
+                        "Checar resultados dos testes pós-manutenção"
                     ]
                 )
-                causes.append(cause)
+                causas.append(causa)
 
-            elif "material" in event_type or "grade" in event_type:
-                cause = RootCause(
-                    category=IshikawaCategory.MATERIAL,
-                    cause="Material Change",
-                    description=f"Material/grade change: {description}",
-                    severity=CauseSeverity.MEDIUM,
-                    confidence=0.65,
-                    evidence=[f"Material event: {description}"],
-                    recommendations=[
-                        "Verify material specifications",
-                        "Check process adjustments for new material"
+            elif "material" in tipo_evento or "grade" in tipo_evento:
+                causa = CausaRaiz(
+                    categoria=CategoriaIshikawa.MATERIAL,
+                    causa="Mudança de Material",
+                    descricao=f"Mudança de material/grade: {descricao}",
+                    severidade=SeveridadeCausa.MEDIA,
+                    confianca=0.65,
+                    evidencias=[f"Evento de material: {descricao}"],
+                    recomendacoes=[
+                        "Verificar especificações do material",
+                        "Checar ajustes de processo para novo material"
                     ]
                 )
-                causes.append(cause)
+                causas.append(causa)
 
-        return causes
+        return causas
 
-    def _classify_alarm(self, alarm_type: str, tag_id: str, message: str) -> IshikawaCategory:
-        """Classify alarm into Ishikawa category"""
-        combined_text = f"{alarm_type} {tag_id} {message}".lower()
+    def _classificar_alarme(self, tipo_alarme: str, tag_id: str, mensagem: str) -> CategoriaIshikawa:
+        """Classifica alarme em categoria Ishikawa"""
+        texto_combinado = f"{tipo_alarme} {tag_id} {mensagem}".lower()
 
-        for category, patterns in self.CAUSE_PATTERNS.items():
-            for keyword in patterns["alarm_keywords"]:
-                if keyword in combined_text:
-                    return category
+        for categoria, padroes in self.PADROES_CAUSA.items():
+            for palavra in padroes["palavras_alarme"]:
+                if palavra in texto_combinado:
+                    return categoria
 
-        # Default to machine for most alarms
-        return IshikawaCategory.MACHINE
+        # Padrão para máquina na maioria dos alarmes
+        return CategoriaIshikawa.MAQUINA
 
-    def _classify_tag(self, tag_id: str, tag_name: str) -> IshikawaCategory:
-        """Classify tag into Ishikawa category"""
-        combined_text = f"{tag_id} {tag_name}".lower()
+    def _classificar_tag(self, tag_id: str, nome_tag: str) -> CategoriaIshikawa:
+        """Classifica tag em categoria Ishikawa"""
+        texto_combinado = f"{tag_id} {nome_tag}".lower()
 
-        for category, patterns in self.CAUSE_PATTERNS.items():
-            for keyword in patterns["tag_keywords"]:
-                if keyword in combined_text:
-                    return category
+        for categoria, padroes in self.PADROES_CAUSA.items():
+            for palavra in padroes["palavras_tag"]:
+                if palavra in texto_combinado:
+                    return categoria
 
-        # Default to method for process tags
-        return IshikawaCategory.METHOD
+        # Padrão para método em tags de processo
+        return CategoriaIshikawa.METODO
 
-    def _determine_severity(self, alarm: Dict) -> CauseSeverity:
-        """Determine severity based on alarm properties"""
-        priority = alarm.get("priority", "").upper()
-        count = alarm.get("count", 1)
+    def _determinar_severidade(self, alarme: Dict) -> SeveridadeCausa:
+        """Determina severidade baseada nas propriedades do alarme"""
+        prioridade = alarme.get("priority", "").upper()
+        contagem = alarme.get("count", 1)
 
-        if priority == "CRITICAL" or count > 10:
-            return CauseSeverity.CRITICAL
-        elif priority == "HIGH" or count > 5:
-            return CauseSeverity.HIGH
-        elif priority == "MEDIUM" or count > 2:
-            return CauseSeverity.MEDIUM
+        if prioridade == "CRITICAL" or contagem > 10:
+            return SeveridadeCausa.CRITICA
+        elif prioridade == "HIGH" or contagem > 5:
+            return SeveridadeCausa.ALTA
+        elif prioridade == "MEDIUM" or contagem > 2:
+            return SeveridadeCausa.MEDIA
         else:
-            return CauseSeverity.LOW
+            return SeveridadeCausa.BAIXA
 
-    def _get_alarm_recommendations(self, category: IshikawaCategory, alarm_type: str) -> List[str]:
-        """Get recommendations based on category and alarm type"""
-        recommendations = {
-            IshikawaCategory.MAN: [
-                "Review operator actions leading to alarm",
-                "Check if refresher training is needed",
-                "Verify procedures are being followed"
+    def _obter_recomendacoes_alarme(self, categoria: CategoriaIshikawa, tipo_alarme: str) -> List[str]:
+        """Obtém recomendações baseadas na categoria e tipo de alarme"""
+        recomendacoes = {
+            CategoriaIshikawa.MAO_DE_OBRA: [
+                "Revisar ações do operador que levaram ao alarme",
+                "Verificar se treinamento de reciclagem é necessário",
+                "Verificar se procedimentos estão sendo seguidos"
             ],
-            IshikawaCategory.MACHINE: [
-                "Check equipment maintenance history",
-                "Verify mechanical condition",
-                "Review spare parts availability"
+            CategoriaIshikawa.MAQUINA: [
+                "Verificar histórico de manutenção do equipamento",
+                "Verificar condição mecânica",
+                "Revisar disponibilidade de peças de reposição"
             ],
-            IshikawaCategory.METHOD: [
-                "Review operating procedures",
-                "Check sequence logic",
-                "Verify recipe parameters"
+            CategoriaIshikawa.METODO: [
+                "Revisar procedimentos operacionais",
+                "Verificar lógica de sequência",
+                "Verificar parâmetros da receita"
             ],
-            IshikawaCategory.MATERIAL: [
-                "Check material quality certificates",
-                "Verify supplier compliance",
-                "Review incoming inspection results"
+            CategoriaIshikawa.MATERIAL: [
+                "Verificar certificados de qualidade do material",
+                "Verificar conformidade do fornecedor",
+                "Revisar resultados de inspeção de recebimento"
             ],
-            IshikawaCategory.MEASUREMENT: [
-                "Calibrate sensors",
-                "Check signal integrity",
-                "Verify transmitter configuration"
+            CategoriaIshikawa.MEDICAO: [
+                "Calibrar sensores",
+                "Verificar integridade do sinal",
+                "Verificar configuração do transmissor"
             ],
-            IshikawaCategory.MOTHER_NATURE: [
-                "Check environmental conditions",
-                "Review weather impact on operations",
-                "Verify climate control systems"
+            CategoriaIshikawa.MEIO_AMBIENTE: [
+                "Verificar condições ambientais",
+                "Revisar impacto do clima nas operações",
+                "Verificar sistemas de climatização"
             ]
         }
-        return recommendations.get(category, ["Investigate root cause"])
+        return recomendacoes.get(categoria, ["Investigar causa raiz"])
 
-    def _deduplicate_causes(self, causes: List[RootCause]) -> List[RootCause]:
-        """Remove duplicate causes, keeping highest confidence"""
-        seen = {}
-        for cause in causes:
-            key = f"{cause.category.value}_{cause.cause}"
-            if key not in seen or cause.confidence > seen[key].confidence:
-                if key in seen:
-                    # Merge evidence
-                    cause.evidence.extend(seen[key].evidence)
-                    cause.frequency += seen[key].frequency
-                seen[key] = cause
+    def _deduplicar_causas(self, causas: List[CausaRaiz]) -> List[CausaRaiz]:
+        """Remove causas duplicadas, mantendo maior confiança"""
+        vistos = {}
+        for causa in causas:
+            chave = f"{causa.categoria.value}_{causa.causa}"
+            if chave not in vistos or causa.confianca > vistos[chave].confianca:
+                if chave in vistos:
+                    # Mesclar evidências
+                    causa.evidencias.extend(vistos[chave].evidencias)
+                    causa.frequencia += vistos[chave].frequencia
+                vistos[chave] = causa
 
-        return list(seen.values())
+        return list(vistos.values())
 
-    def _identify_primary_cause(self, causes: List[RootCause]) -> Optional[RootCause]:
-        """Identify the most likely primary root cause"""
-        if not causes:
+    def _identificar_causa_primaria(self, causas: List[CausaRaiz]) -> Optional[CausaRaiz]:
+        """Identifica a causa raiz primária mais provável"""
+        if not causas:
             return None
 
-        # Score each cause
-        scored_causes = []
-        for cause in causes:
-            score = 0
+        # Pontuar cada causa
+        causas_pontuadas = []
+        for causa in causas:
+            pontuacao = 0
 
-            # Severity weight
-            severity_weights = {
-                CauseSeverity.CRITICAL: 100,
-                CauseSeverity.HIGH: 75,
-                CauseSeverity.MEDIUM: 50,
-                CauseSeverity.LOW: 25
+            # Peso da severidade
+            pesos_severidade = {
+                SeveridadeCausa.CRITICA: 100,
+                SeveridadeCausa.ALTA: 75,
+                SeveridadeCausa.MEDIA: 50,
+                SeveridadeCausa.BAIXA: 25
             }
-            score += severity_weights[cause.severity]
+            pontuacao += pesos_severidade[causa.severidade]
 
-            # Confidence weight
-            score += cause.confidence * 50
+            # Peso da confiança
+            pontuacao += causa.confianca * 50
 
-            # Frequency weight
-            score += min(cause.frequency * 5, 25)
+            # Peso da frequência
+            pontuacao += min(causa.frequencia * 5, 25)
 
-            scored_causes.append((score, cause))
+            causas_pontuadas.append((pontuacao, causa))
 
-        # Return highest scoring cause
-        scored_causes.sort(key=lambda x: x[0], reverse=True)
-        return scored_causes[0][1] if scored_causes else None
+        # Retornar causa com maior pontuação
+        causas_pontuadas.sort(key=lambda x: x[0], reverse=True)
+        return causas_pontuadas[0][1] if causas_pontuadas else None
 
-    def _generate_recommendations(
+    def _gerar_recomendacoes(
         self,
-        categories: Dict[str, List[RootCause]],
-        primary_cause: Optional[RootCause]
+        categorias: Dict[str, List[CausaRaiz]],
+        causa_primaria: Optional[CausaRaiz]
     ) -> List[str]:
-        """Generate prioritized recommendations"""
-        recommendations = []
+        """Gera recomendações priorizadas"""
+        recomendacoes = []
 
-        if primary_cause:
-            recommendations.append(
-                f"PRIORITY: Address {primary_cause.cause} ({primary_cause.category.value})"
+        if causa_primaria:
+            nome_cat = self.NOMES_CATEGORIAS.get(causa_primaria.categoria, causa_primaria.categoria.value)
+            recomendacoes.append(
+                f"🎯 PRIORIDADE: Resolver {causa_primaria.causa} ({nome_cat})"
             )
-            recommendations.extend(primary_cause.recommendations[:2])
+            recomendacoes.extend(causa_primaria.recomendacoes[:2])
 
-        # Add recommendations from critical causes
-        for cat_name, causes in categories.items():
-            for cause in causes:
-                if cause.severity == CauseSeverity.CRITICAL and cause != primary_cause:
-                    recommendations.append(
-                        f"CRITICAL: {cause.cause} - {cause.recommendations[0] if cause.recommendations else 'Investigate'}"
+        # Adicionar recomendações de causas críticas
+        for nome_cat, causas in categorias.items():
+            for causa in causas:
+                if causa.severidade == SeveridadeCausa.CRITICA and causa != causa_primaria:
+                    recomendacoes.append(
+                        f"⚠️ CRÍTICO: {causa.causa} - {causa.recomendacoes[0] if causa.recomendacoes else 'Investigar'}"
                     )
 
-        # Limit to top 5 recommendations
-        return recommendations[:5]
+        # Limitar a 5 recomendações
+        return recomendacoes[:5]
 
-    def _calculate_data_quality(
+    def _calcular_qualidade_dados(
         self,
-        alarms: List[Dict],
-        tag_data: List[Dict],
-        events: Optional[List[Dict]]
+        alarmes: List[Dict],
+        dados_tags: List[Dict],
+        eventos: Optional[List[Dict]]
     ) -> float:
-        """Calculate quality score of input data"""
+        """Calcula score de qualidade dos dados de entrada"""
         score = 0.0
-        factors = 0
+        fatores = 0
 
-        # Alarms data quality
-        if alarms:
-            score += 0.3 * min(len(alarms) / 10, 1.0)
-            factors += 1
+        # Qualidade dos dados de alarme
+        if alarmes:
+            score += 0.3 * min(len(alarmes) / 10, 1.0)
+            fatores += 1
 
-        # Tag data quality
-        if tag_data:
-            good_quality = sum(1 for t in tag_data if t.get("quality") == "GOOD")
-            score += 0.4 * (good_quality / len(tag_data)) if tag_data else 0
-            factors += 1
+        # Qualidade dos dados de tag
+        if dados_tags:
+            boa_qualidade = sum(1 for t in dados_tags if t.get("quality") == "GOOD")
+            score += 0.4 * (boa_qualidade / len(dados_tags)) if dados_tags else 0
+            fatores += 1
 
-        # Events data quality
-        if events:
-            score += 0.3 * min(len(events) / 5, 1.0)
-            factors += 1
+        # Qualidade dos dados de evento
+        if eventos:
+            score += 0.3 * min(len(eventos) / 5, 1.0)
+            fatores += 1
 
-        return score / factors if factors > 0 else 0.5
+        return score / fatores if fatores > 0 else 0.5
 
-    def to_dict(self, diagram: IshikawaDiagram) -> Dict[str, Any]:
-        """Convert IshikawaDiagram to dictionary for JSON serialization"""
+    def para_dict(self, diagrama: DiagramaIshikawa) -> Dict[str, Any]:
+        """Converte DiagramaIshikawa para dicionário para serialização JSON"""
         return {
-            "problem_statement": diagram.problem_statement,
-            "generated_at": diagram.generated_at.isoformat(),
-            "analysis_period_hours": diagram.analysis_period_hours,
-            "categories": {
-                cat_name: [
-                    {
-                        "category": cause.category.value,
-                        "cause": cause.cause,
-                        "description": cause.description,
-                        "severity": cause.severity.value,
-                        "confidence": cause.confidence,
-                        "evidence": cause.evidence,
-                        "recommendations": cause.recommendations,
-                        "related_tags": cause.related_tags,
-                        "frequency": cause.frequency
-                    }
-                    for cause in causes
-                ]
-                for cat_name, causes in diagram.categories.items()
+            "declaracao_problema": diagrama.declaracao_problema,
+            "gerado_em": diagrama.gerado_em.isoformat(),
+            "periodo_analise_horas": diagrama.periodo_analise_horas,
+            "categorias": {
+                nome_cat: {
+                    "nome": self.NOMES_CATEGORIAS.get(CategoriaIshikawa(nome_cat), nome_cat),
+                    "icone": self.ICONES_CATEGORIAS.get(CategoriaIshikawa(nome_cat), "❓"),
+                    "causas": [
+                        {
+                            "categoria": causa.categoria.value,
+                            "causa": causa.causa,
+                            "descricao": causa.descricao,
+                            "severidade": causa.severidade.value,
+                            "confianca": causa.confianca,
+                            "evidencias": causa.evidencias,
+                            "recomendacoes": causa.recomendacoes,
+                            "tags_relacionadas": causa.tags_relacionadas,
+                            "frequencia": causa.frequencia
+                        }
+                        for causa in causas
+                    ]
+                }
+                for nome_cat, causas in diagrama.categorias.items()
             },
-            "primary_cause": {
-                "category": diagram.primary_cause.category.value,
-                "cause": diagram.primary_cause.cause,
-                "description": diagram.primary_cause.description,
-                "severity": diagram.primary_cause.severity.value,
-                "confidence": diagram.primary_cause.confidence
-            } if diagram.primary_cause else None,
-            "total_causes_identified": diagram.total_causes_identified,
-            "data_quality_score": diagram.data_quality_score,
-            "recommendations": diagram.recommendations
+            "causa_primaria": {
+                "categoria": diagrama.causa_primaria.categoria.value,
+                "categoria_nome": self.NOMES_CATEGORIAS.get(diagrama.causa_primaria.categoria, ""),
+                "causa": diagrama.causa_primaria.causa,
+                "descricao": diagrama.causa_primaria.descricao,
+                "severidade": diagrama.causa_primaria.severidade.value,
+                "confianca": diagrama.causa_primaria.confianca
+            } if diagrama.causa_primaria else None,
+            "total_causas_identificadas": diagrama.total_causas_identificadas,
+            "score_qualidade_dados": diagrama.score_qualidade_dados,
+            "recomendacoes": diagrama.recomendacoes
         }
 
+    # Manter compatibilidade com código existente
+    async def analyze(self, problem_statement: str, alarms: List[Dict], tag_data: List[Dict],
+                      events: Optional[List[Dict]] = None, hours: int = 24) -> DiagramaIshikawa:
+        """Alias para analisar() - compatibilidade"""
+        return await self.analisar(problem_statement, alarms, tag_data, events, hours)
 
-# Singleton instance
-_ishikawa_service: Optional[IshikawaAnalysisService] = None
+    def to_dict(self, diagram: DiagramaIshikawa) -> Dict[str, Any]:
+        """Alias para para_dict() - compatibilidade"""
+        return self.para_dict(diagram)
 
 
-def get_ishikawa_service() -> IshikawaAnalysisService:
-    """Get or create Ishikawa analysis service instance"""
-    global _ishikawa_service
-    if _ishikawa_service is None:
-        _ishikawa_service = IshikawaAnalysisService()
-    return _ishikawa_service
+# Instância singleton
+_servico_ishikawa: Optional[ServicoAnaliseIshikawa] = None
+
+
+def get_ishikawa_service() -> ServicoAnaliseIshikawa:
+    """Obtém ou cria instância do serviço de análise Ishikawa"""
+    global _servico_ishikawa
+    if _servico_ishikawa is None:
+        _servico_ishikawa = ServicoAnaliseIshikawa()
+    return _servico_ishikawa

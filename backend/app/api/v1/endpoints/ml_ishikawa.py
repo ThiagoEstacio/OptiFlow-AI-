@@ -102,87 +102,87 @@ async def get_ishikawa_categories(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get information about Ishikawa 6M categories.
+    Obtém informações sobre as categorias 6M do Ishikawa.
 
-    Returns descriptions and typical causes for each category.
+    Retorna descrições e causas típicas para cada categoria.
     """
     return {
         "categories": [
             {
-                "id": "man",
-                "name": "Man (Personnel)",
-                "description": "Human factors including operator errors, training gaps, fatigue, and communication issues",
+                "id": "mao_de_obra",
+                "name": "Mão de Obra",
+                "description": "Fatores humanos incluindo erros de operação, falhas de treinamento, fadiga e problemas de comunicação",
                 "typical_causes": [
-                    "Operator error",
-                    "Insufficient training",
-                    "Fatigue/workload",
-                    "Communication failure",
-                    "Supervision gaps"
+                    "Erro do operador",
+                    "Treinamento insuficiente",
+                    "Fadiga / sobrecarga de trabalho",
+                    "Falha de comunicação",
+                    "Falta de supervisão"
                 ],
                 "icon": "👤"
             },
             {
-                "id": "machine",
-                "name": "Machine (Equipment)",
-                "description": "Equipment-related issues including failures, wear, maintenance, and calibration",
+                "id": "maquina",
+                "name": "Máquina",
+                "description": "Problemas relacionados a equipamentos incluindo falhas, desgaste, manutenção e calibração",
                 "typical_causes": [
-                    "Equipment failure",
-                    "Wear and tear",
-                    "Poor calibration",
-                    "Inadequate maintenance",
-                    "Design limitations"
+                    "Falha de equipamento",
+                    "Desgaste mecânico",
+                    "Calibração inadequada",
+                    "Manutenção deficiente",
+                    "Limitações de projeto"
                 ],
                 "icon": "⚙️"
             },
             {
-                "id": "method",
-                "name": "Method (Process)",
-                "description": "Process and procedure issues including SOPs, sequence errors, and timing",
+                "id": "metodo",
+                "name": "Método",
+                "description": "Problemas de processo e procedimento incluindo POPs, erros de sequência e timing",
                 "typical_causes": [
-                    "Procedure not followed",
-                    "Wrong sequence",
-                    "Timing issues",
-                    "Outdated procedures",
-                    "Process variability"
+                    "Procedimento não seguido",
+                    "Sequência incorreta",
+                    "Problemas de timing",
+                    "Procedimentos desatualizados",
+                    "Variabilidade do processo"
                 ],
                 "icon": "📋"
             },
             {
                 "id": "material",
-                "name": "Material (Inputs)",
-                "description": "Raw material and input issues including quality, specifications, and supplier",
+                "name": "Material",
+                "description": "Problemas de matéria-prima e insumos incluindo qualidade, especificações e fornecedor",
                 "typical_causes": [
-                    "Contamination",
-                    "Out-of-spec material",
-                    "Supplier variation",
-                    "Storage issues",
-                    "Grade changes"
+                    "Contaminação",
+                    "Material fora de especificação",
+                    "Variação de fornecedor",
+                    "Problemas de armazenamento",
+                    "Mudanças de grade"
                 ],
                 "icon": "📦"
             },
             {
-                "id": "measurement",
-                "name": "Measurement (Instrumentation)",
-                "description": "Instrumentation and sensor issues including calibration, accuracy, and signal quality",
+                "id": "medicao",
+                "name": "Medição",
+                "description": "Problemas de instrumentação e sensores incluindo calibração, precisão e qualidade do sinal",
                 "typical_causes": [
-                    "Sensor drift",
-                    "Calibration error",
-                    "Instrument failure",
-                    "Signal interference",
-                    "Wrong range/units"
+                    "Deriva do sensor",
+                    "Erro de calibração",
+                    "Falha de instrumento",
+                    "Interferência de sinal",
+                    "Range/unidade incorreta"
                 ],
                 "icon": "📏"
             },
             {
-                "id": "mother_nature",
-                "name": "Mother Nature (Environment)",
-                "description": "Environmental factors including temperature, humidity, weather, and dust",
+                "id": "meio_ambiente",
+                "name": "Meio Ambiente",
+                "description": "Fatores ambientais incluindo temperatura, umidade, clima e poeira",
                 "typical_causes": [
-                    "Temperature extremes",
-                    "High humidity",
-                    "Weather events",
-                    "Dust/particles",
-                    "Seasonal changes"
+                    "Temperaturas extremas",
+                    "Alta umidade",
+                    "Eventos climáticos",
+                    "Poeira / partículas",
+                    "Variações sazonais"
                 ],
                 "icon": "🌡️"
             }

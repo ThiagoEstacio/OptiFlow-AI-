@@ -1,14 +1,13 @@
 /**
- * 🔧 Maintenance Dashboard (PCM) - MELH-005
- * ==========================================
+ * Central de Manutenção Preditiva - MELH-005
+ * ===========================================
  *
- * Central de Manutenção com 4 tabs:
- * - Saúde dos Ativos
- * - Indicadores KPI (MTBF/MTTR)
- * - Backlog e Planejamento
- * - Análise de Falhas
+ * Dashboard de Manutenção com 3 tabs:
+ * - Saúde dos Ativos (visão geral de equipamentos)
+ * - Indicadores KPI (MTBF/MTTR/Disponibilidade)
+ * - Manutenção Preditiva (ML: detecção de anomalias)
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -19,7 +18,6 @@ import {
   Grid,
   ProgressBar,
   Badge,
-  BadgeDelta,
   TabGroup,
   TabList,
   Tab,
@@ -36,48 +34,41 @@ import {
 } from '@tremor/react';
 import {
   ProfessionalAreaChart,
-  ProfessionalDonutChart,
-  ProfessionalBarChart,
-  ProfessionalMultiBarChart,
 } from '../../components/charts/ProfessionalCharts';
 import {
   Wrench,
-  Clock,
   Activity,
   AlertTriangle,
   CheckCircle,
-  TrendingUp,
-  TrendingDown,
-  Settings,
   RefreshCw,
   Download,
-  Calendar,
-  Package,
-  FileText,
   Target,
   Gauge,
   Heart,
   Zap,
   Timer,
   XCircle,
+  Brain,
+  Thermometer,
+  Waves,
+  BatteryCharging,
+  Cpu,
+  PlayCircle,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import apiClient from '../../api/client';
 
 // Tab routing mapping
 const TAB_ROUTES: Record<string, number> = {
-  '/maintenance': 0,           // Saúde dos Ativos
-  '/maintenance/pcm': 0,       // Saúde dos Ativos
-  '/maintenance/kpis': 1,      // Indicadores KPI
-  '/maintenance/backlog': 2,   // Backlog
-  '/maintenance/analysis': 3,  // Análise de Falhas
+  '/maintenance': 0,
+  '/maintenance/pcm': 0,
+  '/maintenance/kpis': 1,
+  '/maintenance/predictive': 2,
 };
 
 const ROUTE_BY_TAB: Record<number, string> = {
   0: '/maintenance',
   1: '/maintenance/kpis',
-  2: '/maintenance/backlog',
-  3: '/maintenance/analysis',
+  2: '/maintenance/predictive',
 };
 
 // Types
@@ -100,30 +91,40 @@ interface MaintenanceKPI {
   total_downtime_hours: number;
 }
 
-interface WorkOrder {
-  id: string;
+interface AnomalyPrediction {
   equipment_id: string;
-  type: 'preventive' | 'corrective' | 'predictive';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  description: string;
-  due_date: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'normal' | 'anomaly' | 'no_model' | 'error';
+  score: number;
+  confidence: number;
+  is_anomaly: boolean;
+  contributing_features: {
+    feature: string;
+    current_value: number;
+    expected_mean: number;
+    z_score: number;
+    deviation: 'high' | 'low';
+    severity: 'high' | 'medium';
+  }[];
+  recommendation: string;
+  timestamp: string;
 }
 
-interface FailureAnalysis {
-  failure_type: string;
-  count: number;
-  total_hours: number;
-  percentage: number;
+interface ModelStatus {
+  available: boolean;
+  total_models: number;
+  models: Record<string, { trained_at: string; samples_used: number }>;
+  statistics: {
+    total_predictions: number;
+    anomalies_detected: number;
+    models_trained: number;
+  };
 }
-
 
 // Component
 export default function TremorMaintenance() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Determine initial tab from URL
   const getInitialTab = () => {
     const path = location.pathname;
     return TAB_ROUTES[path] ?? 0;
@@ -133,6 +134,16 @@ export default function TremorMaintenance() {
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState(getInitialTab);
   const [timeRange, setTimeRange] = useState('30d');
+  const [equipmentHealth, setEquipmentHealth] = useState<EquipmentHealth[]>([]);
+  const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
+  const [kpis, setKpis] = useState<MaintenanceKPI | null>(null);
+  const [mtbfTrend, setMtbfTrend] = useState<{ month: string; mtbf_hours: number }[]>([]);
+
+  // Predictive Maintenance State
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
+  const [anomalyPredictions, setAnomalyPredictions] = useState<Record<string, AnomalyPrediction>>({});
+  const [predictiveLoading, setPredictiveLoading] = useState(false);
+  const [trainingEquipment, setTrainingEquipment] = useState<string | null>(null);
 
   // Update tab when URL changes
   useEffect(() => {
@@ -140,9 +151,9 @@ export default function TremorMaintenance() {
     if (newTab !== undefined && newTab !== selectedTab) {
       setSelectedTab(newTab);
     }
-  }, [location.pathname]);
+  }, [location.pathname, selectedTab]);
 
-  // Handle tab change - update URL
+  // Handle tab change
   const handleTabChange = (index: number) => {
     setSelectedTab(index);
     const newRoute = ROUTE_BY_TAB[index];
@@ -150,18 +161,11 @@ export default function TremorMaintenance() {
       navigate(newRoute, { replace: true });
     }
   };
-  const [equipmentHealth, setEquipmentHealth] = useState<EquipmentHealth[]>([]);
-  const [selectedEquipment, setSelectedEquipment] = useState<string | null>(null);
-  const [kpis, setKpis] = useState<MaintenanceKPI | null>(null);
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [failureAnalysis, setFailureAnalysis] = useState<FailureAnalysis[]>([]);
-  const [mtbfTrend, setMtbfTrend] = useState<{ month: string; mtbf_hours: number }[]>([]);
 
-  // Fetch data
+  // Fetch main data
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch equipment KPIs
       const kpisResponse = await apiClient.get('/api/v1/maintenance/kpis/all', {
         params: { days: timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 7 }
       });
@@ -178,30 +182,9 @@ export default function TremorMaintenance() {
           status: eq.status
         })));
       }
-
-      // Fetch downtime analysis
-      const downtimeResponse = await apiClient.get('/api/v1/maintenance/downtime/analysis', {
-        params: { days: 30 }
-      });
-
-      if (downtimeResponse.data.success) {
-        setFailureAnalysis(downtimeResponse.data.by_failure_type.map((f: any) => ({
-          failure_type: f.failure_type,
-          count: f.count,
-          total_hours: f.hours,
-          percentage: (f.hours / downtimeResponse.data.total_downtime_hours) * 100
-        })));
-      }
-
-      // Set sample work orders (would come from OS system)
-      setWorkOrders(generateSampleWorkOrders());
-
     } catch (error) {
       console.error('Error fetching maintenance data:', error);
-      // Use fallback data
       setEquipmentHealth(generateFallbackEquipment());
-      setFailureAnalysis(generateFallbackFailures());
-      setWorkOrders(generateSampleWorkOrders());
     } finally {
       setLoading(false);
     }
@@ -217,8 +200,7 @@ export default function TremorMaintenance() {
       if (response.data.success) {
         setKpis(response.data.kpis);
 
-        // Fetch MTBF trend
-        const trendResponse = await apiClient.get(`/maintenance/mtbf/trend/${equipmentId}`, {
+        const trendResponse = await apiClient.get(`/api/v1/maintenance/mtbf/trend/${equipmentId}`, {
           params: { months: 6 }
         });
 
@@ -233,6 +215,71 @@ export default function TremorMaintenance() {
     }
   };
 
+  // Fetch ML model status
+  const fetchModelStatus = async () => {
+    try {
+      const response = await apiClient.get('/api/v1/ml/anomaly/status');
+      setModelStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching model status:', error);
+      setModelStatus({
+        available: true,
+        total_models: 0,
+        models: {},
+        statistics: { total_predictions: 0, anomalies_detected: 0, models_trained: 0 }
+      });
+    }
+  };
+
+  // Train anomaly model for equipment
+  const trainModel = async (equipmentId: string) => {
+    setTrainingEquipment(equipmentId);
+    try {
+      const response = await apiClient.post(`/api/v1/ml/anomaly/train/${equipmentId}`, null, {
+        params: { days: 30, contamination: 0.05 }
+      });
+
+      if (response.data.status === 'success') {
+        await fetchModelStatus();
+        await runPrediction(equipmentId);
+      }
+    } catch (error) {
+      console.error('Error training model:', error);
+    } finally {
+      setTrainingEquipment(null);
+    }
+  };
+
+  // Run anomaly prediction
+  const runPrediction = async (equipmentId: string) => {
+    try {
+      const response = await apiClient.get(`/api/v1/ml/anomaly/predict/${equipmentId}`, {
+        params: { use_live: true }
+      });
+
+      setAnomalyPredictions(prev => ({
+        ...prev,
+        [equipmentId]: response.data
+      }));
+    } catch (error) {
+      console.error('Error running prediction:', error);
+    }
+  };
+
+  // Run predictions for all equipment with models
+  const runAllPredictions = async () => {
+    setPredictiveLoading(true);
+    try {
+      for (const eq of equipmentHealth) {
+        if (modelStatus?.models[eq.equipment_id]) {
+          await runPrediction(eq.equipment_id);
+        }
+      }
+    } finally {
+      setPredictiveLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -243,8 +290,14 @@ export default function TremorMaintenance() {
     }
   }, [selectedEquipment]);
 
-  // Get status color - returns Tremor color type
-  const getStatusColor = (status: string): "blue" | "cyan" | "fuchsia" | "gray" | "green" | "indigo" | "lime" | "orange" | "pink" | "purple" | "red" | "teal" | "violet" | "yellow" | "neutral" | "emerald" | "amber" | "slate" | "zinc" | "stone" | "sky" | "rose" => {
+  useEffect(() => {
+    if (selectedTab === 2) {
+      fetchModelStatus();
+    }
+  }, [selectedTab]);
+
+  // Helper functions
+  const getStatusColor = (status: string): "emerald" | "yellow" | "orange" | "red" | "gray" => {
     switch (status) {
       case 'healthy': return 'emerald';
       case 'attention': return 'yellow';
@@ -254,18 +307,6 @@ export default function TremorMaintenance() {
     }
   };
 
-  // Get priority color
-  const getPriorityColor = (priority: string): string => {
-    switch (priority) {
-      case 'critical': return 'red';
-      case 'high': return 'orange';
-      case 'medium': return 'yellow';
-      case 'low': return 'blue';
-      default: return 'gray';
-    }
-  };
-
-  // Get health icon
   const getHealthIcon = (status: string) => {
     switch (status) {
       case 'healthy': return <CheckCircle className="h-5 w-5 text-emerald-500" />;
@@ -276,6 +317,28 @@ export default function TremorMaintenance() {
     }
   };
 
+  const getFeatureIcon = (feature: string) => {
+    switch (feature) {
+      case 'vibration_mms': return <Waves className="h-4 w-4" />;
+      case 'temperature_c': return <Thermometer className="h-4 w-4" />;
+      case 'current_a': return <BatteryCharging className="h-4 w-4" />;
+      case 'power_kw': return <Zap className="h-4 w-4" />;
+      case 'load_pct': return <Cpu className="h-4 w-4" />;
+      default: return <Activity className="h-4 w-4" />;
+    }
+  };
+
+  const getFeatureName = (feature: string) => {
+    const names: Record<string, string> = {
+      vibration_mms: 'Vibração (mm/s)',
+      temperature_c: 'Temperatura (°C)',
+      current_a: 'Corrente (A)',
+      power_kw: 'Potência (kW)',
+      load_pct: 'Carga (%)',
+    };
+    return names[feature] || feature;
+  };
+
   return (
     <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header */}
@@ -284,10 +347,10 @@ export default function TremorMaintenance() {
           <div>
             <Title className="text-2xl font-bold flex items-center gap-2">
               <Wrench className="h-7 w-7 text-blue-600" />
-              Central de Manutenção (PCM)
+              Central de Manutenção Preditiva
             </Title>
             <Text className="text-gray-500">
-              Gestão de ativos, indicadores e planejamento de manutenção
+              Gestão de ativos, indicadores e manutenção preditiva com ML
             </Text>
           </div>
           <Flex className="gap-3 items-center">
@@ -295,31 +358,17 @@ export default function TremorMaintenance() {
               <select
                 value={timeRange}
                 onChange={(e) => setTimeRange(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 10px center',
-                  backgroundSize: '18px',
-                  paddingRight: '40px'
-                }}
+                className="w-full px-4 py-2.5 text-sm font-medium border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="7d">Últimos 7 dias</option>
                 <option value="30d">Últimos 30 dias</option>
                 <option value="90d">Últimos 90 dias</option>
               </select>
             </div>
-            <Button
-              icon={RefreshCw}
-              variant="secondary"
-              onClick={fetchData}
-              loading={loading}
-            >
+            <Button icon={RefreshCw} variant="secondary" onClick={fetchData} loading={loading}>
               Atualizar
             </Button>
-            <Button icon={Download} variant="secondary">
-              Exportar
-            </Button>
+            <Button icon={Download} variant="secondary">Exportar</Button>
           </Flex>
         </Flex>
       </div>
@@ -329,15 +378,13 @@ export default function TremorMaintenance() {
         <TabList className="mb-6">
           <Tab icon={Heart}>Saúde dos Ativos</Tab>
           <Tab icon={Gauge}>Indicadores KPI</Tab>
-          <Tab icon={Calendar}>Backlog</Tab>
-          <Tab icon={Target}>Análise de Falhas</Tab>
+          <Tab icon={Brain}>Manutenção Preditiva</Tab>
         </TabList>
 
         <TabPanels>
           {/* Tab 1: Asset Health */}
           <TabPanel>
             <Grid numItemsMd={2} numItemsLg={4} className="gap-4 mb-6">
-              {/* Summary Cards */}
               <Card decoration="top" decorationColor="emerald">
                 <Flex alignItems="center" justifyContent="start" className="gap-2">
                   <CheckCircle className="h-5 w-5 text-emerald-500" />
@@ -412,18 +459,18 @@ export default function TremorMaintenance() {
               </Grid>
             </Card>
 
-            {/* Link to ML Analytics */}
+            {/* Link to Predictive */}
             <Card className="mt-6" decoration="left" decorationColor="purple">
               <Flex justifyContent="between" alignItems="center">
                 <Flex alignItems="center" className="gap-3">
-                  <Zap className="h-6 w-6 text-purple-600" />
+                  <Brain className="h-6 w-6 text-purple-600" />
                   <div>
-                    <Title>Previsões de Manutenção (ML)</Title>
-                    <Text className="text-gray-500">Análise preditiva e detecção de anomalias</Text>
+                    <Title>Manutenção Preditiva (ML)</Title>
+                    <Text className="text-gray-500">Detecção de anomalias e previsão de falhas</Text>
                   </div>
                 </Flex>
-                <Button variant="secondary" onClick={() => navigate('/analytics')}>
-                  Ver Analytics
+                <Button variant="secondary" onClick={() => handleTabChange(2)}>
+                  Ver Previsões
                 </Button>
               </Flex>
             </Card>
@@ -431,28 +478,17 @@ export default function TremorMaintenance() {
 
           {/* Tab 2: KPI Indicators */}
           <TabPanel>
-            {/* Equipment Selector - Separate from grid for z-index */}
-            <Card className="mb-6 relative z-50">
+            <Card className="mb-6">
               <Flex justifyContent="between" alignItems="start" className="flex-wrap gap-4">
                 <div>
                   <Title>Indicadores de Manutenção</Title>
                   <Text className="text-gray-500">Selecione um equipamento para visualizar os KPIs</Text>
                 </div>
                 <div className="min-w-[300px]">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Equipamento
-                  </label>
                   <select
                     value={selectedEquipment || ''}
                     onChange={(e) => setSelectedEquipment(e.target.value || null)}
-                    className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                      backgroundRepeat: 'no-repeat',
-                      backgroundPosition: 'right 12px center',
-                      backgroundSize: '20px',
-                      paddingRight: '44px'
-                    }}
+                    className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">-- Escolha um equipamento --</option>
                     {equipmentHealth.map((eq) => (
@@ -468,16 +504,13 @@ export default function TremorMaintenance() {
             <Grid numItemsMd={2} className="gap-6">
               {selectedEquipment && kpis ? (
                 <>
-                  {/* KPI Cards for Selected Equipment */}
                   <Card decoration="top" decorationColor="blue">
                     <Flex alignItems="center" className="gap-2">
                       <Timer className="h-5 w-5 text-blue-600" />
                       <Text>MTBF (Tempo Médio Entre Falhas)</Text>
                     </Flex>
                     <Metric>{kpis.mtbf_hours?.toFixed(1) || 'N/A'} horas</Metric>
-                    <Text className="text-gray-500 mt-2">
-                      Meta: 720h (30 dias)
-                    </Text>
+                    <Text className="text-gray-500 mt-2">Meta: 720h (30 dias)</Text>
                     <ProgressBar
                       value={Math.min(100, ((kpis.mtbf_hours || 0) / 720) * 100)}
                       color="blue"
@@ -491,9 +524,7 @@ export default function TremorMaintenance() {
                       <Text>MTTR (Tempo Médio de Reparo)</Text>
                     </Flex>
                     <Metric>{kpis.mttr_hours?.toFixed(1) || 'N/A'} horas</Metric>
-                    <Text className="text-gray-500 mt-2">
-                      Meta: &lt; 4h
-                    </Text>
+                    <Text className="text-gray-500 mt-2">Meta: &lt; 4h</Text>
                     <ProgressBar
                       value={Math.max(0, 100 - ((kpis.mttr_hours || 0) / 4) * 100)}
                       color="amber"
@@ -507,14 +538,8 @@ export default function TremorMaintenance() {
                       <Text>Disponibilidade</Text>
                     </Flex>
                     <Metric>{kpis.availability_percent?.toFixed(1) || 'N/A'}%</Metric>
-                    <Text className="text-gray-500 mt-2">
-                      Meta: &gt; 95%
-                    </Text>
-                    <ProgressBar
-                      value={kpis.availability_percent || 0}
-                      color="emerald"
-                      className="mt-2"
-                    />
+                    <Text className="text-gray-500 mt-2">Meta: &gt; 95%</Text>
+                    <ProgressBar value={kpis.availability_percent || 0} color="emerald" className="mt-2" />
                   </Card>
 
                   <Card decoration="top" decorationColor="violet">
@@ -523,24 +548,14 @@ export default function TremorMaintenance() {
                       <Text>Confiabilidade (24h)</Text>
                     </Flex>
                     <Metric>{kpis.reliability_24h_percent?.toFixed(1) || 'N/A'}%</Metric>
-                    <Text className="text-gray-500 mt-2">
-                      Probabilidade de operar sem falha nas próximas 24h
-                    </Text>
-                    <ProgressBar
-                      value={kpis.reliability_24h_percent || 0}
-                      color="violet"
-                      className="mt-2"
-                    />
+                    <Text className="text-gray-500 mt-2">Probabilidade de operar sem falha nas próximas 24h</Text>
+                    <ProgressBar value={kpis.reliability_24h_percent || 0} color="violet" className="mt-2" />
                   </Card>
 
-                  {/* MTBF Trend Chart */}
                   <Card className="col-span-2">
                     <Title>Tendência MTBF (Últimos 6 meses)</Title>
                     <ProfessionalAreaChart
-                      data={mtbfTrend.map(d => ({
-                        date: d.month,
-                        value: d.mtbf_hours || 0
-                      }))}
+                      data={mtbfTrend.map(d => ({ date: d.month, value: d.mtbf_hours || 0 }))}
                       xAxisKey="date"
                       dataKey="value"
                       color="#0077BB"
@@ -550,7 +565,6 @@ export default function TremorMaintenance() {
                 </>
               ) : (
                 <>
-                  {/* Overview KPIs for All Equipment (default view) */}
                   <Card decoration="top" decorationColor="blue" className="col-span-2">
                     <Title className="mb-4">Visão Geral - Todos os Equipamentos</Title>
                     <Grid numItemsMd={4} className="gap-4">
@@ -589,10 +603,9 @@ export default function TremorMaintenance() {
                     </Grid>
                   </Card>
 
-                  {/* Equipment KPI Table */}
                   <Card className="col-span-2">
                     <Title>KPIs por Equipamento</Title>
-                    <Text className="text-gray-500 mb-4">Selecione um equipamento no dropdown acima para ver detalhes</Text>
+                    <Text className="text-gray-500 mb-4">Selecione um equipamento no dropdown acima</Text>
                     <Table>
                       <TableHead>
                         <TableRow>
@@ -600,7 +613,6 @@ export default function TremorMaintenance() {
                           <TableHeaderCell className="text-right">MTBF (h)</TableHeaderCell>
                           <TableHeaderCell className="text-right">MTTR (h)</TableHeaderCell>
                           <TableHeaderCell className="text-right">Disponibilidade</TableHeaderCell>
-                          <TableHeaderCell className="text-right">Score Saúde</TableHeaderCell>
                           <TableHeaderCell>Status</TableHeaderCell>
                         </TableRow>
                       </TableHead>
@@ -615,9 +627,6 @@ export default function TremorMaintenance() {
                             <TableCell className="text-right">{eq.mtbf_hours?.toFixed(0) || 'N/A'}</TableCell>
                             <TableCell className="text-right">{eq.mttr_hours?.toFixed(1) || 'N/A'}</TableCell>
                             <TableCell className="text-right">{eq.availability_percent?.toFixed(1) || 'N/A'}%</TableCell>
-                            <TableCell className="text-right">
-                              <ProgressBar value={eq.health_score || 0} color={getStatusColor(eq.status)} className="w-20" />
-                            </TableCell>
                             <TableCell>
                               <Badge color={getStatusColor(eq.status)}>
                                 {eq.status === 'healthy' ? 'Saudável' :
@@ -635,161 +644,222 @@ export default function TremorMaintenance() {
             </Grid>
           </TabPanel>
 
-          {/* Tab 3: Backlog */}
+          {/* Tab 3: Predictive Maintenance (ML) */}
           <TabPanel>
-            <Grid numItemsMd={3} className="gap-4 mb-6">
+            {/* ML Status Header */}
+            <Grid numItemsMd={4} className="gap-4 mb-6">
+              <Card decoration="top" decorationColor="purple">
+                <Flex alignItems="center" className="gap-2">
+                  <Brain className="h-5 w-5 text-purple-600" />
+                  <Text>Modelos Treinados</Text>
+                </Flex>
+                <Metric>{modelStatus?.total_models || 0}</Metric>
+                <Text className="text-gray-500">Isolation Forest</Text>
+              </Card>
+
               <Card decoration="top" decorationColor="blue">
                 <Flex alignItems="center" className="gap-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <Text>Preventivas Pendentes</Text>
+                  <Activity className="h-5 w-5 text-blue-600" />
+                  <Text>Predições Realizadas</Text>
                 </Flex>
-                <Metric>{workOrders.filter(wo => wo.type === 'preventive' && wo.status === 'pending').length}</Metric>
+                <Metric>{modelStatus?.statistics.total_predictions || 0}</Metric>
               </Card>
 
               <Card decoration="top" decorationColor="red">
                 <Flex alignItems="center" className="gap-2">
-                  <Wrench className="h-5 w-5 text-red-600" />
-                  <Text>Corretivas Abertas</Text>
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <Text>Anomalias Detectadas</Text>
                 </Flex>
-                <Metric>{workOrders.filter(wo => wo.type === 'corrective' && wo.status !== 'completed').length}</Metric>
+                <Metric>{modelStatus?.statistics.anomalies_detected || 0}</Metric>
               </Card>
 
-              <Card decoration="top" decorationColor="purple">
+              <Card decoration="top" decorationColor="emerald">
                 <Flex alignItems="center" className="gap-2">
-                  <Zap className="h-5 w-5 text-purple-600" />
-                  <Text>Preditivas Agendadas</Text>
+                  <CheckCircle className="h-5 w-5 text-emerald-600" />
+                  <Text>Taxa de Detecção</Text>
                 </Flex>
-                <Metric>{workOrders.filter(wo => wo.type === 'predictive').length}</Metric>
+                <Metric>
+                  {modelStatus?.statistics.total_predictions
+                    ? ((modelStatus.statistics.anomalies_detected / modelStatus.statistics.total_predictions) * 100).toFixed(1)
+                    : 0}%
+                </Metric>
               </Card>
             </Grid>
 
-            <Card>
+            {/* Actions */}
+            <Card className="mb-6">
               <Flex justifyContent="between" alignItems="center">
-                <Title>Ordens de Serviço</Title>
-                <Button icon={FileText} variant="secondary">
-                  Nova OS
+                <div>
+                  <Title>Detecção de Anomalias por Equipamento</Title>
+                  <Text className="text-gray-500">
+                    Algoritmo: Isolation Forest | Features: Vibração, Temperatura, Corrente, Potência, Carga
+                  </Text>
+                </div>
+                <Button
+                  icon={PlayCircle}
+                  onClick={runAllPredictions}
+                  loading={predictiveLoading}
+                  disabled={!modelStatus?.total_models}
+                >
+                  Executar Predições
                 </Button>
               </Flex>
-              <Table className="mt-4">
-                <TableHead>
-                  <TableRow>
-                    <TableHeaderCell>ID</TableHeaderCell>
-                    <TableHeaderCell>Equipamento</TableHeaderCell>
-                    <TableHeaderCell>Tipo</TableHeaderCell>
-                    <TableHeaderCell>Prioridade</TableHeaderCell>
-                    <TableHeaderCell>Descrição</TableHeaderCell>
-                    <TableHeaderCell>Prazo</TableHeaderCell>
-                    <TableHeaderCell>Status</TableHeaderCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {workOrders.map((wo) => (
-                    <TableRow key={wo.id}>
-                      <TableCell className="font-mono">{wo.id}</TableCell>
-                      <TableCell>{wo.equipment_id}</TableCell>
-                      <TableCell>
-                        <Badge color={wo.type === 'corrective' ? 'red' : wo.type === 'predictive' ? 'purple' : 'blue'}>
-                          {wo.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge color={getPriorityColor(wo.priority)}>
-                          {wo.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{wo.description}</TableCell>
-                      <TableCell>{wo.due_date}</TableCell>
-                      <TableCell>
-                        <Badge color={wo.status === 'completed' ? 'emerald' : wo.status === 'in_progress' ? 'yellow' : 'gray'}>
-                          {wo.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </Card>
-          </TabPanel>
 
-          {/* Tab 4: Failure Analysis */}
-          <TabPanel>
-            <Grid numItemsMd={2} className="gap-6">
-              {/* Pareto Chart */}
-              <Card>
-                <Title>Pareto de Falhas por Tipo</Title>
-                <Text className="text-gray-500 mb-2">Horas de parada e ocorrências por tipo de falha</Text>
-                <ProfessionalMultiBarChart
-                  data={failureAnalysis.map(f => ({
-                    tipo: f.failure_type.length > 12 ? f.failure_type.substring(0, 12) + '...' : f.failure_type,
-                    'Horas': f.total_hours,
-                    'Qtd': f.count
-                  }))}
-                  xAxisKey="tipo"
-                  bars={[
-                    { dataKey: 'Horas', name: 'Horas de Parada', color: '#dc2626' },
-                    { dataKey: 'Qtd', name: 'Ocorrências', color: '#2563eb' }
-                  ]}
-                  height={280}
-                  showGrid={true}
-                  showLegend={true}
-                />
-              </Card>
+            {/* Equipment Predictions */}
+            <Grid numItemsMd={2} className="gap-4">
+              {equipmentHealth.map((eq) => {
+                const hasModel = modelStatus?.models[eq.equipment_id];
+                const prediction = anomalyPredictions[eq.equipment_id];
+                const isTraining = trainingEquipment === eq.equipment_id;
 
-              {/* Cost Distribution */}
-              <Card>
-                <Title>Distribuição de Custos</Title>
-                <ProfessionalDonutChart
-                  data={[
-                    { name: 'Corretiva', value: 45 },
-                    { name: 'Preventiva', value: 35 },
-                    { name: 'Preditiva', value: 20 },
-                  ]}
-                  colors={['#D32F2F', '#0077BB', '#9C27B0']}
-                  height={288}
-                  showLegend={true}
-                />
-              </Card>
+                return (
+                  <Card key={eq.equipment_id} className="relative">
+                    <Flex justifyContent="between" alignItems="start">
+                      <div>
+                        <Flex alignItems="center" className="gap-2">
+                          {getHealthIcon(eq.status)}
+                          <Title>{eq.equipment_name}</Title>
+                        </Flex>
+                        <Text className="text-gray-500">{eq.equipment_id}</Text>
+                      </div>
 
-              {/* Failure Details Table */}
-              <Card className="col-span-2">
-                <Title>Detalhamento de Falhas</Title>
-                <Table className="mt-4">
-                  <TableHead>
-                    <TableRow>
-                      <TableHeaderCell>Tipo de Falha</TableHeaderCell>
-                      <TableHeaderCell>Ocorrências</TableHeaderCell>
-                      <TableHeaderCell>Tempo Total (h)</TableHeaderCell>
-                      <TableHeaderCell>% do Total</TableHeaderCell>
-                      <TableHeaderCell>Tendência</TableHeaderCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {failureAnalysis.map((failure, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{failure.failure_type}</TableCell>
-                        <TableCell>{failure.count}</TableCell>
-                        <TableCell>{failure.total_hours.toFixed(1)}</TableCell>
-                        <TableCell>
-                          <Flex className="gap-2">
-                            <ProgressBar
-                              value={failure.percentage}
-                              color="red"
-                              className="w-20"
-                            />
-                            <Text>{failure.percentage.toFixed(1)}%</Text>
-                          </Flex>
-                        </TableCell>
-                        <TableCell>
-                          <BadgeDelta deltaType={idx % 2 === 0 ? 'decrease' : 'increase'}>
-                            {idx % 2 === 0 ? '-12%' : '+5%'}
-                          </BadgeDelta>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
+                      {hasModel ? (
+                        <Badge color="emerald" icon={CheckCircle}>Modelo Treinado</Badge>
+                      ) : (
+                        <Badge color="gray">Sem Modelo</Badge>
+                      )}
+                    </Flex>
+
+                    {/* Model Training */}
+                    {!hasModel && (
+                      <Callout
+                        className="mt-4"
+                        title="Modelo não treinado"
+                        icon={Brain}
+                        color="yellow"
+                      >
+                        <Text>Treine o modelo com dados históricos para habilitar predições.</Text>
+                        <Button
+                          size="xs"
+                          className="mt-2"
+                          onClick={() => trainModel(eq.equipment_id)}
+                          loading={isTraining}
+                        >
+                          Treinar Modelo (30 dias)
+                        </Button>
+                      </Callout>
+                    )}
+
+                    {/* Prediction Results */}
+                    {hasModel && prediction && (
+                      <div className="mt-4">
+                        <Flex justifyContent="between" alignItems="center" className="mb-3">
+                          <Text className="font-medium">Resultado da Predição</Text>
+                          <Badge
+                            color={prediction.is_anomaly ? 'red' : 'emerald'}
+                            icon={prediction.is_anomaly ? AlertTriangle : CheckCircle}
+                          >
+                            {prediction.is_anomaly ? 'ANOMALIA' : 'NORMAL'}
+                          </Badge>
+                        </Flex>
+
+                        <Grid numItems={2} className="gap-3 mb-3">
+                          <div className="p-2 bg-gray-50 rounded">
+                            <Text className="text-xs text-gray-500">Score</Text>
+                            <Text className="font-medium">{prediction.score.toFixed(3)}</Text>
+                          </div>
+                          <div className="p-2 bg-gray-50 rounded">
+                            <Text className="text-xs text-gray-500">Confiança</Text>
+                            <Text className="font-medium">{prediction.confidence.toFixed(1)}%</Text>
+                          </div>
+                        </Grid>
+
+                        {/* Contributing Features */}
+                        {prediction.contributing_features.length > 0 && (
+                          <div className="mt-3">
+                            <Text className="text-sm font-medium text-gray-700 mb-2">
+                              Fatores Contribuintes:
+                            </Text>
+                            {prediction.contributing_features.slice(0, 3).map((f, idx) => (
+                              <Flex key={idx} className="gap-2 p-2 bg-red-50 rounded mb-1" alignItems="center">
+                                {getFeatureIcon(f.feature)}
+                                <div className="flex-1">
+                                  <Text className="text-sm font-medium">{getFeatureName(f.feature)}</Text>
+                                  <Text className="text-xs text-gray-500">
+                                    Atual: {f.current_value.toFixed(1)} | Esperado: {f.expected_mean.toFixed(1)} | Z-score: {f.z_score.toFixed(1)}
+                                  </Text>
+                                </div>
+                                <Badge color={f.severity === 'high' ? 'red' : 'orange'} size="xs">
+                                  {f.deviation === 'high' ? 'Alto' : 'Baixo'}
+                                </Badge>
+                              </Flex>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Recommendation */}
+                        {prediction.recommendation && (
+                          <Callout
+                            className="mt-3"
+                            title="Recomendação"
+                            color={prediction.is_anomaly ? 'red' : 'emerald'}
+                          >
+                            <Text>{prediction.recommendation}</Text>
+                          </Callout>
+                        )}
+
+                        <Text className="text-xs text-gray-400 mt-2">
+                          Última análise: {new Date(prediction.timestamp).toLocaleString('pt-BR')}
+                        </Text>
+                      </div>
+                    )}
+
+                    {/* Run prediction button if model exists but no prediction yet */}
+                    {hasModel && !prediction && (
+                      <div className="mt-4">
+                        <Button
+                          size="xs"
+                          variant="secondary"
+                          onClick={() => runPrediction(eq.equipment_id)}
+                        >
+                          Executar Predição
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
             </Grid>
+
+            {/* Algorithm Info */}
+            <Card className="mt-6" decoration="left" decorationColor="purple">
+              <Flex alignItems="start" className="gap-4">
+                <Brain className="h-8 w-8 text-purple-600 flex-shrink-0" />
+                <div>
+                  <Title>Sobre o Algoritmo de Detecção</Title>
+                  <Text className="text-gray-600 mt-2">
+                    <strong>Isolation Forest</strong> é um algoritmo de Machine Learning não supervisionado
+                    especializado em detecção de anomalias. Ele funciona isolando observações anômalas
+                    através de partições recursivas aleatórias.
+                  </Text>
+                  <Grid numItemsMd={3} className="gap-4 mt-4">
+                    <div className="p-3 bg-purple-50 rounded-lg">
+                      <Text className="font-medium text-purple-700">Features Analisadas</Text>
+                      <Text className="text-sm text-gray-600">Vibração, Temperatura, Corrente, Potência, Carga</Text>
+                    </div>
+                    <div className="p-3 bg-purple-50 rounded-lg">
+                      <Text className="font-medium text-purple-700">Contamination</Text>
+                      <Text className="text-sm text-gray-600">5% (proporção esperada de anomalias)</Text>
+                    </div>
+                    <div className="p-3 bg-purple-50 rounded-lg">
+                      <Text className="font-medium text-purple-700">Treinamento</Text>
+                      <Text className="text-sm text-gray-600">30 dias de dados históricos por equipamento</Text>
+                    </div>
+                  </Grid>
+                </div>
+              </Flex>
+            </Card>
           </TabPanel>
         </TabPanels>
       </TabGroup>
@@ -829,24 +899,3 @@ function generateFallbackTrend(): { month: string; mtbf_hours: number }[] {
     { month: '2024-12', mtbf_hours: 520 },
   ];
 }
-
-function generateFallbackFailures(): FailureAnalysis[] {
-  return [
-    { failure_type: 'Mecânica', count: 12, total_hours: 48, percentage: 45 },
-    { failure_type: 'Elétrica', count: 8, total_hours: 24, percentage: 22 },
-    { failure_type: 'Instrumentação', count: 5, total_hours: 15, percentage: 14 },
-    { failure_type: 'Processo', count: 4, total_hours: 12, percentage: 11 },
-    { failure_type: 'Operacional', count: 3, total_hours: 8, percentage: 8 },
-  ];
-}
-
-function generateSampleWorkOrders(): WorkOrder[] {
-  return [
-    { id: 'OS-2024-1234', equipment_id: 'ELEV01', type: 'preventive', priority: 'medium', description: 'Troca de rolamento', due_date: '15/12/2024', status: 'pending' },
-    { id: 'OS-2024-1235', equipment_id: 'CORR02', type: 'preventive', priority: 'low', description: 'Lubrificação geral', due_date: '18/12/2024', status: 'pending' },
-    { id: 'OS-2024-1236', equipment_id: 'PUMP01', type: 'corrective', priority: 'high', description: 'Reparo de vazamento', due_date: '10/12/2024', status: 'in_progress' },
-    { id: 'OS-2024-1237', equipment_id: 'CRUSH01', type: 'predictive', priority: 'critical', description: 'Substituição preventiva - vibração alta', due_date: '08/12/2024', status: 'pending' },
-    { id: 'OS-2024-1238', equipment_id: 'SILO01', type: 'preventive', priority: 'low', description: 'Inspeção de sensores', due_date: '20/12/2024', status: 'pending' },
-  ];
-}
-
