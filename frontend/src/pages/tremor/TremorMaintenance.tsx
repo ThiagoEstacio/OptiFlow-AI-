@@ -350,11 +350,14 @@ export default function TremorMaintenance() {
 
   // Auto-run predictions when models and equipment are available
   useEffect(() => {
-    if (modelStatus?.total_models && modelStatus.total_models > 0 && equipmentHealth.length > 0) {
+    // Check models dict (includes disk models), not just total_models (in-memory only)
+    const hasModels = modelStatus?.models && Object.keys(modelStatus.models).length > 0;
+    if (hasModels && equipmentHealth.length > 0) {
       // Run predictions automatically on first load (only once)
       if (!hasRunInitialPrediction.current && !predictiveLoading) {
         hasRunInitialPrediction.current = true;
         console.log('[Auto-Prediction] Running initial predictions on page load...');
+        console.log('[Auto-Prediction] Models available:', Object.keys(modelStatus.models));
         // Small delay to ensure refs are updated
         setTimeout(() => {
           runAllPredictions();
@@ -370,7 +373,8 @@ export default function TremorMaintenance() {
     const intervalMs = autoRefreshInterval * 60 * 60 * 1000; // Convert hours to ms
 
     const interval = setInterval(() => {
-      if (modelStatus?.total_models && modelStatus.total_models > 0 && equipmentHealth.length > 0) {
+      const hasModels = modelStatus?.models && Object.keys(modelStatus.models).length > 0;
+      if (hasModels && equipmentHealth.length > 0) {
         console.log(`[Auto-Prediction] Running scheduled predictions (interval: ${autoRefreshInterval}h)`);
         runAllPredictions();
       }
@@ -753,7 +757,7 @@ export default function TremorMaintenance() {
                   <Brain className="h-5 w-5 text-purple-600" />
                   <Text>Modelos Treinados</Text>
                 </Flex>
-                <Metric>{modelStatus?.total_models || 0}</Metric>
+                <Metric>{modelStatus?.models ? Object.keys(modelStatus.models).length : 0}</Metric>
                 <Text className="text-gray-500">Isolation Forest</Text>
               </Card>
 
@@ -844,7 +848,7 @@ export default function TremorMaintenance() {
                     icon={PlayCircle}
                     onClick={runAllPredictions}
                     loading={predictiveLoading}
-                    disabled={!modelStatus?.total_models}
+                    disabled={!modelStatus?.models || Object.keys(modelStatus.models).length === 0}
                     size="sm"
                   >
                     Executar Agora
