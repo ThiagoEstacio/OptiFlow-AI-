@@ -285,9 +285,8 @@ export const AssetProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Load assets on mount
   useEffect(() => {
-    // Temporarily disabled - assets feature not in use yet
-    // fetchAssets();
-    // fetchAssetTree();
+    fetchAssets();
+    fetchAssetTree();
   }, [fetchAssets, fetchAssetTree]);
 
   const value: AssetContextState = {
