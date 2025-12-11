@@ -124,10 +124,9 @@ export const SimplifiedSidebar: React.FC = () => {
       icon: <Briefcase className="w-5 h-5" />,
       children: [
         { path: '/executive', label: 'Visão Geral', icon: <Target className="w-4 h-4" /> },
-        { path: '/executive/analytics', label: 'Análises ML', icon: <Brain className="w-4 h-4" /> },
         { path: '/executive/oee', label: 'OEE', icon: <Factory className="w-4 h-4" /> },
         { path: '/executive/energy', label: 'Energia', icon: <Zap className="w-4 h-4" /> },
-        { path: '/executive/quality', label: 'Qualidade (SPC)', icon: <Ruler className="w-4 h-4" /> },
+        { path: '/executive/quality', label: 'Qualidade', icon: <Ruler className="w-4 h-4" /> },
         { path: '/executive/reports', label: 'Relatórios', icon: <FileText className="w-4 h-4" /> },
       ],
     },
@@ -147,8 +146,7 @@ export const SimplifiedSidebar: React.FC = () => {
       children: [
         { path: '/maintenance', label: 'Saúde dos Ativos', icon: <Activity className="w-4 h-4" /> },
         { path: '/maintenance/kpis', label: 'KPIs (MTBF/MTTR)', icon: <TrendingUp className="w-4 h-4" /> },
-        { path: '/maintenance/backlog', label: 'Backlog', icon: <ClipboardList className="w-4 h-4" /> },
-        { path: '/maintenance/analysis', label: 'Análise de Falhas', icon: <Target className="w-4 h-4" /> },
+        { path: '/maintenance/predictive', label: 'Preditiva (ML)', icon: <Brain className="w-4 h-4" /> },
       ],
     },
     {

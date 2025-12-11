@@ -39,7 +39,6 @@ const PageLoading = () => (
 const TremorDashboard = lazy(() => import('./pages/tremor/TremorDashboard'));
 const TremorRealtime = lazy(() => import('./pages/tremor/TremorRealtime'));
 const TremorAlarms = lazy(() => import('./pages/tremor/TremorAlarms'));
-const TremorAnalytics = lazy(() => import('./pages/tremor/TremorAnalytics'));
 const TremorSettings = lazy(() => import('./pages/tremor/TremorSettings'));
 const TremorExecutive = lazy(() => import('./pages/tremor/TremorExecutive'));
 const TremorOEE = lazy(() => import('./pages/tremor/TremorOEE'));
@@ -110,8 +109,8 @@ function AppContent() {
             <Route path="alarms" element={<Suspense fallback={<PageLoading />}><TremorAlarms /></Suspense>} />
             <Route path="alarms/*" element={<Suspense fallback={<PageLoading />}><TremorAlarms /></Suspense>} />
 
-            {/* Analytics - Tremor Professional */}
-            <Route path="analytics" element={<Suspense fallback={<PageLoading />}><TremorAnalytics /></Suspense>} />
+            {/* AI Chat */}
+            <Route path="analytics" element={<Navigate to="/maintenance/predictive" replace />} />
             <Route path="analytics/chat" element={<Suspense fallback={<PageLoading />}><TremorAIChat /></Suspense>} />
 
             {/* Settings - Tremor Professional */}
@@ -123,7 +122,7 @@ function AppContent() {
             {/* Executive routes - Tremor Professional */}
             <Route path="executive" element={<Suspense fallback={<PageLoading />}><TremorExecutive /></Suspense>} />
             <Route path="executive/overview" element={<Suspense fallback={<PageLoading />}><TremorExecutive /></Suspense>} />
-            <Route path="executive/analytics" element={<Suspense fallback={<PageLoading />}><TremorAnalytics /></Suspense>} />
+            <Route path="executive/analytics" element={<Navigate to="/maintenance/predictive" replace />} />
             <Route path="executive/oee" element={<Suspense fallback={<PageLoading />}><TremorOEE /></Suspense>} />
             <Route path="executive/energy" element={<Suspense fallback={<PageLoading />}><TremorEnergy /></Suspense>} />
             <Route path="executive/reports" element={<Suspense fallback={<PageLoading />}><TremorReports /></Suspense>} />
@@ -141,8 +140,7 @@ function AppContent() {
             <Route path="maintenance" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
             <Route path="maintenance/pcm" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
             <Route path="maintenance/kpis" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
-            <Route path="maintenance/backlog" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
-            <Route path="maintenance/analysis" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
+            <Route path="maintenance/predictive" element={<Suspense fallback={<PageLoading />}><TremorMaintenance /></Suspense>} />
 
             {/* Asset Framework - PI Asset Framework style */}
             <Route path="assets" element={<Suspense fallback={<PageLoading />}><TremorAssetFramework /></Suspense>} />
