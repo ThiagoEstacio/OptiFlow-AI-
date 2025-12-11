@@ -624,3 +624,12 @@ def get_ishikawa_service() -> ServicoAnaliseIshikawa:
     if _servico_ishikawa is None:
         _servico_ishikawa = ServicoAnaliseIshikawa()
     return _servico_ishikawa
+
+
+# ============================================
+# Aliases de compatibilidade (nomes em inglês)
+# ============================================
+IshikawaCategory = CategoriaIshikawa
+RootCause = CausaRaiz
+IshikawaDiagram = DiagramaIshikawa
+IshikawaAnalysisService = ServicoAnaliseIshikawa
