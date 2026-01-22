@@ -7,7 +7,6 @@ from app.models.tag_label import TagLabel
 from app.models.alarm import AlarmDefinition, AlarmEvent
 from app.models.ml_model import MLModel, Prediction
 from app.models.asset import Asset, AssetAttribute, AssetTemplate, AssetType
-from app.models.asset_health_alert import AssetHealthAlert
 from app.models.operational_data import TruckEntry, ShipLoading, DailyOperations
 from app.models.external_data import DataSource, DataImport, GBMLogisticsData
 from app.models.dashboard import Dashboard, Widget, DashboardShare, DashboardTemplate, DashboardModule, WidgetType
@@ -28,7 +27,6 @@ __all__ = [
     "AssetAttribute",
     "AssetTemplate",
     "AssetType",
-    "AssetHealthAlert",
     "TruckEntry",
     "ShipLoading",
     "DailyOperations",
